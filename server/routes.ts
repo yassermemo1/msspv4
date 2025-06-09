@@ -16,9 +16,9 @@ import {
   insertUserDashboardSchema,
   validateSAFClientConsistency, validateProposalClientConsistency, validateContractClientConsistency,
   // Import all the table schemas needed for Drizzle queries
-  users, userSettings, companySettings, clients, contracts, proposals, services, serviceScopes, financialTransactions,
-  serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools,
-  auditLogs, changeHistory, securityEvents, dataAccessLogs,
+  users, userSettings, companySettings, clients, clientContacts, contracts, proposals, services, serviceScopes, financialTransactions,
+  serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
+  clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs,
   dashboardWidgets, userDashboards, dashboardWidgetAssignments,
   externalSystems, clientExternalMappings, externalWidgetTemplates, widgetExecutionCache,
   pagePermissions, savedSearches, searchHistory
@@ -3483,8 +3483,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/widgets/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      console.log(`=== UPDATE WIDGET ${id} ===`);
+      console.log("User:", req.user?.email, "ID:", req.user?.id);
       
-      // Get widget and check ownership through dashboard
+      // Get widget and check ownership through dashboard assignment
       const [widget] = await db.select()
         .from(dashboardWidgets)
         .where(eq(dashboardWidgets.id, id));
@@ -3492,24 +3494,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!widget) {
         return res.status(404).json({ message: "Widget not found" });
       }
+      console.log("Widget found:", widget.name);
+      
+      // Get dashboard ownership through widget assignment
+      const [assignment] = await db.select({
+        dashboardId: dashboardWidgetAssignments.dashboardId
+      })
+        .from(dashboardWidgetAssignments)
+        .where(eq(dashboardWidgetAssignments.widgetId, id));
+      
+      if (!assignment) {
+        console.log("No assignment found for widget", id);
+        return res.status(404).json({ message: "Widget assignment not found for widget " + id });
+      }
+      console.log("Assignment found, dashboard ID:", assignment.dashboardId);
       
       // Check dashboard ownership
       const [dashboard] = await db.select()
         .from(userDashboards)
-        .where(eq(userDashboards.id, widget.dashboardId));
+        .where(eq(userDashboards.id, assignment.dashboardId));
       
-      if (!dashboard || dashboard.userId !== req.user.id) {
-        return res.status(403).json({ message: "Access denied" });
+      if (!dashboard) {
+        console.log("Dashboard not found:", assignment.dashboardId);
+        return res.status(404).json({ message: "Dashboard not found: " + assignment.dashboardId });
       }
       
-      const updateData = {
-        title: req.body.title,
-        widgetType: req.body.widgetType,
-        dataSource: req.body.dataSource,
-        config: req.body.config,
-        position: req.body.position,
-        updatedAt: new Date()
-      };
+                    console.log("Dashboard owner:", dashboard.userId, "Current user:", req.user.id);
+      console.log("Type check - dashboard.userId:", typeof dashboard.userId, "req.user.id:", typeof req.user.id);
+      console.log("Authorization check result:", dashboard.userId == req.user.id);
+      
+      if (dashboard.userId != req.user.id) {
+        console.log("❌ Authorization failed - Access denied");
+        return res.status(403).json({ message: "Access denied - user does not own dashboard" });
+      }
+      
+      console.log("✅ Authorization passed - proceeding with update");
+      
+      const updateData: any = {};
+      if (req.body.name !== undefined) updateData.name = req.body.name;
+      if (req.body.widgetType !== undefined) updateData.widgetType = req.body.widgetType;
+      if (req.body.config !== undefined) updateData.config = req.body.config;
+      if (req.body.dataSourceId !== undefined) updateData.dataSourceId = req.body.dataSourceId;
+      if (req.body.refreshInterval !== undefined) updateData.refreshInterval = req.body.refreshInterval;
+      if (req.body.isActive !== undefined) updateData.isActive = req.body.isActive;
+      updateData.updatedAt = new Date();
       
       const [updatedWidget] = await db.update(dashboardWidgets)
         .set(updateData)
@@ -3537,10 +3565,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Widget not found" });
       }
       
+      // Get dashboard ownership through widget assignment
+      const [assignment] = await db.select({
+        dashboardId: dashboardWidgetAssignments.dashboardId
+      })
+        .from(dashboardWidgetAssignments)
+        .where(eq(dashboardWidgetAssignments.widgetId, id));
+      
+      if (!assignment) {
+        return res.status(404).json({ message: "Widget assignment not found" });
+      }
+      
       // Check dashboard ownership
       const [dashboard] = await db.select()
         .from(userDashboards)
-        .where(eq(userDashboards.id, widget.dashboardId));
+        .where(eq(userDashboards.id, assignment.dashboardId));
       
       if (!dashboard || dashboard.userId !== req.user.id) {
         return res.status(403).json({ message: "Access denied" });
@@ -4825,6 +4864,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/dashboard-widgets/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      console.log(`=== UPDATE DASHBOARD WIDGET ${id} ===`);
+      console.log("User:", req.user?.email, "ID:", req.user?.id);
+      
+      // Get widget and check ownership through dashboard assignment
+      const [widget] = await db.select()
+        .from(dashboardWidgets)
+        .where(eq(dashboardWidgets.id, id));
+      
+      if (!widget) {
+        return res.status(404).json({ message: "Widget not found" });
+      }
+      console.log("Widget found:", widget.name);
+      
+      // Get dashboard ownership through widget assignment
+      const [assignment] = await db.select({
+        dashboardId: dashboardWidgetAssignments.dashboardId
+      })
+        .from(dashboardWidgetAssignments)
+        .where(eq(dashboardWidgetAssignments.widgetId, id));
+      
+      if (!assignment) {
+        console.log("No assignment found for widget", id);
+        return res.status(404).json({ message: "Widget assignment not found for widget " + id });
+      }
+      console.log("Assignment found, dashboard ID:", assignment.dashboardId);
+      
+      // Check dashboard ownership
+      const [dashboard] = await db.select()
+        .from(userDashboards)
+        .where(eq(userDashboards.id, assignment.dashboardId));
+      
+      if (!dashboard) {
+        console.log("Dashboard not found:", assignment.dashboardId);
+        return res.status(404).json({ message: "Dashboard not found: " + assignment.dashboardId });
+      }
+      
+      console.log("Dashboard owner:", dashboard.userId, "Current user:", req.user.id);
+      console.log("Authorization check result:", dashboard.userId == req.user.id);
+      
+      if (dashboard.userId != req.user.id) {
+        console.log("❌ Authorization failed - Access denied");
+        return res.status(403).json({ message: "Access denied - user does not own dashboard" });
+      }
+      
+      console.log("✅ Authorization passed - proceeding with update");
       
       // Extract only the fields we want to update (exclude timestamps as they're auto-generated)
       const { name, widgetType, config, dataSourceId, refreshInterval, isActive } = req.body;
@@ -4837,11 +4921,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (refreshInterval !== undefined) updateData.refreshInterval = refreshInterval || null;
       if (isActive !== undefined) updateData.isActive = isActive;
       
-      const widget = await storage.updateDashboardWidget(id, updateData);
-      if (!widget) {
+      const updatedWidget = await storage.updateDashboardWidget(id, updateData);
+      if (!updatedWidget) {
         return res.status(404).json({ message: "Widget not found" });
       }
-      res.json(widget);
+      console.log("✅ Widget updated successfully");
+      res.json(updatedWidget);
     } catch (error) {
       console.error("Update dashboard widget error:", error);
       res.status(500).json({ message: "Failed to update widget" });
