@@ -1,688 +1,747 @@
-import { ExternalApiService } from '../external-api-service';
-import { CustomQuery, QueryExecution, ExternalSystem } from '@shared/schema';
-import { storage } from '../storage';
+import { ExternalSystem } from '../types/external-systems.js';
+import { db } from '../db.js';
+import { externalSystems } from '../../shared/schema.js';
+import { eq } from 'drizzle-orm';
 
-interface QueryResult {
-  success: boolean;
-  data: any;
-  error?: string;
-  executionTime: number;
-  recordCount: number;
+interface QueryRequest {
+  systemId: number;
+  query: string;
+  parameters?: Record<string, any>;
+  method?: string; // Default method if system supports multiple
+  format?: string; // Response format preference
+  timeout?: number;
+  transformations?: string[]; // Data transformation steps
 }
 
-export class QueryExecutionService {
-  private static instance: QueryExecutionService;
-  private externalApiService: ExternalApiService;
-  private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
+interface QueryResponse {
+  success: boolean;
+  data?: any;
+  metadata?: {
+    executionTime: number;
+    recordCount: number;
+    systemName: string;
+    method: string;
+    transformationsApplied?: string[];
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
 
-  private constructor() {
-    this.externalApiService = ExternalApiService.getInstance();
-  }
+interface SystemConfig {
+  system: ExternalSystem;
+  queryMethods: Record<string, any>;
+  authHeaders: Record<string, string>;
+  connectionSettings: any;
+}
 
-  public static getInstance(): QueryExecutionService {
-    if (!QueryExecutionService.instance) {
-      QueryExecutionService.instance = new QueryExecutionService();
+export class DynamicQueryExecutionService {
+  private static instance: DynamicQueryExecutionService;
+  private systemConfigs: Map<number, SystemConfig> = new Map();
+
+  static getInstance(): DynamicQueryExecutionService {
+    if (!DynamicQueryExecutionService.instance) {
+      DynamicQueryExecutionService.instance = new DynamicQueryExecutionService();
     }
-    return QueryExecutionService.instance;
+    return DynamicQueryExecutionService.instance;
   }
 
   /**
-   * Execute a custom query and return results
+   * Execute a query against any configured external system
    */
-  async executeQuery(queryId: number, userId?: number, forceRefresh = false): Promise<QueryResult> {
+  async executeQuery(queryRequest: QueryRequest): Promise<QueryResponse> {
     const startTime = Date.now();
-
+    
     try {
-      // Get query configuration
-      const query = await storage.getCustomQuery(queryId);
-      if (!query) {
-        throw new Error('Query not found');
-      }
-
-      // Get external system configuration
-      const system = await storage.getExternalSystem(query.systemId);
-      if (!system) {
-        throw new Error('External system not found');
-      }
-
-      // Check cache first
-      const cacheKey = `query_${queryId}`;
-      if (query.cacheEnabled && !forceRefresh && this.isCacheValid(cacheKey, query.refreshInterval)) {
-        const cached = this.cache.get(cacheKey);
-        if (cached) {
-          await this.logExecution(queryId, userId, 'cached', cached.data, Date.now() - startTime, cached.data?.length || 0);
-          return {
-            success: true,
-            data: cached.data,
-            executionTime: Date.now() - startTime,
-            recordCount: cached.data?.length || 0
-          };
-        }
-      }
-
-      // Execute query based on type
-      let result: any;
-      switch (query.queryType.toLowerCase()) {
-        case 'jql':
-          result = await this.executeJqlQuery(query, system);
-          break;
-        case 'rest':
-          result = await this.executeRestQuery(query, system);
-          break;
-        case 'graphql':
-          result = await this.executeGraphqlQuery(query, system);
-          break;
-        case 'sql':
-          result = await this.executeSqlQuery(query, system);
-          break;
-        default:
-          result = await this.executeCustomQuery(query, system);
-      }
-
-      // Apply data mapping if configured
-      let mappedData = this.applyDataMapping(result, query.dataMapping);
-
-      // Apply aggregations if configured
-      if (query.dataMapping?.aggregations) {
-        mappedData = this.applyAggregations(mappedData, query.dataMapping.aggregations);
-      }
-
-      // Cache the result
-      if (query.cacheEnabled) {
-        this.cache.set(cacheKey, {
-          data: mappedData,
-          timestamp: Date.now(),
-          ttl: query.refreshInterval * 1000
-        });
-      }
+      // Get system configuration
+      const systemConfig = await this.getSystemConfig(queryRequest.systemId);
+      
+      // Validate query method
+      const method = this.validateAndGetMethod(queryRequest, systemConfig);
+      
+      // Execute the query using the system's configuration
+      const result = await this.performQuery(queryRequest, systemConfig, method);
+      
+      // Apply transformations if specified
+      const transformedResult = await this.applyTransformations(
+        result, 
+        queryRequest.transformations || [],
+        systemConfig
+      );
 
       const executionTime = Date.now() - startTime;
-      const recordCount = Array.isArray(mappedData) ? mappedData.length : 1;
-
-      // Log successful execution
-      await this.logExecution(queryId, userId, 'completed', mappedData, executionTime, recordCount);
-
+      
       return {
         success: true,
-        data: mappedData,
-        executionTime,
-        recordCount
+        data: transformedResult,
+        metadata: {
+          executionTime,
+          recordCount: this.getRecordCount(transformedResult),
+          systemName: systemConfig.system.displayName,
+          method: method.name,
+          transformationsApplied: queryRequest.transformations
+        }
       };
 
-    } catch (error) {
+    } catch (error: any) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      // Log failed execution
-      await this.logExecution(queryId, userId, 'failed', null, executionTime, 0, errorMessage);
-
+      
       return {
         success: false,
-        data: null,
-        error: errorMessage,
-        executionTime,
-        recordCount: 0
+        metadata: {
+          executionTime,
+          recordCount: 0,
+          systemName: 'Unknown',
+          method: 'Unknown'
+        },
+        error: {
+          code: error.code || 'QUERY_EXECUTION_ERROR',
+          message: error.message || 'Query execution failed',
+          details: {
+            systemId: queryRequest.systemId,
+            originalError: error
+          }
+        }
       };
     }
   }
 
   /**
-   * Execute JQL query for Jira systems
+   * Get and cache system configuration
    */
-  private async executeJqlQuery(query: CustomQuery, system: ExternalSystem): Promise<any> {
-    const jqlQuery = this.substituteParameters(query.query, query.parameters);
-    
-    const metadata = {
-      customJql: jqlQuery,
-      maxResults: query.parameters?.maxResults || 100,
-      fields: query.parameters?.fields || 'key,summary,status,assignee,priority,created,updated'
-    };
-
-    // Create a mock mapping to use existing Jira fetch logic
-    const mockMapping = {
-      systemName: system.systemName,
-      externalIdentifier: '', // Not needed for custom JQL
-      metadata
-    };
-
-    // Use existing Jira fetch logic from ExternalApiService
-    const response = await (this.externalApiService as any).fetchJiraData(mockMapping, system);
-    
-    if (response.status === 'error') {
-      throw new Error(response.error_message || 'Jira query failed');
+  private async getSystemConfig(systemId: number): Promise<SystemConfig> {
+    // Check cache first
+    if (this.systemConfigs.has(systemId)) {
+      return this.systemConfigs.get(systemId)!;
     }
 
-    return response.data;
+    // Fetch from database
+    const systems = await db
+      .select()
+      .from(externalSystems)
+      .where(eq(externalSystems.id, systemId));
+
+    if (systems.length === 0) {
+      throw new Error(`System with ID ${systemId} not found`);
+    }
+
+    const system = systems[0];
+    
+    if (!system.isActive) {
+      throw new Error(`System ${system.displayName} is not active`);
+    }
+
+    // Build configuration
+    const config: SystemConfig = {
+      system,
+      queryMethods: system.queryMethods as Record<string, any> || {},
+      authHeaders: this.buildAuthHeaders(system),
+      connectionSettings: system.connectionConfig as any || {}
+    };
+
+    // Cache the configuration
+    this.systemConfigs.set(systemId, config);
+    
+    return config;
   }
 
   /**
-   * Execute REST API query
+   * Build authentication headers based on system configuration
    */
-  private async executeRestQuery(query: CustomQuery, system: ExternalSystem): Promise<any> {
-    const endpoint = this.substituteParameters(query.query, query.parameters);
-    const method = query.parameters?.method || 'GET';
-    const headers = this.getAuthHeaders(system);
-    
-    if (query.parameters?.headers) {
-      Object.assign(headers, query.parameters.headers);
-    }
-
-    const url = `${system.baseUrl}${endpoint}`;
-    const options: any = {
-      method,
-      headers,
-      signal: AbortSignal.timeout(30000)
+  private buildAuthHeaders(system: ExternalSystem): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'MSSP-Integration-Engine/1.0'
     };
 
-    if (method !== 'GET' && query.parameters?.body) {
-      options.body = JSON.stringify(query.parameters.body);
-      headers['Content-Type'] = 'application/json';
+    const authConfig = system.authConfig as any || {};
+
+    switch (system.authType) {
+      case 'basic':
+        if (authConfig.username && authConfig.password) {
+          const credentials = Buffer.from(`${authConfig.username}:${authConfig.password}`).toString('base64');
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+        break;
+        
+      case 'bearer':
+        if (authConfig.token) {
+          headers['Authorization'] = `Bearer ${authConfig.token}`;
+        }
+        break;
+        
+      case 'api_key':
+        if (authConfig.key && authConfig.header) {
+          headers[authConfig.header] = authConfig.key;
+        } else if (authConfig.key) {
+          headers['X-API-Key'] = authConfig.key;
+        }
+        break;
+        
+      case 'oauth':
+        if (authConfig.accessToken) {
+          headers['Authorization'] = `Bearer ${authConfig.accessToken}`;
+        }
+        break;
+        
+      case 'custom':
+        // Apply custom headers from authConfig
+        if (authConfig.customHeaders) {
+          Object.assign(headers, authConfig.customHeaders);
+        }
+        break;
+        
+      case 'none':
+      default:
+        // No authentication required
+        break;
     }
 
-    const response = await fetch(url, options);
+    // Add any additional headers from connection config
+    const connectionConfig = system.connectionConfig as any;
+    if (connectionConfig?.additionalHeaders) {
+      Object.assign(headers, connectionConfig.additionalHeaders);
+    }
+
+    return headers;
+  }
+
+  /**
+   * Validate and get the query method to use
+   */
+  private validateAndGetMethod(queryRequest: QueryRequest, systemConfig: SystemConfig): any {
+    const availableMethods = systemConfig.queryMethods;
     
-    if (!response.ok) {
-      throw new Error(`REST API error: ${response.status} ${response.statusText}`);
+    if (!availableMethods || Object.keys(availableMethods).length === 0) {
+      throw new Error(`No query methods configured for system ${systemConfig.system.displayName}`);
     }
 
-    return await response.json();
+    // Use specified method or default to first available method
+    const methodName = queryRequest.method || Object.keys(availableMethods)[0];
+    const method = availableMethods[methodName];
+    
+    if (!method) {
+      throw new Error(`Query method '${methodName}' not supported by system ${systemConfig.system.displayName}`);
+    }
+
+    return { name: methodName, config: method };
+  }
+
+  /**
+   * Perform the actual query execution
+   */
+  private async performQuery(
+    queryRequest: QueryRequest, 
+    systemConfig: SystemConfig, 
+    method: any
+  ): Promise<any> {
+    const { system } = systemConfig;
+    const methodConfig = method.config;
+    const timeout = queryRequest.timeout || methodConfig.timeout || 30000;
+
+    // Build the request based on method type
+    switch (methodConfig.type) {
+      case 'http_get':
+        return this.executeHttpGet(queryRequest, systemConfig, methodConfig, timeout);
+        
+      case 'http_post':
+        return this.executeHttpPost(queryRequest, systemConfig, methodConfig, timeout);
+        
+      case 'graphql':
+        return this.executeGraphQL(queryRequest, systemConfig, methodConfig, timeout);
+        
+      case 'rest':
+        return this.executeRest(queryRequest, systemConfig, methodConfig, timeout);
+        
+      case 'sql':
+        return this.executeSQL(queryRequest, systemConfig, methodConfig, timeout);
+        
+      case 'custom':
+        return this.executeCustom(queryRequest, systemConfig, methodConfig, timeout);
+        
+      default:
+        throw new Error(`Unsupported query method type: ${methodConfig.type}`);
+    }
+  }
+
+  /**
+   * Execute HTTP GET request
+   */
+  private async executeHttpGet(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    const { system, authHeaders } = systemConfig;
+    
+    // Build URL with query parameters
+    const url = new URL(methodConfig.endpoint || '', system.baseUrl);
+    
+    // Add query parameters
+    if (queryRequest.parameters) {
+      Object.entries(queryRequest.parameters).forEach(([key, value]) => {
+        url.searchParams.append(key, String(value));
+      });
+    }
+    
+    // Add the main query if configured
+    if (methodConfig.queryParam && queryRequest.query) {
+      url.searchParams.append(methodConfig.queryParam, queryRequest.query);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: authHeaders,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return this.extractDataFromResponse(data, methodConfig);
+      
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Execute HTTP POST request
+   */
+  private async executeHttpPost(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    const { system, authHeaders } = systemConfig;
+    
+    const url = new URL(methodConfig.endpoint || '', system.baseUrl);
+    
+    // Build payload
+    const payload = this.buildPostPayload(queryRequest, methodConfig);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': methodConfig.contentType || 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return this.extractDataFromResponse(data, methodConfig);
+      
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   /**
    * Execute GraphQL query
    */
-  private async executeGraphqlQuery(query: CustomQuery, system: ExternalSystem): Promise<any> {
-    const graphqlQuery = this.substituteParameters(query.query, query.parameters);
-    const headers = this.getAuthHeaders(system);
-    headers['Content-Type'] = 'application/json';
-
-    const body = {
-      query: graphqlQuery,
-      variables: query.parameters?.variables || {}
+  private async executeGraphQL(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    const { system, authHeaders } = systemConfig;
+    
+    const url = new URL(methodConfig.endpoint || '/graphql', system.baseUrl);
+    
+    const payload = {
+      query: queryRequest.query,
+      variables: queryRequest.parameters || {}
     };
 
-    const response = await fetch(`${system.baseUrl}/graphql`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30000)
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) {
-      throw new Error(`GraphQL error: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(data.errors)}`);
+      }
+
+      return data.data;
+      
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
 
-    const result = await response.json();
+  /**
+   * Execute REST API call
+   */
+  private async executeRest(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    const httpMethod = methodConfig.httpMethod || 'GET';
     
-    if (result.errors) {
-      throw new Error(`GraphQL errors: ${result.errors.map((e: any) => e.message).join(', ')}`);
+    if (httpMethod.toLowerCase() === 'get') {
+      return this.executeHttpGet(queryRequest, systemConfig, methodConfig, timeout);
+    } else {
+      return this.executeHttpPost(queryRequest, systemConfig, methodConfig, timeout);
     }
-
-    return result.data;
   }
 
   /**
    * Execute SQL query (for database systems)
    */
-  private async executeSqlQuery(query: CustomQuery, system: ExternalSystem): Promise<any> {
-    const sqlQuery = this.substituteParameters(query.query, query.parameters);
+  private async executeSQL(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    // This would require a database-specific driver
+    // For now, we'll throw an error suggesting configuration
+    throw new Error('SQL query execution requires database-specific configuration. Please configure the system with appropriate database driver settings.');
+  }
+
+  /**
+   * Execute custom query method
+   */
+  private async executeCustom(
+    queryRequest: QueryRequest,
+    systemConfig: SystemConfig,
+    methodConfig: any,
+    timeout: number
+  ): Promise<any> {
+    // Custom execution logic based on methodConfig.customLogic
+    if (methodConfig.customEndpoint) {
+      // Use custom endpoint configuration
+      return this.executeHttpPost(queryRequest, systemConfig, {
+        ...methodConfig,
+        endpoint: methodConfig.customEndpoint
+      }, timeout);
+    }
     
-    // This would need to be implemented based on specific database drivers
-    // For now, throw an error to indicate SQL queries need additional setup
-    throw new Error('SQL query execution requires database driver configuration');
+    throw new Error('Custom query method requires specific configuration in methodConfig.customLogic');
   }
 
   /**
-   * Execute custom query type
+   * Build POST payload based on method configuration
    */
-  private async executeCustomQuery(query: CustomQuery, system: ExternalSystem): Promise<any> {
-    // For custom query types, execute as REST endpoint
-    return await this.executeRestQuery(query, system);
-  }
-
-  /**
-   * Apply data mapping configuration to transform query results
-   */
-  private applyDataMapping(data: any, mapping: any): any {
-    if (!mapping || Object.keys(mapping).length === 0) {
-      return data;
-    }
-
-    try {
-      // Support different mapping strategies
-      if (mapping.type === 'jq') {
-        // Use jq-style mapping (would need jq library)
-        return this.applyJqMapping(data, mapping.expression);
-      } else if (mapping.type === 'jsonpath') {
-        // Use JSONPath mapping
-        return this.applyJsonPathMapping(data, mapping.expression);
-      } else if (mapping.type === 'transform') {
-        // Custom transformation
-        return this.applyCustomTransform(data, mapping.transforms);
-      }
-
-      // Default: extract specific fields
-      return this.extractFields(data, mapping.fields);
-    } catch (error) {
-      console.error('Data mapping error:', error);
-      return data; // Return original data if mapping fails
-    }
-  }
-
-  /**
-   * Extract specific fields from data
-   */
-  private extractFields(data: any, fields: any): any {
-    if (!fields || !data) return data;
-
-    if (Array.isArray(data)) {
-      return data.map(item => this.extractFieldsFromObject(item, fields));
+  private buildPostPayload(queryRequest: QueryRequest, methodConfig: any): any {
+    const payload: any = {};
+    
+    // Add the main query
+    if (methodConfig.queryField) {
+      payload[methodConfig.queryField] = queryRequest.query;
     } else {
-      return this.extractFieldsFromObject(data, fields);
-    }
-  }
-
-  private extractFieldsFromObject(obj: any, fields: any): any {
-    const result: any = {};
-    
-    for (const [key, path] of Object.entries(fields)) {
-      result[key] = this.getNestedValue(obj, path as string);
+      payload.query = queryRequest.query;
     }
     
-    return result;
-  }
-
-  private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
+    // Add parameters
+    if (queryRequest.parameters) {
+      if (methodConfig.parametersField) {
+        payload[methodConfig.parametersField] = queryRequest.parameters;
+      } else {
+        Object.assign(payload, queryRequest.parameters);
+      }
+    }
+    
+    // Add any default payload from method config
+    if (methodConfig.defaultPayload) {
+      Object.assign(payload, methodConfig.defaultPayload);
+    }
+    
+    return payload;
   }
 
   /**
-   * Apply JQ-style mapping (placeholder - would need jq library)
+   * Extract data from response based on method configuration
    */
-  private applyJqMapping(data: any, expression: string): any {
-    // Placeholder for jq mapping
-    console.warn('JQ mapping not implemented yet');
+  private extractDataFromResponse(data: any, methodConfig: any): any {
+    if (methodConfig.dataPath) {
+      // Navigate to the data using the specified path
+      return this.getNestedValue(data, methodConfig.dataPath);
+    }
+    
     return data;
   }
 
   /**
-   * Apply JSONPath mapping (placeholder - would need jsonpath library)
+   * Apply data transformations
    */
-  private applyJsonPathMapping(data: any, expression: string): any {
-    // Placeholder for JSONPath mapping
-    console.warn('JSONPath mapping not implemented yet');
-    return data;
-  }
-
-  /**
-   * Apply custom transformations
-   */
-  private applyCustomTransform(data: any, transforms: any[]): any {
+  private async applyTransformations(
+    data: any,
+    transformations: string[],
+    systemConfig: SystemConfig
+  ): Promise<any> {
     let result = data;
     
-    for (const transform of transforms) {
-      switch (transform.type) {
-        case 'filter':
-          if (Array.isArray(result)) {
-            result = result.filter(item => this.evaluateCondition(item, transform.condition));
-          }
-          break;
-        case 'map':
-          if (Array.isArray(result)) {
-            result = result.map(item => this.applyMapping(item, transform.mapping));
-          }
-          break;
-        case 'sort':
-          if (Array.isArray(result)) {
-            result = result.sort((a, b) => this.compareValues(a, b, transform.field, transform.order));
-          }
-          break;
-        case 'limit':
-          if (Array.isArray(result)) {
-            result = result.slice(0, transform.count);
-          }
-          break;
+    const transformConfig = systemConfig.system.dataTransforms as any || {};
+    
+    for (const transformName of transformations) {
+      const transform = transformConfig[transformName];
+      if (transform) {
+        result = this.applyTransformation(result, transform);
       }
     }
     
     return result;
   }
 
-  private evaluateCondition(item: any, condition: any): boolean {
-    // Simple condition evaluation
-    const value = this.getNestedValue(item, condition.field);
-    switch (condition.operator) {
-      case 'equals': return value === condition.value;
-      case 'not_equals': return value !== condition.value;
-      case 'contains': return String(value).includes(condition.value);
-      case 'greater_than': return Number(value) > Number(condition.value);
-      case 'less_than': return Number(value) < Number(condition.value);
-      default: return true;
-    }
-  }
-
-  private applyMapping(item: any, mapping: any): any {
-    const result: any = {};
-    for (const [key, path] of Object.entries(mapping)) {
-      result[key] = this.getNestedValue(item, path as string);
-    }
-    return result;
-  }
-
-  private compareValues(a: any, b: any, field: string, order: 'asc' | 'desc' = 'asc'): number {
-    const aVal = this.getNestedValue(a, field);
-    const bVal = this.getNestedValue(b, field);
-    const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-    return order === 'desc' ? -comparison : comparison;
-  }
-
   /**
-   * Substitute parameters in query string
+   * Apply a single transformation
    */
-  private substituteParameters(query: string, parameters: any): string {
-    let result = query;
-    
-    for (const [key, value] of Object.entries(parameters || {})) {
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-      result = result.replace(regex, String(value));
-    }
-    
-    return result;
-  }
-
-  /**
-   * Get authentication headers for external system
-   */
-  private getAuthHeaders(system: ExternalSystem): Record<string, string> {
-    // Reuse logic from ExternalApiService
-    return (this.externalApiService as any).getAuthHeaders(system);
-  }
-
-  /**
-   * Check if cached data is still valid
-   */
-  private isCacheValid(cacheKey: string, refreshInterval: number): boolean {
-    const cached = this.cache.get(cacheKey);
-    if (!cached) return false;
-    
-    const age = Date.now() - cached.timestamp;
-    return age < (refreshInterval * 1000);
-  }
-
-  /**
-   * Log query execution
-   */
-  private async logExecution(
-    queryId: number, 
-    userId: number | undefined, 
-    status: string, 
-    resultData: any, 
-    executionTime: number, 
-    recordCount: number, 
-    error?: string
-  ): Promise<void> {
-    try {
-      await storage.logQueryExecution({
-        queryId,
-        executedBy: userId || null,
-        status,
-        resultData,
-        executionTime,
-        recordCount,
-        error,
-        completedAt: new Date()
-      });
-    } catch (logError) {
-      console.error('Failed to log query execution:', logError);
-    }
-  }
-
-  /**
-   * Apply data aggregations to query results
-   */
-  private applyAggregations(data: any, aggregations: any): any {
-    if (!aggregations) return data;
-
-    // Handle both array and non-array data
-    let dataArray: any[] = [];
-    if (Array.isArray(data)) {
-      dataArray = data;
-    } else if (data?.aggregated_data) {
-      // Already aggregated data
-      return data;
-    } else if (data?.results && Array.isArray(data.results)) {
-      dataArray = data.results;
-    } else if (data?.issues && Array.isArray(data.issues)) {
-      // Jira-specific
-      dataArray = data.issues;
-    } else {
-      // Single object to array
-      dataArray = [data];
-    }
-
-    if (dataArray.length === 0) return data;
-
-    const { 
-      groupBy = [], 
-      metrics = [], 
-      filters = [], 
-      sort = [],
-      limit 
-    } = aggregations;
-
-    let processedData = [...dataArray];
-
-    // Apply filters first
-    if (filters.length > 0) {
-      processedData = this.applyDataFilters(processedData, filters);
-    }
-
-    // Apply grouping and aggregation
-    if (groupBy.length > 0) {
-      processedData = this.performDataGrouping(processedData, groupBy, metrics);
-    } else if (metrics.length > 0) {
-      // Global aggregations without grouping
-      processedData = [this.calculateDataMetrics(processedData, metrics)];
-    }
-
-    // Apply sorting
-    if (sort.length > 0) {
-      processedData = this.applyDataSorting(processedData, sort);
-    }
-
-    // Apply limit
-    if (limit && limit > 0) {
-      processedData = processedData.slice(0, limit);
-    }
-
-    return {
-      aggregated_data: processedData,
-      total_records: dataArray.length,
-      processed_records: processedData.length,
-      aggregation_summary: {
-        grouped_by: groupBy,
-        metrics_calculated: metrics.map((m: any) => `${m.function}(${m.field})`),
-        filters_applied: filters.length,
-        sorted_by: sort,
-        limited_to: limit
-      }
-    };
-  }
-
-  /**
-   * Apply filters to data for aggregation
-   */
-  private applyDataFilters(data: any[], filters: any[]): any[] {
-    return data.filter(row => {
-      return filters.every(filter => {
-        const { field, operator, value } = filter;
-        const fieldValue = this.getNestedValue(row, field);
+  private applyTransformation(data: any, transform: any): any {
+    switch (transform.type) {
+      case 'filter':
+        return this.filterData(data, transform.config);
         
-        switch (operator) {
-          case 'equals': case '=': return fieldValue == value;
-          case 'not_equals': case '!=': return fieldValue != value;
-          case 'greater_than': case '>': return Number(fieldValue) > Number(value);
-          case 'less_than': case '<': return Number(fieldValue) < Number(value);
-          case 'greater_equal': case '>=': return Number(fieldValue) >= Number(value);
-          case 'less_equal': case '<=': return Number(fieldValue) <= Number(value);
-          case 'contains': return String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
-          case 'not_contains': return !String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
-          case 'starts_with': return String(fieldValue).toLowerCase().startsWith(String(value).toLowerCase());
-          case 'ends_with': return String(fieldValue).toLowerCase().endsWith(String(value).toLowerCase());
-          case 'in': return Array.isArray(value) ? value.includes(fieldValue) : false;
-          case 'not_in': return Array.isArray(value) ? !value.includes(fieldValue) : true;
-          case 'is_null': return fieldValue == null || fieldValue == undefined;
-          case 'is_not_null': return fieldValue != null && fieldValue != undefined;
-          default: return true;
-        }
-      });
-    });
+      case 'map':
+        return this.mapData(data, transform.config);
+        
+      case 'aggregate':
+        return this.aggregateData(data, transform.config);
+        
+      case 'sort':
+        return this.sortData(data, transform.config);
+        
+      default:
+        return data;
+    }
   }
 
   /**
-   * Perform grouping and calculate metrics for aggregation
+   * Filter data based on criteria
    */
-  private performDataGrouping(data: any[], groupBy: string[], metrics: any[]): any[] {
-    const groups = new Map<string, any[]>();
+  private filterData(data: any, config: any): any {
+    if (!Array.isArray(data)) return data;
     
-    data.forEach(row => {
-      const groupKey = groupBy.map(field => String(this.getNestedValue(row, field) || '')).join('|');
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, []);
-      }
-      groups.get(groupKey)!.push(row);
-    });
-
-    const result: any[] = [];
-    groups.forEach((groupData, groupKey) => {
-      const groupValues = groupKey.split('|');
-      const groupRecord: any = {};
-      
-      // Add group fields
-      groupBy.forEach((field, index) => {
-        groupRecord[field] = groupValues[index];
+    return data.filter(item => {
+      return config.criteria.every((criterion: any) => {
+        const value = this.getNestedValue(item, criterion.field);
+        return this.evaluateCondition(value, criterion.operator, criterion.value);
       });
-      
-      // Calculate metrics
-      const metricsResult = this.calculateDataMetrics(groupData, metrics);
-      Object.assign(groupRecord, metricsResult);
-      
-      // Add group metadata
-      groupRecord._group_size = groupData.length;
-      
-      result.push(groupRecord);
     });
-
-    return result;
   }
 
   /**
-   * Calculate metrics for aggregation
+   * Map/transform data fields
    */
-  private calculateDataMetrics(data: any[], metrics: any[]): any {
+  private mapData(data: any, config: any): any {
+    if (!Array.isArray(data)) return data;
+    
+    return data.map(item => {
+      const mapped: any = {};
+      Object.entries(config.fieldMappings).forEach(([newField, oldField]) => {
+        mapped[newField] = this.getNestedValue(item, oldField as string);
+      });
+      return mapped;
+    });
+  }
+
+  /**
+   * Aggregate data
+   */
+  private aggregateData(data: any, config: any): any {
+    if (!Array.isArray(data)) return data;
+    
+    // Simple aggregation implementation
     const result: any = {};
-
-    metrics.forEach(metric => {
-      const { field, function: func, alias } = metric;
-      const outputField = alias || `${func}_${field}`;
-      
-      try {
-        switch (func.toLowerCase()) {
-          case 'count':
-            result[outputField] = data.length;
-            break;
-          case 'count_distinct':
-            const distinctValues = new Set(data.map(row => this.getNestedValue(row, field)));
-            result[outputField] = distinctValues.size;
-            break;
-          case 'sum':
-            result[outputField] = data.reduce((sum, row) => {
-              const value = Number(this.getNestedValue(row, field)) || 0;
-              return sum + value;
-            }, 0);
-            break;
-          case 'avg': case 'average':
-            const values = data.map(row => Number(this.getNestedValue(row, field))).filter(v => !isNaN(v));
-            result[outputField] = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-            break;
-          case 'min':
-            const minValues = data.map(row => Number(this.getNestedValue(row, field))).filter(v => !isNaN(v));
-            result[outputField] = minValues.length > 0 ? Math.min(...minValues) : null;
-            break;
-          case 'max':
-            const maxValues = data.map(row => Number(this.getNestedValue(row, field))).filter(v => !isNaN(v));
-            result[outputField] = maxValues.length > 0 ? Math.max(...maxValues) : null;
-            break;
-          case 'median':
-            const sortedValues = data.map(row => Number(this.getNestedValue(row, field)))
-              .filter(v => !isNaN(v)).sort((a, b) => a - b);
-            if (sortedValues.length === 0) {
-              result[outputField] = null;
-            } else if (sortedValues.length % 2 === 0) {
-              const mid = sortedValues.length / 2;
-              result[outputField] = (sortedValues[mid - 1] + sortedValues[mid]) / 2;
-            } else {
-              result[outputField] = sortedValues[Math.floor(sortedValues.length / 2)];
-            }
-            break;
-          case 'concat':
-            const separator = metric.separator || ', ';
-            result[outputField] = data.map(row => this.getNestedValue(row, field))
-              .filter(v => v != null).join(separator);
-            break;
-          default:
-            console.warn(`Unknown aggregation function: ${func}`);
-            result[outputField] = null;
-        }
-      } catch (error) {
-        console.error(`Error calculating ${func} for field ${field}:`, error);
-        result[outputField] = null;
-      }
-    });
-
+    
+    if (config.count) {
+      result.count = data.length;
+    }
+    
+    if (config.sum && config.sum.length > 0) {
+      config.sum.forEach((field: string) => {
+        result[`${field}_sum`] = data.reduce((sum, item) => {
+          return sum + (Number(this.getNestedValue(item, field)) || 0);
+        }, 0);
+      });
+    }
+    
+    if (config.avg && config.avg.length > 0) {
+      config.avg.forEach((field: string) => {
+        const sum = data.reduce((sum, item) => {
+          return sum + (Number(this.getNestedValue(item, field)) || 0);
+        }, 0);
+        result[`${field}_avg`] = data.length > 0 ? sum / data.length : 0;
+      });
+    }
+    
     return result;
   }
 
   /**
-   * Apply sorting for aggregation
+   * Sort data
    */
-  private applyDataSorting(data: any[], sortConfig: any[]): any[] {
+  private sortData(data: any, config: any): any {
+    if (!Array.isArray(data)) return data;
+    
     return data.sort((a, b) => {
-      for (const { field, direction } of sortConfig) {
-        const aVal = this.getNestedValue(a, field);
-        const bVal = this.getNestedValue(b, field);
-        
-        if (aVal == null && bVal == null) continue;
-        if (aVal == null) return direction === 'desc' ? 1 : -1;
-        if (bVal == null) return direction === 'desc' ? -1 : 1;
+      for (const sort of config.fields) {
+        const aVal = this.getNestedValue(a, sort.field);
+        const bVal = this.getNestedValue(b, sort.field);
         
         let comparison = 0;
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          comparison = aVal - bVal;
-        } else {
-          comparison = String(aVal).localeCompare(String(bVal));
-        }
+        if (aVal < bVal) comparison = -1;
+        else if (aVal > bVal) comparison = 1;
         
-        if (comparison !== 0) {
-          return direction === 'desc' ? -comparison : comparison;
-        }
+        if (sort.direction === 'desc') comparison *= -1;
+        
+        if (comparison !== 0) return comparison;
       }
       return 0;
     });
   }
 
   /**
-   * Clear cache for a specific query
+   * Evaluate a condition for filtering
    */
-  clearCache(queryId: number): void {
-    const cacheKey = `query_${queryId}`;
-    this.cache.delete(cacheKey);
+  private evaluateCondition(value: any, operator: string, expected: any): boolean {
+    switch (operator) {
+      case 'equals':
+      case '=':
+        return value == expected;
+      case 'not_equals':
+      case '!=':
+        return value != expected;
+      case 'greater_than':
+      case '>':
+        return Number(value) > Number(expected);
+      case 'less_than':
+      case '<':
+        return Number(value) < Number(expected);
+      case 'contains':
+        return String(value).toLowerCase().includes(String(expected).toLowerCase());
+      case 'starts_with':
+        return String(value).toLowerCase().startsWith(String(expected).toLowerCase());
+      case 'ends_with':
+        return String(value).toLowerCase().endsWith(String(expected).toLowerCase());
+      case 'in':
+        return Array.isArray(expected) ? expected.includes(value) : false;
+      default:
+        return true;
+    }
   }
 
   /**
-   * Clear all cache
+   * Get nested value from object using dot notation
    */
-  clearAllCache(): void {
-    this.cache.clear();
+  private getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => {
+      return current && current[key] !== undefined ? current[key] : undefined;
+    }, obj);
+  }
+
+  /**
+   * Get record count from result data
+   */
+  private getRecordCount(data: any): number {
+    if (Array.isArray(data)) {
+      return data.length;
+    }
+    if (data && typeof data === 'object') {
+      if (data.count !== undefined) return data.count;
+      if (data.total !== undefined) return data.total;
+      if (data.results && Array.isArray(data.results)) return data.results.length;
+    }
+    return 1;
+  }
+
+  /**
+   * Test system connection
+   */
+  async testConnection(systemId: number): Promise<{ success: boolean; message: string; details?: any }> {
+    try {
+      const systemConfig = await this.getSystemConfig(systemId);
+      const healthConfig = systemConfig.system.healthCheckConfig as any;
+      
+      if (!healthConfig || !healthConfig.endpoint) {
+        return {
+          success: false,
+          message: 'No health check endpoint configured for this system'
+        };
+      }
+      
+      const url = new URL(healthConfig.endpoint, systemConfig.system.baseUrl);
+      const response = await fetch(url.toString(), {
+        method: healthConfig.method || 'GET',
+        headers: systemConfig.authHeaders,
+        signal: AbortSignal.timeout(healthConfig.timeout || 10000)
+      });
+      
+      if (response.ok) {
+        return {
+          success: true,
+          message: `Successfully connected to ${systemConfig.system.displayName}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText
+          }
+        };
+      } else {
+        return {
+          success: false,
+          message: `Connection failed: ${response.status} ${response.statusText}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText
+          }
+        };
+      }
+      
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Connection test failed',
+        details: error
+      };
+    }
+  }
+
+  /**
+   * Clear system configuration cache
+   */
+  clearCache(systemId?: number): void {
+    if (systemId) {
+      this.systemConfigs.delete(systemId);
+    } else {
+      this.systemConfigs.clear();
+    }
   }
 } 

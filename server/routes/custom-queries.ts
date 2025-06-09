@@ -1,57 +1,57 @@
-import express from 'express';
-import { storage } from '../storage';
-import { QueryExecutionService } from '../services/query-execution-service';
-import { requireAuth } from '../auth';
+import { Router } from 'express';
+import { db } from '../db.js';
+import { customQueries, customQueryWidgets, externalSystems, widgetExecutionCache } from '../../shared/schema.js';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
+import { DynamicQueryExecutionService } from '../services/query-execution-service.js';
+import crypto from 'crypto';
 
-const router = express.Router();
-const queryExecutionService = QueryExecutionService.getInstance();
-
-// Apply authentication to all routes
-router.use(requireAuth);
+const router = Router();
 
 /**
- * GET /api/custom-queries - List all custom queries for the user
+ * GET /api/custom-queries - Get all custom queries for the current user
  */
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user?.id;
-    const { systemId, queryType, tags, isPublic } = req.query;
+    const userId = req.user.id;
+    
+    const queries = await db
+      .select({
+        id: customQueries.id,
+        name: customQueries.name,
+        description: customQueries.description,
+        systemId: customQueries.systemId,
+        method: customQueries.method,
+        query: customQueries.query,
+        parameters: customQueries.parameters,
+        transformations: customQueries.transformations,
+        dataMapping: customQueries.dataMapping,
+        refreshInterval: customQueries.refreshInterval,
+        cacheEnabled: customQueries.cacheEnabled,
+        isActive: customQueries.isActive,
+        isPublic: customQueries.isPublic,
+        tags: customQueries.tags,
+        createdAt: customQueries.createdAt,
+        updatedAt: customQueries.updatedAt,
+        systemName: externalSystems.systemName,
+        systemDisplayName: externalSystems.displayName,
+      })
+      .from(customQueries)
+      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
+      .where(
+        and(
+          customQueries.isActive,
+          or(
+            eq(customQueries.createdBy, userId),
+            eq(customQueries.isPublic, true)
+          )
+        )
+      )
+      .orderBy(desc(customQueries.updatedAt));
 
-    const filters: any = {};
-    if (systemId) filters.systemId = parseInt(systemId as string);
-    if (queryType) filters.queryType = queryType;
-    if (tags) filters.tags = (tags as string).split(',');
-    if (isPublic !== undefined) filters.isPublic = isPublic === 'true';
-
-    const queries = await storage.getCustomQueries(userId, filters);
     res.json(queries);
   } catch (error) {
     console.error('Error fetching custom queries:', error);
-    res.status(500).json({ message: 'Failed to fetch queries' });
-  }
-});
-
-/**
- * GET /api/custom-queries/:id - Get a specific query
- */
-router.get('/:id', async (req, res) => {
-  try {
-    const queryId = parseInt(req.params.id);
-    const query = await storage.getCustomQuery(queryId);
-    
-    if (!query) {
-      return res.status(404).json({ message: 'Query not found' });
-    }
-
-    // Check if user has access to this query
-    if (!query.isPublic && query.createdBy !== req.user?.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    res.json(query);
-  } catch (error) {
-    console.error('Error fetching query:', error);
-    res.status(500).json({ message: 'Failed to fetch query' });
+    res.status(500).json({ message: 'Failed to fetch custom queries' });
   }
 });
 
@@ -60,30 +60,21 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
+    const userId = req.user.id;
     const queryData = {
       ...req.body,
       createdBy: userId
     };
 
-    // Validate required fields
-    if (!queryData.name || !queryData.systemId || !queryData.query || !queryData.queryType) {
-      return res.status(400).json({ 
-        message: 'Missing required fields: name, systemId, query, queryType' 
-      });
-    }
+    const [newQuery] = await db
+      .insert(customQueries)
+      .values(queryData)
+      .returning();
 
-    const queryId = await storage.createCustomQuery(queryData);
-    const query = await storage.getCustomQuery(queryId);
-    
-    res.status(201).json(query);
+    res.status(201).json(newQuery);
   } catch (error) {
-    console.error('Error creating query:', error);
-    res.status(500).json({ message: 'Failed to create query' });
+    console.error('Error creating custom query:', error);
+    res.status(500).json({ message: 'Failed to create custom query' });
   }
 });
 
@@ -93,28 +84,44 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const queryId = parseInt(req.params.id);
-    const userId = req.user?.id;
-    
-    const existingQuery = await storage.getCustomQuery(queryId);
-    if (!existingQuery) {
+    const userId = req.user.id;
+
+    // Check if user owns the query or has permission to edit
+    const existingQuery = await db
+      .select()
+      .from(customQueries)
+      .where(eq(customQueries.id, queryId))
+      .limit(1);
+
+    if (!existingQuery.length) {
       return res.status(404).json({ message: 'Query not found' });
     }
 
-    // Check if user owns this query
-    if (existingQuery.createdBy !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (existingQuery[0].createdBy !== userId) {
+      return res.status(403).json({ message: 'Permission denied' });
     }
 
-    await storage.updateCustomQuery(queryId, req.body);
-    
-    // Clear cache for this query
-    queryExecutionService.clearCache(queryId);
-    
-    const updatedQuery = await storage.getCustomQuery(queryId);
+    const [updatedQuery] = await db
+      .update(customQueries)
+      .set({ ...req.body, updatedAt: new Date() })
+      .where(eq(customQueries.id, queryId))
+      .returning();
+
+    // Invalidate cache for this query
+    await db
+      .update(widgetExecutionCache)
+      .set({ isValid: false })
+      .where(
+        sql`widget_id IN (
+          SELECT id FROM custom_query_widgets 
+          WHERE custom_query_id = ${queryId}
+        )`
+      );
+
     res.json(updatedQuery);
   } catch (error) {
-    console.error('Error updating query:', error);
-    res.status(500).json({ message: 'Failed to update query' });
+    console.error('Error updating custom query:', error);
+    res.status(500).json({ message: 'Failed to update custom query' });
   }
 });
 
@@ -124,145 +131,126 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const queryId = parseInt(req.params.id);
-    const userId = req.user?.id;
-    
-    const existingQuery = await storage.getCustomQuery(queryId);
-    if (!existingQuery) {
+    const userId = req.user.id;
+
+    // Check if user owns the query
+    const existingQuery = await db
+      .select()
+      .from(customQueries)
+      .where(eq(customQueries.id, queryId))
+      .limit(1);
+
+    if (!existingQuery.length) {
       return res.status(404).json({ message: 'Query not found' });
     }
 
-    // Check if user owns this query
-    if (existingQuery.createdBy !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (existingQuery[0].createdBy !== userId) {
+      return res.status(403).json({ message: 'Permission denied' });
     }
 
-    await storage.deleteCustomQuery(queryId);
-    
-    // Clear cache for this query
-    queryExecutionService.clearCache(queryId);
-    
+    await db
+      .delete(customQueries)
+      .where(eq(customQueries.id, queryId));
+
     res.json({ message: 'Query deleted successfully' });
   } catch (error) {
-    console.error('Error deleting query:', error);
-    res.status(500).json({ message: 'Failed to delete query' });
+    console.error('Error deleting custom query:', error);
+    res.status(500).json({ message: 'Failed to delete custom query' });
   }
 });
 
 /**
- * POST /api/custom-queries/:id/execute - Execute a custom query
- */
-router.post('/:id/execute', async (req, res) => {
-  try {
-    const queryId = parseInt(req.params.id);
-    const userId = req.user?.id;
-    const { forceRefresh = false } = req.body;
-
-    const query = await storage.getCustomQuery(queryId);
-    if (!query) {
-      return res.status(404).json({ message: 'Query not found' });
-    }
-
-    // Check if user has access to this query
-    if (!query.isPublic && query.createdBy !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    const result = await queryExecutionService.executeQuery(queryId, userId, forceRefresh);
-    
-    if (result.success) {
-      res.json({
-        success: true,
-        data: result.data,
-        executionTime: result.executionTime,
-        recordCount: result.recordCount,
-        cached: !forceRefresh && result.executionTime < 100 // Likely cached if very fast
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: result.error,
-        executionTime: result.executionTime
-      });
-    }
-  } catch (error) {
-    console.error('Error executing query:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to execute query' 
-    });
-  }
-});
-
-/**
- * GET /api/custom-queries/:id/executions - Get execution history for a query
- */
-router.get('/:id/executions', async (req, res) => {
-  try {
-    const queryId = parseInt(req.params.id);
-    const { page = 1, limit = 50 } = req.query;
-
-    const query = await storage.getCustomQuery(queryId);
-    if (!query) {
-      return res.status(404).json({ message: 'Query not found' });
-    }
-
-    // Check if user has access to this query
-    if (!query.isPublic && query.createdBy !== req.user?.id) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    const executions = await storage.getQueryExecutions(queryId, {
-      page: parseInt(page as string),
-      limit: parseInt(limit as string)
-    });
-
-    res.json(executions);
-  } catch (error) {
-    console.error('Error fetching query executions:', error);
-    res.status(500).json({ message: 'Failed to fetch executions' });
-  }
-});
-
-/**
- * POST /api/custom-queries/:id/test - Test a query without saving execution
+ * POST /api/custom-queries/:id/test - Test execute a custom query
  */
 router.post('/:id/test', async (req, res) => {
   try {
     const queryId = parseInt(req.params.id);
-    const userId = req.user?.id;
 
-    const query = await storage.getCustomQuery(queryId);
-    if (!query) {
+    const query = await db
+      .select()
+      .from(customQueries)
+      .where(eq(customQueries.id, queryId))
+      .limit(1);
+
+    if (!query.length) {
       return res.status(404).json({ message: 'Query not found' });
     }
 
-    // Check if user has access to this query
-    if (!query.isPublic && query.createdBy !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
+    const queryConfig = query[0];
+    const queryService = DynamicQueryExecutionService.getInstance();
+
+    const result = await queryService.executeQuery({
+      systemId: queryConfig.systemId,
+      query: queryConfig.query,
+      method: queryConfig.method,
+      parameters: queryConfig.parameters,
+      transformations: queryConfig.transformations,
+      timeout: 30000
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error testing custom query:', error);
+    res.status(500).json({ message: 'Failed to test custom query' });
+  }
+});
+
+/**
+ * POST /api/custom-queries/:id/add-to-dashboard - Add query as widget to dashboard
+ */
+router.post('/:id/add-to-dashboard', async (req, res) => {
+  try {
+    const queryId = parseInt(req.params.id);
+    const userId = req.user.id;
+    const { 
+      dashboardId, 
+      legacyDashboardId, 
+      title, 
+      widgetType = 'chart', 
+      chartType = 'bar',
+      position = { x: 0, y: 0, w: 4, h: 3 },
+      config = {}
+    } = req.body;
+
+    // Validate that the query exists and user has access
+    const query = await db
+      .select()
+      .from(customQueries)
+      .where(
+        and(
+          eq(customQueries.id, queryId),
+          or(
+            eq(customQueries.createdBy, userId),
+            eq(customQueries.isPublic, true)
+          )
+        )
+      )
+      .limit(1);
+
+    if (!query.length) {
+      return res.status(404).json({ message: 'Query not found or access denied' });
     }
 
-    // Execute without logging (test mode)
-    const result = await queryExecutionService.executeQuery(queryId, undefined, true);
-    
-    // Limit data for testing (first 10 records)
-    if (result.success && Array.isArray(result.data)) {
-      result.data = result.data.slice(0, 10);
-    }
-    
-    res.json({
-      success: result.success,
-      data: result.data,
-      error: result.error,
-      executionTime: result.executionTime,
-      recordCount: result.recordCount,
-      isTest: true
-    });
+    // Create the widget
+    const [newWidget] = await db
+      .insert(customQueryWidgets)
+      .values({
+        customQueryId: queryId,
+        dashboardId,
+        legacyDashboardId,
+        title: title || query[0].name,
+        widgetType,
+        chartType,
+        config,
+        position,
+        createdBy: userId
+      })
+      .returning();
+
+    res.status(201).json(newWidget);
   } catch (error) {
-    console.error('Error testing query:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to test query' 
-    });
+    console.error('Error adding query to dashboard:', error);
+    res.status(500).json({ message: 'Failed to add query to dashboard' });
   }
 });
 
@@ -271,7 +259,12 @@ router.post('/:id/test', async (req, res) => {
  */
 router.get('/systems', async (req, res) => {
   try {
-    const systems = await storage.getAllExternalSystems();
+    const systems = await db
+      .select()
+      .from(externalSystems)
+      .where(eq(externalSystems.isActive, true))
+      .orderBy(externalSystems.displayName);
+
     res.json(systems);
   } catch (error) {
     console.error('Error fetching external systems:', error);
@@ -280,57 +273,183 @@ router.get('/systems', async (req, res) => {
 });
 
 /**
- * POST /api/custom-queries/validate - Validate a query without executing
+ * GET /api/custom-queries/widgets/:dashboardId - Get widgets for a dashboard
  */
-router.post('/validate', async (req, res) => {
+router.get('/widgets/:dashboardId', async (req, res) => {
   try {
-    const { query, queryType, systemId } = req.body;
+    const dashboardId = parseInt(req.params.dashboardId);
+    const { type = 'new' } = req.query; // 'new' or 'legacy'
 
-    if (!query || !queryType || !systemId) {
-      return res.status(400).json({ 
-        valid: false,
-        error: 'Missing required fields: query, queryType, systemId' 
-      });
-    }
+    const whereCondition = type === 'legacy' 
+      ? eq(customQueryWidgets.legacyDashboardId, dashboardId)
+      : eq(customQueryWidgets.dashboardId, dashboardId);
 
-    // Basic validation based on query type
-    let validationResult = { valid: true, error: null };
+    const widgets = await db
+      .select({
+        id: customQueryWidgets.id,
+        title: customQueryWidgets.title,
+        widgetType: customQueryWidgets.widgetType,
+        chartType: customQueryWidgets.chartType,
+        config: customQueryWidgets.config,
+        position: customQueryWidgets.position,
+        isVisible: customQueryWidgets.isVisible,
+        createdAt: customQueryWidgets.createdAt,
+        query: {
+          id: customQueries.id,
+          name: customQueries.name,
+          systemId: customQueries.systemId,
+          method: customQueries.method,
+          query: customQueries.query,
+          parameters: customQueries.parameters,
+          refreshInterval: customQueries.refreshInterval,
+          cacheEnabled: customQueries.cacheEnabled,
+        },
+        system: {
+          id: externalSystems.id,
+          systemName: externalSystems.systemName,
+          displayName: externalSystems.displayName,
+        }
+      })
+      .from(customQueryWidgets)
+      .leftJoin(customQueries, eq(customQueryWidgets.customQueryId, customQueries.id))
+      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
+      .where(
+        and(
+          whereCondition,
+          eq(customQueryWidgets.isVisible, true)
+        )
+      )
+      .orderBy(customQueryWidgets.createdAt);
 
-    switch (queryType.toLowerCase()) {
-      case 'jql':
-        // Basic JQL validation (could be enhanced)
-        if (!query.trim()) {
-          validationResult = { valid: false, error: 'JQL query cannot be empty' };
-        }
-        break;
-      case 'rest':
-        // Validate REST endpoint
-        if (!query.startsWith('/')) {
-          validationResult = { valid: false, error: 'REST endpoint must start with /' };
-        }
-        break;
-      case 'graphql':
-        // Basic GraphQL validation
-        if (!query.includes('{') || !query.includes('}')) {
-          validationResult = { valid: false, error: 'GraphQL query must contain valid syntax' };
-        }
-        break;
-      case 'sql':
-        // Basic SQL validation
-        if (!query.toLowerCase().includes('select')) {
-          validationResult = { valid: false, error: 'SQL query must contain SELECT statement' };
-        }
-        break;
-    }
-
-    res.json(validationResult);
+    res.json(widgets);
   } catch (error) {
-    console.error('Error validating query:', error);
+    console.error('Error fetching dashboard widgets:', error);
+    res.status(500).json({ message: 'Failed to fetch dashboard widgets' });
+  }
+});
+
+/**
+ * GET /api/custom-queries/widgets/:widgetId/data - Get cached or fresh data for a widget
+ */
+router.get('/widgets/:widgetId/data', async (req, res) => {
+  try {
+    const widgetId = parseInt(req.params.widgetId);
+    const { forceRefresh = false } = req.query;
+
+    // Get widget details
+    const widget = await db
+      .select({
+        widget: customQueryWidgets,
+        query: customQueries,
+        system: externalSystems,
+      })
+      .from(customQueryWidgets)
+      .leftJoin(customQueries, eq(customQueryWidgets.customQueryId, customQueries.id))
+      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
+      .where(eq(customQueryWidgets.id, widgetId))
+      .limit(1);
+
+    if (!widget.length) {
+      return res.status(404).json({ message: 'Widget not found' });
+    }
+
+    const { widget: widgetData, query: queryData, system: systemData } = widget[0];
+
+    // Check cache if not forcing refresh and cache is enabled
+    if (!forceRefresh && queryData.cacheEnabled) {
+      const queryHash = crypto
+        .createHash('md5')
+        .update(JSON.stringify({
+          query: queryData.query,
+          parameters: queryData.parameters,
+          method: queryData.method
+        }))
+        .digest('hex');
+
+      const cachedResult = await db
+        .select()
+        .from(widgetExecutionCache)
+        .where(
+          and(
+            eq(widgetExecutionCache.widgetId, widgetId),
+            eq(widgetExecutionCache.queryHash, queryHash),
+            eq(widgetExecutionCache.isValid, true),
+            sql`expires_at > NOW()`
+          )
+        )
+        .limit(1);
+
+      if (cachedResult.length) {
+        return res.json({
+          success: true,
+          data: cachedResult[0].resultData,
+          metadata: {
+            ...cachedResult[0].metadata,
+            cached: true,
+            cacheCreatedAt: cachedResult[0].createdAt
+          }
+        });
+      }
+    }
+
+    // Execute query
+    const queryService = DynamicQueryExecutionService.getInstance();
+    const result = await queryService.executeQuery({
+      systemId: queryData.systemId,
+      query: queryData.query,
+      method: queryData.method,
+      parameters: queryData.parameters,
+      transformations: queryData.transformations,
+      timeout: 30000
+    });
+
+    // Cache the result if cache is enabled and query succeeded
+    if (queryData.cacheEnabled && result.success) {
+      const queryHash = crypto
+        .createHash('md5')
+        .update(JSON.stringify({
+          query: queryData.query,
+          parameters: queryData.parameters,
+          method: queryData.method
+        }))
+        .digest('hex');
+
+      const expiresAt = new Date(Date.now() + (queryData.refreshInterval * 1000));
+
+      await db
+        .insert(widgetExecutionCache)
+        .values({
+          widgetId,
+          queryHash,
+          resultData: result.data,
+          metadata: result.metadata || {},
+          executionTime: result.metadata?.executionTime,
+          expiresAt
+        })
+        .onConflictDoUpdate({
+          target: [widgetExecutionCache.widgetId, widgetExecutionCache.queryHash],
+          set: {
+            resultData: result.data,
+            metadata: result.metadata || {},
+            executionTime: result.metadata?.executionTime,
+            isValid: true,
+            expiresAt,
+            createdAt: new Date()
+          }
+        });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching widget data:', error);
     res.status(500).json({ 
-      valid: false,
-      error: 'Failed to validate query' 
+      success: false,
+      error: {
+        code: 'WIDGET_DATA_ERROR',
+        message: 'Failed to fetch widget data'
+      }
     });
   }
 });
 
-export { router as customQueriesRouter }; 
+export { router as customQueryRoutes }; 
