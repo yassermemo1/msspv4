@@ -1,0 +1,672 @@
+{
+  "startTime": "2025-06-10T16:34:47.228Z",
+  "summary": {
+    "totalTests": 70,
+    "passed": 62,
+    "failed": 8,
+    "skipped": 0,
+    "coverage": {
+      "apiEndpoints": {
+        "total": 28,
+        "tested": 28,
+        "percentage": "100.0"
+      },
+      "formValidations": {
+        "total": 5,
+        "tested": 5,
+        "percentage": "100.0"
+      },
+      "databaseRelations": {
+        "total": 4,
+        "tested": 4,
+        "percentage": "100.0"
+      },
+      "constraints": {
+        "total": 5,
+        "tested": 4,
+        "percentage": "80.0"
+      }
+    }
+  },
+  "testCategories": {
+    "Authentication": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Login",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:47.307Z",
+          "hasToken": false,
+          "hasCookie": true
+        }
+      ]
+    },
+    "API Endpoints": {
+      "total": 28,
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Health Check",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.310Z",
+          "responseSize": 98,
+          "hasData": true
+        },
+        {
+          "name": "Version Info",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.414Z",
+          "responseSize": 163,
+          "hasData": true
+        },
+        {
+          "name": "Current User",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.519Z",
+          "responseSize": 250,
+          "hasData": true
+        },
+        {
+          "name": "2FA Status",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.625Z",
+          "responseSize": 42,
+          "hasData": true
+        },
+        {
+          "name": "Users List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.730Z",
+          "responseSize": 1116,
+          "hasData": true
+        },
+        {
+          "name": "User Settings",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.835Z",
+          "responseSize": 370,
+          "hasData": true
+        },
+        {
+          "name": "Company Settings",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:47.940Z",
+          "responseSize": 1565,
+          "hasData": true
+        },
+        {
+          "name": "Clients List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.053Z",
+          "responseSize": 4621,
+          "hasData": true
+        },
+        {
+          "name": "Archived Clients",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.161Z",
+          "responseSize": 2,
+          "hasData": true
+        },
+        {
+          "name": "Contracts List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.267Z",
+          "responseSize": 3642,
+          "hasData": true
+        },
+        {
+          "name": "Services List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.373Z",
+          "responseSize": 2862,
+          "hasData": true
+        },
+        {
+          "name": "Service Categories",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.479Z",
+          "responseSize": 64,
+          "hasData": true
+        },
+        {
+          "name": "Hardware Assets",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.587Z",
+          "responseSize": 717,
+          "hasData": true
+        },
+        {
+          "name": "License Pools",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.695Z",
+          "responseSize": 1484,
+          "hasData": true
+        },
+        {
+          "name": "Individual Licenses",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.803Z",
+          "responseSize": 2,
+          "hasData": true
+        },
+        {
+          "name": "Documents List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:48.915Z",
+          "responseSize": 2,
+          "hasData": true
+        },
+        {
+          "name": "Dashboard Stats",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.023Z",
+          "responseSize": 1702,
+          "hasData": true
+        },
+        {
+          "name": "Dashboard Widgets",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.129Z",
+          "responseSize": 1474,
+          "hasData": true
+        },
+        {
+          "name": "Recent Activity",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.233Z",
+          "responseSize": 3367,
+          "hasData": true
+        },
+        {
+          "name": "External Systems",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.339Z",
+          "responseSize": 1215,
+          "hasData": true
+        },
+        {
+          "name": "Data Sources",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.451Z",
+          "responseSize": 1079,
+          "hasData": true
+        },
+        {
+          "name": "Field Visibility",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.559Z",
+          "responseSize": 690,
+          "hasData": true
+        },
+        {
+          "name": "SAF List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.666Z",
+          "responseSize": 2,
+          "hasData": true
+        },
+        {
+          "name": "COC List",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.774Z",
+          "responseSize": 1747,
+          "hasData": true
+        },
+        {
+          "name": "Audit Logs",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.881Z",
+          "responseSize": 24781,
+          "hasData": true
+        },
+        {
+          "name": "Integration Engine Health",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:49.989Z",
+          "responseSize": 97,
+          "hasData": true
+        },
+        {
+          "name": "Entity Relation Types",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:50.094Z",
+          "responseSize": 505,
+          "hasData": true
+        },
+        {
+          "name": "Financial Transactions",
+          "status": 200,
+          "timestamp": "2025-06-10T16:34:50.202Z",
+          "responseSize": 1027,
+          "hasData": true
+        }
+      ]
+    },
+    "Form Validations": {
+      "total": 16,
+      "passed": 10,
+      "failed": 6,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Client Creation Form - Valid Data",
+          "status": 201,
+          "timestamp": "2025-06-10T16:34:50.316Z"
+        },
+        {
+          "name": "Client Creation Form - Invalid Data (name is required)",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:50.320Z",
+          "validationWorking": true
+        },
+        {
+          "name": "Client Creation Form - Invalid Data (name cannot be empty)",
+          "status": 201,
+          "timestamp": "2025-06-10T16:34:50.433Z",
+          "error": "Validation should have failed but didn't"
+        },
+        {
+          "name": "Client Creation Form - Invalid Data (invalid status)",
+          "status": 500,
+          "timestamp": "2025-06-10T16:34:50.540Z",
+          "error": "Validation should have failed but didn't"
+        },
+        {
+          "name": "Service Creation Form - Valid Data",
+          "status": 201,
+          "timestamp": "2025-06-10T16:34:50.848Z"
+        },
+        {
+          "name": "Service Creation Form - Invalid Data (name is required)",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:50.850Z",
+          "validationWorking": true
+        },
+        {
+          "name": "Service Creation Form - Invalid Data (invalid delivery model)",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:50.953Z",
+          "validationWorking": true
+        },
+        {
+          "name": "Contract Creation Form - Valid Data",
+          "status": 201,
+          "timestamp": "2025-06-10T16:34:51.266Z"
+        },
+        {
+          "name": "Contract Creation Form - Invalid Data (name is required)",
+          "status": 500,
+          "timestamp": "2025-06-10T16:34:51.269Z",
+          "error": "Validation should have failed but didn't"
+        },
+        {
+          "name": "Contract Creation Form - Invalid Data (invalid date format)",
+          "status": 500,
+          "timestamp": "2025-06-10T16:34:51.374Z",
+          "error": "Validation should have failed but didn't"
+        },
+        {
+          "name": "User Creation Form - Valid Data",
+          "status": 404,
+          "timestamp": "2025-06-10T16:34:51.682Z"
+        },
+        {
+          "name": "User Creation Form - Invalid Data (username is required)",
+          "status": 404,
+          "timestamp": "2025-06-10T16:34:51.685Z",
+          "validationWorking": true
+        },
+        {
+          "name": "User Creation Form - Invalid Data (invalid email format)",
+          "status": 404,
+          "timestamp": "2025-06-10T16:34:51.791Z",
+          "validationWorking": true
+        },
+        {
+          "name": "Hardware Asset Form - Valid Data",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:52.098Z",
+          "error": "Invalid hardware asset data"
+        },
+        {
+          "name": "Hardware Asset Form - Invalid Data (assetTag is required)",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:52.101Z",
+          "validationWorking": true
+        },
+        {
+          "name": "Hardware Asset Form - Invalid Data (invalid status)",
+          "status": 400,
+          "timestamp": "2025-06-10T16:34:52.207Z",
+          "validationWorking": true
+        }
+      ]
+    },
+    "Database Relations": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Contract-Client Relationship",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:52.516Z",
+          "description": "Test that contracts must belong to valid clients",
+          "details": {
+            "invalidClientRejected": true,
+            "status": 500
+          }
+        },
+        {
+          "name": "Service Scope Relationship",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:52.737Z",
+          "description": "Test service scope to contract and service relationships",
+          "details": {
+            "contractId": 11,
+            "serviceId": 4,
+            "status": 201
+          }
+        },
+        {
+          "name": "User Settings Relationship",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:52.945Z",
+          "description": "Test that user settings belong to valid users",
+          "details": {
+            "userId": 1,
+            "status": 200
+          }
+        },
+        {
+          "name": "Document Access Relationship",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:53.152Z",
+          "description": "Test document access controls and user relationships",
+          "details": {
+            "documentsAccessible": true,
+            "properAuthCheck": false,
+            "status": 200
+          }
+        }
+      ]
+    },
+    "Database Constraints": {
+      "total": 5,
+      "passed": 4,
+      "failed": 1,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Unique Username Constraint",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:53.357Z",
+          "description": "Test that usernames must be unique",
+          "details": {
+            "status": 404
+          }
+        },
+        {
+          "name": "Email Unique Constraint",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:53.565Z",
+          "description": "Test that email addresses must be unique",
+          "details": {
+            "status": 404
+          }
+        },
+        {
+          "name": "Client Status Constraint",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:53.771Z",
+          "description": "Test that client status must be valid enum value",
+          "details": {
+            "status": 500
+          }
+        },
+        {
+          "name": "Contract Date Constraint",
+          "status": "failed",
+          "timestamp": "2025-06-10T16:34:53.990Z",
+          "description": "Test that contract end date must be after start date",
+          "details": {
+            "status": 201
+          }
+        },
+        {
+          "name": "Foreign Key Constraint",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:54.197Z",
+          "description": "Test that foreign keys must reference valid records",
+          "details": {
+            "status": 500
+          }
+        }
+      ]
+    },
+    "Schema Validation": {
+      "total": 3,
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Client Schema Validation",
+          "status": "failed",
+          "timestamp": "2025-06-10T16:34:54.419Z",
+          "details": {
+            "passedTests": 2,
+            "totalTests": 3
+          }
+        },
+        {
+          "name": "Service Schema Validation",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:54.631Z",
+          "details": {
+            "passedTests": 3,
+            "totalTests": 3
+          }
+        },
+        {
+          "name": "User Schema Validation",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:54.842Z",
+          "details": {
+            "passedTests": 3,
+            "totalTests": 3
+          }
+        }
+      ]
+    },
+    "Business Logic": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Contract Lifecycle Events",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:55.053Z",
+          "details": {
+            "status": 200,
+            "hasEvents": true
+          }
+        },
+        {
+          "name": "Dashboard Statistics",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:55.264Z",
+          "details": {
+            "status": 200,
+            "hasStats": true,
+            "statsKeys": [
+              "overview",
+              "timeRange",
+              "period",
+              "recentActivity"
+            ]
+          }
+        },
+        {
+          "name": "Field Visibility Management",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:55.471Z",
+          "details": {
+            "status": 200,
+            "hasConfigs": true,
+            "configCount": 4
+          }
+        },
+        {
+          "name": "Audit Log Creation",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:55.687Z",
+          "details": {
+            "status": 200,
+            "hasLogs": true,
+            "logCount": 60
+          }
+        }
+      ]
+    },
+    "External Integrations": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Integration Engine Health",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:55.894Z",
+          "details": {
+            "status": 200,
+            "healthStatus": "healthy",
+            "dataSourcesCount": 2,
+            "widgetsCount": 5
+          }
+        },
+        {
+          "name": "External Systems Configuration",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:56.101Z",
+          "details": {
+            "status": 200,
+            "systemsCount": 2
+          }
+        },
+        {
+          "name": "Data Sources Management",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:56.315Z",
+          "details": {
+            "status": 200,
+            "dataSourcesCount": 2
+          }
+        },
+        {
+          "name": "External Widget Routes",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:56.523Z",
+          "details": {
+            "status": 404,
+            "routeAccessible": true
+          }
+        }
+      ]
+    },
+    "Security": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "Unauthorized Access Protection",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:56.726Z",
+          "details": {
+            "status": 401
+          }
+        },
+        {
+          "name": "Protected Route Access",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:56.933Z",
+          "details": {
+            "status": 200,
+            "properAuth": true
+          }
+        },
+        {
+          "name": "Session Management",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:57.141Z",
+          "details": {
+            "status": 200,
+            "sessionValid": true,
+            "userInfo": true
+          }
+        }
+      ]
+    },
+    "Performance": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "tests": [
+        {
+          "name": "API Response Times",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:57.359Z",
+          "details": {
+            "avgTime": 4,
+            "maxTime": 5,
+            "times": [
+              {
+                "endpoint": "/api/health",
+                "time": 4
+              },
+              {
+                "endpoint": "/api/clients",
+                "time": 5
+              },
+              {
+                "endpoint": "/api/services",
+                "time": 2
+              },
+              {
+                "endpoint": "/api/dashboard/stats",
+                "time": 5
+              }
+            ]
+          }
+        },
+        {
+          "name": "Concurrent Request Handling",
+          "status": "passed",
+          "timestamp": "2025-06-10T16:34:57.878Z",
+          "details": {
+            "allSuccessful": true,
+            "totalTime": 12,
+            "requestCount": 10
+          }
+        }
+      ]
+    }
+  },
+  "authToken": null,
+  "sessionCookie": null,
+  "endTime": "2025-06-10T16:34:58.379Z",
+  "duration": 11151
+}

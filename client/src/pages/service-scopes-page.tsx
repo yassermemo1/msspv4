@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,10 +29,16 @@ import {
   Plus,
   Edit,
   Trash2,
-  Eye
+  Eye,
+  List,
+  Grid,
+  Filter,
+  X,
+  ChevronDown
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const serviceScopeFormSchema = z.object({
   contractId: z.string().min(1, "Contract is required"),
@@ -57,6 +64,18 @@ export default function ServiceScopesPage() {
   const [serviceScopes, setServiceScopes] = useState<ServiceScope[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
+  
+  // Advanced filter state
+  const [serviceTierFilter, setServiceTierFilter] = useState('all');
+  const [coverageFilter, setCoverageFilter] = useState('all');
+  const [epsMin, setEpsMin] = useState('');
+  const [epsMax, setEpsMax] = useState('');
+  const [endpointsMin, setEndpointsMin] = useState('');
+  const [endpointsMax, setEndpointsMax] = useState('');
+  const [responseTimeMin, setResponseTimeMin] = useState('');
+  const [responseTimeMax, setResponseTimeMax] = useState('');
   
   // Fetch service scopes, contracts, services, and clients
   const { data: contracts = [] } = useQuery<Contract[]>({
@@ -188,11 +207,31 @@ export default function ServiceScopesPage() {
 
   const handleEditScope = (scope: any) => {
     setSelectedScope(scope);
+    
+    // Extract description and deliverables from scopeDefinition
+    const description = scope.scopeDefinition?.description || scope.description || "";
+    const deliverables = scope.scopeDefinition?.deliverables || scope.deliverables || [];
+    
+    // Convert deliverables to comma-separated string
+    let deliverablesString = "";
+    if (Array.isArray(deliverables)) {
+      deliverablesString = deliverables.map((deliverable: any) => {
+        if (typeof deliverable === 'string') {
+          return deliverable;
+        } else if (deliverable.item) {
+          return deliverable.item;
+        } else if (deliverable.description) {
+          return deliverable.description;
+        }
+        return String(deliverable);
+      }).join(", ");
+    }
+    
     editForm.reset({
       contractId: scope.contractId.toString(),
       serviceId: scope.serviceId.toString(),
-      description: scope.description || "",
-      deliverables: Array.isArray(scope.deliverables) ? scope.deliverables.join(", ") : "",
+      description: description,
+      deliverables: deliverablesString,
       hoursBudget: scope.hoursBudget?.toString() || "",
       hourlyRate: scope.hourlyRate?.toString() || "",
       status: scope.status || "planning",
@@ -263,31 +302,99 @@ export default function ServiceScopesPage() {
     return scope.serviceName || getServiceName(scope.serviceId);
   };
 
-  useEffect(() => {
-    fetchServiceScopes();
-  }, []);
-
   const fetchServiceScopes = async () => {
     try {
-      const response = await fetch('/api/service-scopes', {
+      setLoading(true);
+      
+      // Build query parameters for advanced search
+      const params = new URLSearchParams();
+      
+      // Text search
+      if (searchQuery.trim()) {
+        params.append('q', searchQuery.trim());
+      }
+      
+      // Status filter
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      
+      // Advanced filters
+      if (serviceTierFilter !== 'all') {
+        params.append('serviceTier', serviceTierFilter);
+      }
+      
+      if (coverageFilter !== 'all') {
+        params.append('coverageHours', coverageFilter);
+      }
+      
+      if (epsMin.trim()) {
+        params.append('epsMin', epsMin.trim());
+      }
+      
+      if (epsMax.trim()) {
+        params.append('epsMax', epsMax.trim());
+      }
+      
+      if (endpointsMin.trim()) {
+        params.append('endpointsMin', endpointsMin.trim());
+      }
+      
+      if (endpointsMax.trim()) {
+        params.append('endpointsMax', endpointsMax.trim());
+      }
+      
+      if (responseTimeMin.trim()) {
+        params.append('responseTimeMin', responseTimeMin.trim());
+      }
+      
+      if (responseTimeMax.trim()) {
+        params.append('responseTimeMax', responseTimeMax.trim());
+      }
+      
+      // Use search endpoint if any filters are applied, otherwise use regular endpoint
+      const endpoint = params.toString() ? 
+        `/api/service-scopes/search?${params.toString()}` : 
+        '/api/service-scopes';
+      
+      const response = await fetch(endpoint, {
         credentials: 'include'
       });
       
       if (!response.ok) throw new Error('Failed to fetch service scopes');
       
-      const data = await response.json();
-      setServiceScopes(data);
+      const result = await response.json();
+      
+      // Handle both paginated and non-paginated responses
+      const scopes = result.data || result;
+      setServiceScopes(scopes);
     } catch (error) {
       console.error('Error fetching service scopes:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load service scopes',
+        description: 'Failed to fetch service scopes',
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
+
+  // Re-fetch when filters change
+  useEffect(() => {
+    fetchServiceScopes();
+  }, [
+    searchQuery, 
+    statusFilter, 
+    serviceTierFilter, 
+    coverageFilter, 
+    epsMin, 
+    epsMax, 
+    endpointsMin, 
+    endpointsMax, 
+    responseTimeMin, 
+    responseTimeMax
+  ]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this service scope?')) return;
@@ -316,17 +423,7 @@ export default function ServiceScopesPage() {
     }
   };
 
-  const filteredScopes = serviceScopes.filter(scope => {
-    const matchesSearch = 
-      scope.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      scope.serviceName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      scope.contractName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      scope.clientName?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || scope.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const filteredScopes = serviceScopes;
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -359,209 +456,174 @@ export default function ServiceScopesPage() {
       <main className="flex-1 overflow-auto p-6 pt-16 md:pt-6">
         <div className="space-y-6">
           {/* Header Actions */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search service scopes..."
-                  className="pl-10 w-64"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold tracking-tight">Service Scopes</h1>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
+              >
+                {viewMode === 'table' ? <Grid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                {viewMode === 'table' ? 'Card View' : 'Table View'}
+              </Button>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Service Scope
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-                <DialogHeader className="flex-shrink-0">
-                  <DialogTitle>Create New Service Scope</DialogTitle>
-                </DialogHeader>
-                <div className="flex-1 overflow-y-auto pr-2 -mr-2">
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="contractId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Contract</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a contract" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {(contracts || []).map((contract) => (
-                                  <SelectItem key={contract.id} value={contract.id.toString()}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{contract.name}</span>
-                                      <span className="text-xs text-gray-500">
-                                        Client: {clients.find(c => c.id === contract.clientId)?.name || 'Unknown'} | 
-                                        Status: {contract.status} | 
-                                        Value: {contract.totalValue ? format(contract.totalValue.toString()) : 'N/A'}
-                                      </span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="serviceId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Service</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a service" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {(services || []).map((service) => (
-                                  <SelectItem key={service.id} value={service.id.toString()}>
-                                    {service.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Detailed description of the service scope..."
-                                rows={3}
-                                {...field}
-                                value={field.value || ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="deliverables"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Deliverables</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="List deliverables separated by commas (e.g., Security assessment, Vulnerability report, Compliance documentation)"
-                                rows={3}
-                                {...field}
-                                value={field.value || ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="hoursBudget"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Hours Budget</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0"
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="hourlyRate"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Hourly Rate ($)</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={form.control}
-                        name="status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="planning">Planning</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="on_hold">On Hold</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200 bg-gray-50 -mx-6 px-6 py-4">
-                        <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={createServiceScopeMutation.isPending}>
-                          {createServiceScopeMutation.isPending ? "Creating..." : "Create Service Scope"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
+
+          {/* Search and Filter Controls */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col space-y-4">
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Search service scopes, clients, services..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
+                    className="flex items-center space-x-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    <span>Advanced Filters</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isAdvancedFilterOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                </div>
+
+                {/* Advanced Filters */}
+                <Collapsible open={isAdvancedFilterOpen} onOpenChange={setIsAdvancedFilterOpen}>
+                  <CollapsibleContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">Service Tier</label>
+                        <Select value={serviceTierFilter} onValueChange={setServiceTierFilter}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Tiers</SelectItem>
+                            <SelectItem value="Enterprise">Enterprise</SelectItem>
+                            <SelectItem value="Professional">Professional</SelectItem>
+                            <SelectItem value="Standard">Standard</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">Coverage Hours</label>
+                        <Select value={coverageFilter} onValueChange={setCoverageFilter}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Coverage</SelectItem>
+                            <SelectItem value="24x7">24x7</SelectItem>
+                            <SelectItem value="16x5">16x5</SelectItem>
+                            <SelectItem value="8x5">8x5</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">EPS Range</label>
+                        <div className="flex space-x-2">
+                          <Input
+                            placeholder="Min"
+                            value={epsMin}
+                            onChange={(e) => setEpsMin(e.target.value)}
+                            type="number"
+                          />
+                          <Input
+                            placeholder="Max"
+                            value={epsMax}
+                            onChange={(e) => setEpsMax(e.target.value)}
+                            type="number"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">Endpoints Range</label>
+                        <div className="flex space-x-2">
+                          <Input
+                            placeholder="Min"
+                            value={endpointsMin}
+                            onChange={(e) => setEndpointsMin(e.target.value)}
+                            type="number"
+                          />
+                          <Input
+                            placeholder="Max"
+                            value={endpointsMax}
+                            onChange={(e) => setEndpointsMax(e.target.value)}
+                            type="number"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">Response Time (min)</label>
+                        <div className="flex space-x-2">
+                          <Input
+                            placeholder="Min"
+                            value={responseTimeMin}
+                            onChange={(e) => setResponseTimeMin(e.target.value)}
+                            type="number"
+                          />
+                          <Input
+                            placeholder="Max"
+                            value={responseTimeMax}
+                            onChange={(e) => setResponseTimeMax(e.target.value)}
+                            type="number"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-end">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setServiceTierFilter('all');
+                            setCoverageFilter('all');
+                            setEpsMin('');
+                            setEpsMax('');
+                            setEndpointsMin('');
+                            setEndpointsMax('');
+                            setResponseTimeMin('');
+                            setResponseTimeMax('');
+                          }}
+                          className="w-full"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Clear Filters
+                        </Button>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -628,20 +690,137 @@ export default function ServiceScopesPage() {
               <CardTitle>Service Delivery Scopes</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {filteredScopes.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Service Scopes Found</h3>
-                    <p className="text-gray-500 mb-4">
-                      Define service scopes to specify deliverables and timelines for your contracts.
-                    </p>
-                    <Button onClick={() => setIsDialogOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Service Scope
-                    </Button>
-                  </div>
-                ) : (
+              {filteredScopes.length === 0 ? (
+                <div className="text-center py-12">
+                  <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Service Scopes Found</h3>
+                  <p className="text-gray-500 mb-4">
+                    Define service scopes to specify deliverables and timelines for your contracts.
+                  </p>
+                  <Button onClick={() => setIsDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Service Scope
+                  </Button>
+                </div>
+              ) : viewMode === 'table' ? (
+                // Table View
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Contract</TableHead>
+                        <TableHead>Tier</TableHead>
+                        <TableHead>EPS</TableHead>
+                        <TableHead>Endpoints</TableHead>
+                        <TableHead>Coverage</TableHead>
+                        <TableHead>Response Time</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Start Date</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(filteredScopes || []).map((scope) => {
+                        const contract = contracts.find(c => c.id === scope.contractId);
+                        const service = services.find(s => s.id === scope.serviceId);
+                        const client = clients.find(c => c.id === (contract?.clientId || scope.clientId));
+                        
+                        return (
+                          <TableRow key={scope.id}>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Shield className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium">{service?.name || getScopeServiceName(scope)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Building className="h-4 w-4 text-gray-600" />
+                                <span>{client?.name || getScopeClientName(scope)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate" title={scope.contractName}>
+                              {scope.contractName || "No contract name"}
+                            </TableCell>
+                            <TableCell>
+                              {scope.serviceTier && (
+                                <Badge variant="outline" className="text-xs">
+                                  {scope.serviceTier}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {scope.eps ? (
+                                <span className="font-mono text-sm">{scope.eps.toLocaleString()}</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {scope.endpoints ? (
+                                <span className="font-mono text-sm">{scope.endpoints.toLocaleString()}</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {scope.coverageHours && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {scope.coverageHours}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {scope.responseTimeMinutes ? (
+                                <span className="text-sm">{scope.responseTimeMinutes}m</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {getStatusBadge(scope.status)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Calendar className="h-4 w-4 text-gray-600" />
+                                <span>{formatLocalDate(scope.startDate?.toString())}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="max-w-xs truncate" title={scope.scopeDefinition?.description || scope.description}>
+                                {scope.scopeDefinition?.description || scope.description || "No description provided"}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-1">
+                                <Button variant="ghost" size="sm" onClick={() => handleViewDetails(scope)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleEditScope(scope)}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(scope.id)}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                // Card View
+                <div className="space-y-4">
                   <div className="grid gap-4">
                     {(filteredScopes || []).map((scope) => (
                       <div key={scope.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -667,28 +846,65 @@ export default function ServiceScopesPage() {
                               
                               <div className="flex items-center space-x-2">
                                 <Calendar className="h-4 w-4" />
-                                <span>Start: {formatLocalDate(scope.startDate.toString())}</span>
+                                <span>Start: {formatLocalDate(scope.startDate?.toString())}</span>
                               </div>
                               
                               <div className="flex items-center space-x-2">
                                 <Clock className="h-4 w-4" />
-                                <span>Timeline: {scope.timeline}</span>
+                                <span>Coverage: {scope.coverageHours || 'N/A'}</span>
                               </div>
                             </div>
+
+                            {/* Scope Variables */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                              {scope.serviceTier && (
+                                <div className="bg-blue-50 px-2 py-1 rounded text-xs">
+                                  <span className="font-medium text-blue-800">Tier:</span>
+                                  <span className="ml-1 text-blue-600">{scope.serviceTier}</span>
+                                </div>
+                              )}
+                              
+                              {scope.eps && (
+                                <div className="bg-green-50 px-2 py-1 rounded text-xs">
+                                  <span className="font-medium text-green-800">EPS:</span>
+                                  <span className="ml-1 text-green-600 font-mono">{scope.eps.toLocaleString()}</span>
+                                </div>
+                              )}
+                              
+                              {scope.endpoints && (
+                                <div className="bg-purple-50 px-2 py-1 rounded text-xs">
+                                  <span className="font-medium text-purple-800">Endpoints:</span>
+                                  <span className="ml-1 text-purple-600 font-mono">{scope.endpoints.toLocaleString()}</span>
+                                </div>
+                              )}
+                              
+                              {scope.responseTimeMinutes && (
+                                <div className="bg-orange-50 px-2 py-1 rounded text-xs">
+                                  <span className="font-medium text-orange-800">Response:</span>
+                                  <span className="ml-1 text-orange-600">{scope.responseTimeMinutes}m</span>
+                                </div>
+                              )}
+                            </div>
                             
-                            {scope.description && (
-                              <p className="text-gray-700 mb-3">{scope.description}</p>
+                            {(scope.scopeDefinition?.description || scope.description) && (
+                              <p className="text-gray-700 mb-3">{scope.scopeDefinition?.description || scope.description}</p>
                             )}
                             
                             {/* Deliverables */}
                             <div>
                               <h4 className="text-sm font-medium text-gray-900 mb-2">Key Deliverables:</h4>
                               <div className="flex flex-wrap gap-2">
-                                {(scope.deliverables || []).map((deliverable, index) => (
-                                  <Badge key={index} variant="outline" className="text-xs">
-                                    {deliverable}
-                                  </Badge>
-                                ))}
+                                {(() => {
+                                  const deliverables = scope.scopeDefinition?.deliverables || scope.deliverables || [];
+                                  if (deliverables.length === 0) {
+                                    return <span className="text-gray-500 text-xs">No deliverables specified</span>;
+                                  }
+                                  return deliverables.map((deliverable: any, index: number) => (
+                                    <Badge key={index} variant="outline" className="text-xs">
+                                      {typeof deliverable === 'string' ? deliverable : deliverable.item || deliverable.description || deliverable}
+                                    </Badge>
+                                  ));
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -713,8 +929,8 @@ export default function ServiceScopesPage() {
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -773,17 +989,25 @@ export default function ServiceScopesPage() {
               
               <div>
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Description</h3>
-                <p className="text-gray-700">{selectedScope.description}</p>
+                <p className="text-gray-700 whitespace-pre-line">
+                  {selectedScope.scopeDefinition?.description || selectedScope.description || "No description provided"}
+                </p>
               </div>
               
               <div>
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Deliverables</h3>
                 <div className="flex flex-wrap gap-2">
-                  {(selectedScope.deliverables || []).map((deliverable: string, index: number) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {deliverable}
-                    </Badge>
-                  ))}
+                  {(() => {
+                    const deliverables = selectedScope.scopeDefinition?.deliverables || selectedScope.deliverables || [];
+                    if (deliverables.length === 0) {
+                      return <p className="text-gray-500 text-sm">No deliverables specified</p>;
+                    }
+                    return deliverables.map((deliverable: any, index: number) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {typeof deliverable === 'string' ? deliverable : deliverable.item || deliverable.description || deliverable}
+                      </Badge>
+                    ));
+                  })()}
                 </div>
               </div>
             </div>

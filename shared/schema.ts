@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb, uuid, check, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb, uuid, check, index, unique, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -204,8 +204,47 @@ export const serviceScopes = pgTable("service_scopes", {
   status: text("status").default("active"), // active, pending, completed, cancelled
   monthlyValue: decimal("monthly_value", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  // Indexed scope variables for efficient filtering
+  eps: integer("eps"), // Events Per Second
+  endpoints: integer("endpoints"), // EDR/Endpoint count
+  dataVolumeGb: decimal("data_volume_gb", { precision: 10, scale: 2 }), // Data volume in GB
+  logSources: integer("log_sources"), // For SIEM services
+  firewallDevices: integer("firewall_devices"), // For Firewall services
+  pamUsers: integer("pam_users"), // For PAM services
+  responseTimeMinutes: integer("response_time_minutes"), // Response time in minutes
+  coverageHours: text("coverage_hours"), // Coverage hours (8x5, 16x5, 24x7)
+  serviceTier: text("service_tier"), // Enterprise, Professional, Standard
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Dynamic scope variable definitions table
+export const scopeVariableDefinitions = pgTable('scope_variable_definitions', {
+  id: serial('id').primaryKey(),
+  variableName: varchar('variable_name', { length: 100 }).notNull().unique(),
+  variableType: varchar('variable_type', { length: 20 }).notNull(), // integer, decimal, text, boolean
+  displayName: varchar('display_name', { length: 200 }).notNull(),
+  description: text('description'),
+  isFilterable: boolean('is_filterable').default(true),
+  isIndexed: boolean('is_indexed').default(false),
+  filterComponent: varchar('filter_component', { length: 50 }), // range, select, text, boolean
+  unit: varchar('unit', { length: 20 }), // GB, minutes, endpoints, etc.
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Dynamic scope variable values table
+export const scopeVariableValues = pgTable('scope_variable_values', {
+  id: serial('id').primaryKey(),
+  serviceScopeId: integer('service_scope_id').notNull().references(() => serviceScopes.id, { onDelete: 'cascade' }),
+  variableName: varchar('variable_name', { length: 100 }).notNull().references(() => scopeVariableDefinitions.variableName),
+  valueText: text('value_text'),
+  valueInteger: integer('value_integer'),
+  valueDecimal: decimal('value_decimal', { precision: 15, scale: 4 }),
+  valueBoolean: boolean('value_boolean'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniqueScope: unique().on(table.serviceScopeId, table.variableName),
+}));
 
 // Proposals for tracking technical and financial proposals
 export const proposals = pgTable("proposals", {

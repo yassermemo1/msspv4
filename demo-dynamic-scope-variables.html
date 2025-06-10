@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Scope Variables Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .demo-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .code-block {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .api-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        button {
+            background-color: #4299e1;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+        .success {
+            color: #38a169;
+            font-weight: bold;
+        }
+        .error {
+            color: #e53e3e;
+            font-weight: bold;
+        }
+        .result {
+            background-color: #f7fafc;
+            padding: 10px;
+            border-left: 4px solid #4299e1;
+            margin: 10px 0;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Dynamic Scope Variables System Demo</h1>
+        <p>This demo shows how to add new scope variables to your service scopes without any schema changes or code deployments.</p>
+        
+        <div class="demo-section">
+            <h2>✨ What Makes This System Special</h2>
+            <ul>
+                <li><strong>Zero Downtime Expansion:</strong> Add new scope variables without deployments</li>
+                <li><strong>Automatic Type Detection:</strong> System infers data types and creates appropriate indexes</li>
+                <li><strong>Universal Filtering:</strong> Filter by any variable using consistent API patterns</li>
+                <li><strong>Self-Documenting:</strong> System maintains metadata about all variables</li>
+                <li><strong>Performance Maintained:</strong> Indexed queries remain fast even with dynamic variables</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>📊 Current Variable Definitions</h2>
+            <button onclick="loadVariableDefinitions()">Load Variable Definitions</button>
+            <div id="variableDefinitions" class="result"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>➕ Add New Scope Variable</h2>
+            <div>
+                <label>Scope ID:</label>
+                <input type="number" id="scopeId" value="1" placeholder="Service Scope ID">
+                
+                <label>Variable Name:</label>
+                <input type="text" id="variableName" placeholder="e.g., threat_hunting_coverage">
+                
+                <label>Value:</label>
+                <input type="text" id="variableValue" placeholder="e.g., 95% or 24 or true">
+                
+                <label>Type:</label>
+                <select id="variableType">
+                    <option value="auto">Auto-detect</option>
+                    <option value="integer">Integer</option>
+                    <option value="decimal">Decimal</option>
+                    <option value="text">Text</option>
+                    <option value="boolean">Boolean</option>
+                </select>
+                
+                <br><br>
+                <button onclick="addScopeVariable()">Add Variable</button>
+            </div>
+            <div id="addVariableResult" class="result"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔍 Dynamic Filtering Examples</h2>
+            <div class="api-demo">
+                <div>
+                    <h3>Filter Examples</h3>
+                    <button onclick="filterByEPS()">Filter: EPS > 4000</button>
+                    <button onclick="filterByTier()">Filter: Enterprise Tier</button>
+                    <button onclick="filterByEndpoints()">Filter: Endpoints > 1000</button>
+                    <button onclick="complexFilter()">Complex: EPS > 4000 & Endpoints > 1000</button>
+                </div>
+                <div>
+                    <h3>Statistics</h3>
+                    <button onclick="getVariableStats()">Get Variable Statistics</button>
+                    <button onclick="discoverVariables()">Discover New Variables</button>
+                </div>
+            </div>
+            <div id="filterResult" class="result"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>💡 Real-World Examples</h2>
+            <div>
+                <h3>Security Service Variables You Can Add:</h3>
+                <button onclick="addSecurityExamples()">Add Security Analytics Variables</button>
+                <button onclick="addComplianceExamples()">Add Compliance Variables</button>
+                <button onclick="addThreatExamples()">Add Threat Hunting Variables</button>
+            </div>
+            <div id="examplesResult" class="result"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📋 API Reference</h2>
+            <div class="code-block">
+# Get all variable definitions for dynamic UI generation
+GET /api/service-scopes/variables/definitions
+
+# Filter scopes with EPS > 4000
+GET /api/service-scopes/dynamic?eps_min=4000
+
+# Filter by multiple criteria
+GET /api/service-scopes/dynamic?service_tier=Enterprise&eps_min=5000&endpoints_min=1000
+
+# Add new variable to a scope
+POST /api/service-scopes/123/variables
+{
+  "variableName": "ssl_certificate_count",
+  "value": "45",
+  "type": "integer"
+}
+
+# Wildcard text search
+GET /api/service-scopes/dynamic?compliance_frameworks=*ISO*
+
+# Get usage statistics
+GET /api/service-scopes/variables/stats
+
+# Discover new variables from scope definitions
+GET /api/service-scopes/variables/discover
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+
+        async function makeRequest(url, options = {}) {
+            try {
+                const response = await fetch(API_BASE + url, {
+                    credentials: 'include',
+                    ...options
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                return { success: true, data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function loadVariableDefinitions() {
+            const result = await makeRequest('/api/service-scopes/variables/definitions');
+            const div = document.getElementById('variableDefinitions');
+            
+            if (result.success) {
+                div.innerHTML = `
+                    <div class="success">✅ Found ${result.data.length} variable definitions</div>
+                    <table border="1" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <tr>
+                            <th>Variable Name</th>
+                            <th>Display Name</th>
+                            <th>Type</th>
+                            <th>Unit</th>
+                            <th>Filter Component</th>
+                        </tr>
+                        ${result.data.map(v => `
+                            <tr>
+                                <td>${v.name}</td>
+                                <td>${v.displayName}</td>
+                                <td>${v.type}</td>
+                                <td>${v.unit || '-'}</td>
+                                <td>${v.filterComponent}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            } else {
+                div.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
+            }
+        }
+
+        async function addScopeVariable() {
+            const scopeId = document.getElementById('scopeId').value;
+            const variableName = document.getElementById('variableName').value;
+            const variableValue = document.getElementById('variableValue').value;
+            const variableType = document.getElementById('variableType').value;
+            
+            if (!scopeId || !variableName || !variableValue) {
+                document.getElementById('addVariableResult').innerHTML = 
+                    '<div class="error">❌ Please fill in all fields</div>';
+                return;
+            }
+
+            const result = await makeRequest(`/api/service-scopes/${scopeId}/variables`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    variableName,
+                    value: variableValue,
+                    type: variableType
+                })
+            });
+
+            const div = document.getElementById('addVariableResult');
+            if (result.success) {
+                div.innerHTML = `
+                    <div class="success">✅ Successfully added variable "${variableName}" = "${variableValue}" to scope ${scopeId}</div>
+                    <p>The system automatically:</p>
+                    <ul>
+                        <li>Created the variable definition if it didn't exist</li>
+                        <li>Inferred the data type (${variableType === 'auto' ? 'auto-detected' : variableType})</li>
+                        <li>Added appropriate database indexes for efficient querying</li>
+                        <li>Made it available for filtering immediately</li>
+                    </ul>
+                `;
+            } else {
+                div.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
+            }
+        }
+
+        async function filterByEPS() {
+            const result = await makeRequest('/api/service-scopes/dynamic?eps_min=4000');
+            showFilterResult('EPS > 4000', result);
+        }
+
+        async function filterByTier() {
+            const result = await makeRequest('/api/service-scopes/dynamic?service_tier=Enterprise');
+            showFilterResult('Service Tier = Enterprise', result);
+        }
+
+        async function filterByEndpoints() {
+            const result = await makeRequest('/api/service-scopes/dynamic?endpoints_min=1000');
+            showFilterResult('Endpoints > 1000', result);
+        }
+
+        async function complexFilter() {
+            const result = await makeRequest('/api/service-scopes/dynamic?eps_min=4000&endpoints_min=1000');
+            showFilterResult('EPS > 4000 AND Endpoints > 1000', result);
+        }
+
+        function showFilterResult(filterName, result) {
+            const div = document.getElementById('filterResult');
+            if (result.success) {
+                div.innerHTML = `
+                    <div class="success">✅ Filter "${filterName}" found ${result.data.data.length} results</div>
+                    <div>Total: ${result.data.pagination.total} | Page: ${result.data.pagination.page}</div>
+                    <pre>${JSON.stringify(result.data.data.slice(0, 3), null, 2)}</pre>
+                `;
+            } else {
+                div.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
+            }
+        }
+
+        async function getVariableStats() {
+            const result = await makeRequest('/api/service-scopes/variables/stats');
+            const div = document.getElementById('filterResult');
+            
+            if (result.success) {
+                div.innerHTML = `
+                    <div class="success">✅ Variable Statistics</div>
+                    <pre>${JSON.stringify(result.data.slice(0, 5), null, 2)}</pre>
+                `;
+            } else {
+                div.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
+            }
+        }
+
+        async function discoverVariables() {
+            const result = await makeRequest('/api/service-scopes/variables/discover');
+            const div = document.getElementById('filterResult');
+            
+            if (result.success) {
+                div.innerHTML = `
+                    <div class="success">✅ ${result.data.message}</div>
+                    <pre>${JSON.stringify(result.data.newVariables, null, 2)}</pre>
+                `;
+            } else {
+                div.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
+            }
+        }
+
+        async function addSecurityExamples() {
+            const examples = [
+                { name: 'threat_detection_accuracy', value: '99.5%' },
+                { name: 'malware_samples_analyzed', value: '50000' },
+                { name: 'false_positive_rate', value: '0.02' },
+                { name: 'security_analysts', value: '8' }
+            ];
+
+            const results = [];
+            for (const example of examples) {
+                const result = await makeRequest('/api/service-scopes/1/variables', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        variableName: example.name,
+                        value: example.value,
+                        type: 'auto'
+                    })
+                });
+                results.push(`${example.name}: ${result.success ? '✅' : '❌'}`);
+            }
+
+            document.getElementById('examplesResult').innerHTML = `
+                <div class="success">Security Analytics Variables Added:</div>
+                <ul>${results.map(r => `<li>${r}</li>`).join('')}</ul>
+            `;
+        }
+
+        async function addComplianceExamples() {
+            const examples = [
+                { name: 'compliance_score', value: '98%' },
+                { name: 'audit_frequency', value: 'Quarterly' },
+                { name: 'certification_level', value: 'ISO27001' },
+                { name: 'risk_score', value: '2.3' }
+            ];
+
+            const results = [];
+            for (const example of examples) {
+                const result = await makeRequest('/api/service-scopes/1/variables', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        variableName: example.name,
+                        value: example.value,
+                        type: 'auto'
+                    })
+                });
+                results.push(`${example.name}: ${result.success ? '✅' : '❌'}`);
+            }
+
+            document.getElementById('examplesResult').innerHTML = `
+                <div class="success">Compliance Variables Added:</div>
+                <ul>${results.map(r => `<li>${r}</li>`).join('')}</ul>
+            `;
+        }
+
+        async function addThreatExamples() {
+            const examples = [
+                { name: 'threat_hunting_coverage', value: '24x7' },
+                { name: 'ioc_feeds', value: '15' },
+                { name: 'threat_intelligence_sources', value: '25' },
+                { name: 'mean_time_to_detection', value: '45' }
+            ];
+
+            const results = [];
+            for (const example of examples) {
+                const result = await makeRequest('/api/service-scopes/1/variables', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        variableName: example.name,
+                        value: example.value,
+                        type: 'auto'
+                    })
+                });
+                results.push(`${example.name}: ${result.success ? '✅' : '❌'}`);
+            }
+
+            document.getElementById('examplesResult').innerHTML = `
+                <div class="success">Threat Hunting Variables Added:</div>
+                <ul>${results.map(r => `<li>${r}</li>`).join('')}</ul>
+            `;
+        }
+
+        // Auto-load variable definitions on page load
+        window.onload = function() {
+            loadVariableDefinitions();
+        };
+    </script>
+</body>
+</html> 

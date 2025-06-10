@@ -15,7 +15,7 @@ import {
   TimeoutError,
   isOperationalError,
   getErrorDetails
-} from '../lib/errors.js';
+} from '../lib/errors.ts';
 
 // Enhanced error interface
 interface ErrorResponse {

@@ -1,4 +1,4 @@
-import { ExternalSystem } from '../types/external-systems.js';
+import { ExternalSystem } from '../types/external-systems.ts';
 
 export interface ExternalWidgetDefinition {
   id: string;

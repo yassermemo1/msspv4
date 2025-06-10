@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db } from '../db.js';
-import { customQueries, customQueryWidgets, externalSystems, widgetExecutionCache } from '../../shared/schema.js';
+import { db } from '../db.ts';
+import { customQueries, customQueryWidgets, externalSystems, widgetExecutionCache } from '../../shared/schema.ts';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
-import { DynamicQueryExecutionService } from '../services/query-execution-service.js';
+import { DynamicQueryExecutionService } from '../services/query-execution-service.ts';
 import crypto from 'crypto';
 
 const router = Router();

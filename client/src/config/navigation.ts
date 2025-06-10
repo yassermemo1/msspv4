@@ -31,6 +31,7 @@ import {
   Zap,
   Upload,
   Network,
+  UserPlus,
   type LucideIcon
 } from "lucide-react";
 
@@ -53,6 +54,13 @@ export const mainNavigation: NavigationItem[] = [
     href: "/", 
     icon: LayoutDashboard,
     description: "Overview and key metrics"
+  },
+  { 
+    name: "Client Onboarding", 
+    href: "/onboarding", 
+    icon: UserPlus,
+    description: "Guided client onboarding with pool validation",
+    isNew: true
   },
   { 
     name: "Dynamic Dashboards", 

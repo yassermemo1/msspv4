@@ -18,7 +18,7 @@ import {
   // Import all the table schemas needed for Drizzle queries
   users, userSettings, companySettings, clients, clientContacts, contracts, proposals, services, serviceScopes, financialTransactions,
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
-  clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs,
+  clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   dashboardWidgets, userDashboards, dashboardWidgetAssignments,
   externalSystems, clientExternalMappings, externalWidgetTemplates, widgetExecutionCache,
   pagePermissions, savedSearches, searchHistory
@@ -40,7 +40,7 @@ import * as schema from "@shared/schema";
 import multer from "multer";
 import fetch from 'node-fetch';
 import { ExternalApiService } from './external-api-service';
-import { DynamicQueryExecutionService } from './services/query-execution-service.js';
+import { DynamicQueryExecutionService } from './services/query-execution-service.ts';
 import { entityRelationsService } from "./entity-relations";
 import { EntityType, RelationshipType, ENTITY_TYPES, RELATIONSHIP_TYPES } from "@shared/entity-relations";
 import { type Client, type InsertClient, type User, 
@@ -61,9 +61,11 @@ import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
 import dashboardBridge from './api/integration-engine/dashboard-bridge';
 import externalDataBridge from './api/integration-engine/external-data-bridge';
-import { externalWidgetRoutes } from './routes/external-widgets.js';
-import { integrationEngineWidgetRoutes } from './routes/integration-engine-widgets.js';
+import { externalWidgetRoutes } from './routes/external-widgets.ts';
+import { integrationEngineWidgetRoutes } from './routes/integration-engine-widgets.ts';
 import { codebaseAnalyzer } from './services/codebase-analyzer';
+import { router as dynamicServiceScopeRoutes } from './api/dynamic-service-scopes';
+import poolValidationRoutes from './api/pool-validation';
 
 const scryptAsync = promisify(scrypt);
 
@@ -1548,46 +1550,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SERVICE SCOPES ENDPOINTS
   // ========================================
 
-  // Get all service scopes
+  // Get all service scopes with filtering support
   app.get("/api/service-scopes", requireAuth, async (req, res) => {
     try {
-      const { clientId, contractId } = req.query;
+      const { 
+        clientId, 
+        contractId, 
+        serviceId,
+        serviceTier,
+        coverageHours,
+        epsMin,
+        epsMax,
+        endpointsMin,
+        endpointsMax,
+        responseTimeMin,
+        responseTimeMax,
+        page = '1',
+        limit = '50',
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
       
       let whereConditions: any[] = [];
+      
+      // Basic filters
       if (clientId) {
-        // Join with contracts to filter by clientId
-        const scopes = await db
-          .select({
-            id: serviceScopes.id,
-            contractId: serviceScopes.contractId,
-            serviceId: serviceScopes.serviceId,
-            scopeDefinition: serviceScopes.scopeDefinition,
-            startDate: serviceScopes.startDate,
-            endDate: serviceScopes.endDate,
-            status: serviceScopes.status,
-            monthlyValue: serviceScopes.monthlyValue,
-            notes: serviceScopes.notes,
-            createdAt: serviceScopes.createdAt,
-            contractName: contracts.name,
-            clientId: contracts.clientId,
-            clientName: clients.name,
-            serviceName: services.name
-          })
-          .from(serviceScopes)
-          .leftJoin(contracts, eq(serviceScopes.contractId, contracts.id))
-          .leftJoin(clients, eq(contracts.clientId, clients.id))
-          .leftJoin(services, eq(serviceScopes.serviceId, services.id))
-          .where(eq(contracts.clientId, parseInt(clientId as string)))
-          .orderBy(desc(serviceScopes.createdAt));
-        
-        return res.json(scopes);
+        whereConditions.push(eq(contracts.clientId, parseInt(clientId as string)));
       }
-
       if (contractId) {
         whereConditions.push(eq(serviceScopes.contractId, parseInt(contractId as string)));
       }
+      if (serviceId) {
+        whereConditions.push(eq(serviceScopes.serviceId, parseInt(serviceId as string)));
+      }
+      
+      // Scope variable filters
+      if (serviceTier) {
+        whereConditions.push(eq(serviceScopes.serviceTier, serviceTier as string));
+      }
+      if (coverageHours) {
+        whereConditions.push(eq(serviceScopes.coverageHours, coverageHours as string));
+      }
+      if (epsMin) {
+        whereConditions.push(gte(serviceScopes.eps, parseInt(epsMin as string)));
+      }
+      if (epsMax) {
+        whereConditions.push(lte(serviceScopes.eps, parseInt(epsMax as string)));
+      }
+      if (endpointsMin) {
+        whereConditions.push(gte(serviceScopes.endpoints, parseInt(endpointsMin as string)));
+      }
+      if (endpointsMax) {
+        whereConditions.push(lte(serviceScopes.endpoints, parseInt(endpointsMax as string)));
+      }
+      if (responseTimeMin) {
+        whereConditions.push(gte(serviceScopes.responseTimeMinutes, parseInt(responseTimeMin as string)));
+      }
+      if (responseTimeMax) {
+        whereConditions.push(lte(serviceScopes.responseTimeMinutes, parseInt(responseTimeMax as string)));
+      }
 
       const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      // Calculate pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      // Determine sort column and order
+      const sortColumn = sortBy === 'eps' ? serviceScopes.eps :
+                        sortBy === 'endpoints' ? serviceScopes.endpoints :
+                        sortBy === 'serviceTier' ? serviceScopes.serviceTier :
+                        sortBy === 'coverageHours' ? serviceScopes.coverageHours :
+                        sortBy === 'responseTimeMinutes' ? serviceScopes.responseTimeMinutes :
+                        sortBy === 'serviceName' ? services.name :
+                        sortBy === 'clientName' ? clients.name :
+                        serviceScopes.createdAt;
+
+      const orderDirection = sortOrder === 'asc' ? asc : desc;
 
       const scopes = await db
         .select({
@@ -1600,6 +1640,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: serviceScopes.status,
           monthlyValue: serviceScopes.monthlyValue,
           notes: serviceScopes.notes,
+          // Include indexed scope variables
+          eps: serviceScopes.eps,
+          endpoints: serviceScopes.endpoints,
+          dataVolumeGb: serviceScopes.dataVolumeGb,
+          logSources: serviceScopes.logSources,
+          firewallDevices: serviceScopes.firewallDevices,
+          pamUsers: serviceScopes.pamUsers,
+          responseTimeMinutes: serviceScopes.responseTimeMinutes,
+          coverageHours: serviceScopes.coverageHours,
+          serviceTier: serviceScopes.serviceTier,
           createdAt: serviceScopes.createdAt,
           contractName: contracts.name,
           clientId: contracts.clientId,
@@ -1611,12 +1661,524 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(clients, eq(contracts.clientId, clients.id))
         .leftJoin(services, eq(serviceScopes.serviceId, services.id))
         .where(whereClause)
-        .orderBy(desc(serviceScopes.createdAt));
+        .orderBy(orderDirection(sortColumn))
+        .limit(limitNum)
+        .offset(offset);
 
-      res.json(scopes);
+      // Get total count for pagination
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(serviceScopes)
+        .leftJoin(contracts, eq(serviceScopes.contractId, contracts.id))
+        .where(whereClause);
+
+      const totalPages = Math.ceil(count / limitNum);
+
+      res.json({
+        data: scopes,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1
+        }
+      });
     } catch (error) {
       console.error("Get service scopes error:", error);
       res.status(500).json({ message: "Failed to fetch service scopes" });
+    }
+  });
+
+  // Advanced service scope search with filters
+  app.get("/api/service-scopes/search", requireAuth, async (req, res) => {
+    try {
+      const {
+        q, // search query for text search
+        serviceId,
+        serviceTier,
+        coverageHours,
+        epsMin,
+        epsMax,
+        endpointsMin,
+        endpointsMax,
+        responseTimeMin,
+        responseTimeMax,
+        dataVolumeMin,
+        dataVolumeMax,
+        logSourcesMin,
+        logSourcesMax,
+        firewallDevicesMin,
+        firewallDevicesMax,
+        pamUsersMin,
+        pamUsersMax,
+        clientIds, // comma-separated list
+        serviceIds, // comma-separated list
+        page = '1',
+        limit = '50',
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      let whereConditions: any[] = [];
+
+      // Text search across multiple fields
+      if (q) {
+        const searchTerm = `%${q}%`;
+        whereConditions.push(
+          or(
+            ilike(clients.name, searchTerm),
+            ilike(services.name, searchTerm),
+            ilike(contracts.name, searchTerm),
+            ilike(serviceScopes.notes, searchTerm),
+            sql`${serviceScopes.scopeDefinition}->>'description' ILIKE ${searchTerm}`
+          )
+        );
+      }
+
+      // Multiple client filter
+      if (clientIds) {
+        const clientIdArray = (clientIds as string).split(',').map(id => parseInt(id.trim()));
+        whereConditions.push(inArray(contracts.clientId, clientIdArray));
+      }
+
+      // Multiple service filter
+      if (serviceIds) {
+        const serviceIdArray = (serviceIds as string).split(',').map(id => parseInt(id.trim()));
+        whereConditions.push(inArray(serviceScopes.serviceId, serviceIdArray));
+      }
+
+      // Service tier filter
+      if (serviceTier && serviceTier !== 'all') {
+        whereConditions.push(eq(serviceScopes.serviceTier, serviceTier as string));
+      }
+
+      // Coverage hours filter
+      if (coverageHours && coverageHours !== 'all') {
+        whereConditions.push(eq(serviceScopes.coverageHours, coverageHours as string));
+      }
+
+      // EPS range filter
+      if (epsMin || epsMax) {
+        if (epsMin && epsMax) {
+          whereConditions.push(between(serviceScopes.eps, parseInt(epsMin as string), parseInt(epsMax as string)));
+        } else if (epsMin) {
+          whereConditions.push(gte(serviceScopes.eps, parseInt(epsMin as string)));
+        } else if (epsMax) {
+          whereConditions.push(lte(serviceScopes.eps, parseInt(epsMax as string)));
+        }
+      }
+
+      // Endpoints range filter
+      if (endpointsMin || endpointsMax) {
+        if (endpointsMin && endpointsMax) {
+          whereConditions.push(between(serviceScopes.endpoints, parseInt(endpointsMin as string), parseInt(endpointsMax as string)));
+        } else if (endpointsMin) {
+          whereConditions.push(gte(serviceScopes.endpoints, parseInt(endpointsMin as string)));
+        } else if (endpointsMax) {
+          whereConditions.push(lte(serviceScopes.endpoints, parseInt(endpointsMax as string)));
+        }
+      }
+
+      // Response time range filter
+      if (responseTimeMin || responseTimeMax) {
+        if (responseTimeMin && responseTimeMax) {
+          whereConditions.push(between(serviceScopes.responseTimeMinutes, parseInt(responseTimeMin as string), parseInt(responseTimeMax as string)));
+        } else if (responseTimeMin) {
+          whereConditions.push(gte(serviceScopes.responseTimeMinutes, parseInt(responseTimeMin as string)));
+        } else if (responseTimeMax) {
+          whereConditions.push(lte(serviceScopes.responseTimeMinutes, parseInt(responseTimeMax as string)));
+        }
+      }
+
+      // Data volume range filter
+      if (dataVolumeMin || dataVolumeMax) {
+        if (dataVolumeMin && dataVolumeMax) {
+          whereConditions.push(between(serviceScopes.dataVolumeGb, parseFloat(dataVolumeMin as string), parseFloat(dataVolumeMax as string)));
+        } else if (dataVolumeMin) {
+          whereConditions.push(gte(serviceScopes.dataVolumeGb, parseFloat(dataVolumeMin as string)));
+        } else if (dataVolumeMax) {
+          whereConditions.push(lte(serviceScopes.dataVolumeGb, parseFloat(dataVolumeMax as string)));
+        }
+      }
+
+      // Additional filters for other scope variables...
+      if (logSourcesMin) {
+        whereConditions.push(gte(serviceScopes.logSources, parseInt(logSourcesMin as string)));
+      }
+      if (logSourcesMax) {
+        whereConditions.push(lte(serviceScopes.logSources, parseInt(logSourcesMax as string)));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      // Calculate pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      // Determine sort column and order
+      const sortColumn = sortBy === 'eps' ? serviceScopes.eps :
+                        sortBy === 'endpoints' ? serviceScopes.endpoints :
+                        sortBy === 'serviceTier' ? serviceScopes.serviceTier :
+                        sortBy === 'coverageHours' ? serviceScopes.coverageHours :
+                        sortBy === 'responseTimeMinutes' ? serviceScopes.responseTimeMinutes :
+                        sortBy === 'serviceName' ? services.name :
+                        sortBy === 'clientName' ? clients.name :
+                        serviceScopes.createdAt;
+
+      const orderDirection = sortOrder === 'asc' ? asc : desc;
+
+      const scopes = await db
+        .select({
+          id: serviceScopes.id,
+          contractId: serviceScopes.contractId,
+          serviceId: serviceScopes.serviceId,
+          scopeDefinition: serviceScopes.scopeDefinition,
+          startDate: serviceScopes.startDate,
+          endDate: serviceScopes.endDate,
+          status: serviceScopes.status,
+          monthlyValue: serviceScopes.monthlyValue,
+          notes: serviceScopes.notes,
+          // Include all indexed scope variables
+          eps: serviceScopes.eps,
+          endpoints: serviceScopes.endpoints,
+          dataVolumeGb: serviceScopes.dataVolumeGb,
+          logSources: serviceScopes.logSources,
+          firewallDevices: serviceScopes.firewallDevices,
+          pamUsers: serviceScopes.pamUsers,
+          responseTimeMinutes: serviceScopes.responseTimeMinutes,
+          coverageHours: serviceScopes.coverageHours,
+          serviceTier: serviceScopes.serviceTier,
+          createdAt: serviceScopes.createdAt,
+          contractName: contracts.name,
+          clientId: contracts.clientId,
+          clientName: clients.name,
+          serviceName: services.name
+        })
+        .from(serviceScopes)
+        .leftJoin(contracts, eq(serviceScopes.contractId, contracts.id))
+        .leftJoin(clients, eq(contracts.clientId, clients.id))
+        .leftJoin(services, eq(serviceScopes.serviceId, services.id))
+        .where(whereClause)
+        .orderBy(orderDirection(sortColumn))
+        .limit(limitNum)
+        .offset(offset);
+
+      // Get total count for pagination
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(serviceScopes)
+        .leftJoin(contracts, eq(serviceScopes.contractId, contracts.id))
+        .leftJoin(clients, eq(contracts.clientId, clients.id))
+        .where(whereClause);
+
+      const totalPages = Math.ceil(count / limitNum);
+
+      res.json({
+        data: scopes,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: count,
+          totalPages,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1
+        },
+        filters: {
+          serviceTier: serviceTier || 'all',
+          coverageHours: coverageHours || 'all',
+          epsRange: { min: epsMin, max: epsMax },
+          endpointsRange: { min: endpointsMin, max: endpointsMax },
+          responseTimeRange: { min: responseTimeMin, max: responseTimeMax }
+        }
+      });
+    } catch (error) {
+      console.error("Service scope search error:", error);
+      res.status(500).json({ message: "Failed to search service scopes" });
+    }
+  });
+
+  // Dynamic Service Scope Variable Endpoints
+  
+  // Get variable definitions for dynamic filtering
+  app.get("/api/service-scopes/variables/definitions", requireAuth, async (req, res) => {
+    try {
+      const definitions = await db.execute(sql`
+        SELECT 
+          variable_name as name,
+          variable_type as type,
+          display_name as "displayName",
+          description,
+          filter_component as "filterComponent",
+          unit,
+          is_filterable as "isFilterable"
+        FROM scope_variable_definitions
+        WHERE is_filterable = true
+        ORDER BY display_name
+      `);
+
+      res.json(definitions.rows);
+    } catch (error) {
+      console.error('Error fetching variable definitions:', error);
+      res.status(500).json({ error: 'Failed to fetch variable definitions' });
+    }
+  });
+
+  // Dynamic search endpoint that can handle any scope variable filters
+  app.get("/api/service-scopes/dynamic", requireAuth, async (req, res) => {
+    try {
+      const {
+        page = 1,
+        limit = 50,
+        sortBy = 'created_at',
+        sortOrder = 'desc',
+        ...filters
+      } = req.query;
+
+      // Build dynamic filter query
+      const filterConditions: string[] = [];
+      const queryParams: any[] = [];
+      let paramIndex = 1;
+
+      // Process each filter
+      for (const [key, value] of Object.entries(filters)) {
+        if (!value || value === '') continue;
+
+        // Handle range filters (key_min, key_max)
+        if (key.endsWith('_min')) {
+          const variableName = key.replace('_min', '');
+          filterConditions.push(`
+            EXISTS (
+              SELECT 1 FROM scope_variable_values svv 
+              WHERE svv.service_scope_id = service_scopes.id 
+              AND svv.variable_name = $${paramIndex++}
+              AND (svv.value_integer >= $${paramIndex} OR svv.value_decimal >= $${paramIndex})
+            )
+          `);
+          queryParams.push(variableName, Number(value), Number(value));
+          paramIndex++;
+        } else if (key.endsWith('_max')) {
+          const variableName = key.replace('_max', '');
+          filterConditions.push(`
+            EXISTS (
+              SELECT 1 FROM scope_variable_values svv 
+              WHERE svv.service_scope_id = service_scopes.id 
+              AND svv.variable_name = $${paramIndex++}
+              AND (svv.value_integer <= $${paramIndex} OR svv.value_decimal <= $${paramIndex})
+            )
+          `);
+          queryParams.push(variableName, Number(value), Number(value));
+          paramIndex++;
+        } else {
+          // Exact match or text search
+          if (typeof value === 'string' && value.includes('*')) {
+            // Wildcard search
+            const searchPattern = value.replace(/\*/g, '%');
+            filterConditions.push(`
+              EXISTS (
+                SELECT 1 FROM scope_variable_values svv 
+                WHERE svv.service_scope_id = service_scopes.id 
+                AND svv.variable_name = $${paramIndex++}
+                AND svv.value_text ILIKE $${paramIndex++}
+              )
+            `);
+            queryParams.push(key, searchPattern);
+          } else {
+            // Exact match
+            filterConditions.push(`
+              EXISTS (
+                SELECT 1 FROM scope_variable_values svv 
+                WHERE svv.service_scope_id = service_scopes.id 
+                AND svv.variable_name = $${paramIndex++}
+                AND (
+                  svv.value_text = $${paramIndex} OR
+                  svv.value_integer = $${paramIndex} OR
+                  svv.value_decimal = $${paramIndex}
+                )
+              )
+            `);
+            queryParams.push(key, String(value), Number(value), Number(value));
+            paramIndex += 3;
+          }
+        }
+      }
+
+      // Calculate pagination
+      const offset = (Number(page) - 1) * Number(limit);
+
+      // Build the main query
+      let query = `
+        SELECT 
+          ss.id,
+          ss.contract_id as "contractId",
+          ss.service_id as "serviceId",
+          ss.scope_definition as "scopeDefinition",
+          ss.created_at as "createdAt",
+          ss.updated_at as "updatedAt"
+        FROM service_scopes ss
+      `;
+
+      // Apply filters
+      if (filterConditions.length > 0) {
+        query += ` WHERE ${filterConditions.join(' AND ')}`;
+      }
+
+      // Apply sorting and pagination
+      const validSortColumns = ['created_at', 'updated_at', 'id'];
+      const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy as string : 'created_at';
+      const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
+      
+      query += ` ORDER BY ${sortColumn} ${order} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+      queryParams.push(Number(limit), offset);
+
+      const results = await db.execute(sql.raw(query, queryParams));
+
+      // Get variable values for each scope
+      const scopeIds = results.rows.map((r: any) => r.id);
+      let variables: any[] = [];
+      
+      if (scopeIds.length > 0) {
+        const variableQuery = `
+          SELECT 
+            service_scope_id as "serviceScopeId",
+            variable_name as "variableName",
+            value_text as "valueText",
+            value_integer as "valueInteger",
+            value_decimal as "valueDecimal",
+            value_boolean as "valueBoolean"
+          FROM scope_variable_values
+          WHERE service_scope_id = ANY($1)
+        `;
+        const variableResults = await db.execute(sql.raw(variableQuery, [scopeIds]));
+        variables = variableResults.rows;
+      }
+
+      // Group variables by scope ID
+      const variablesByScope = variables.reduce((acc: any, variable: any) => {
+        const scopeId = variable.serviceScopeId;
+        if (!acc[scopeId]) acc[scopeId] = {};
+        
+        const value = variable.valueInteger ?? variable.valueDecimal ?? variable.valueBoolean ?? variable.valueText;
+        acc[scopeId][variable.variableName] = value;
+        
+        return acc;
+      }, {});
+
+      // Combine results with variables
+      const enrichedResults = results.rows.map((scope: any) => ({
+        ...scope,
+        variables: variablesByScope[scope.id] || {}
+      }));
+
+      // Get total count for pagination
+      let countQuery = `SELECT count(*) FROM service_scopes ss`;
+      let countParams = queryParams.slice(0, -2); // Remove limit and offset params
+
+      if (filterConditions.length > 0) {
+        countQuery += ` WHERE ${filterConditions.join(' AND ')}`;
+      }
+
+      const [{ count }] = (await db.execute(sql.raw(countQuery, countParams))).rows;
+      const totalCount = Number(count);
+
+      res.json({
+        data: enrichedResults,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total: totalCount,
+          pages: Math.ceil(totalCount / Number(limit))
+        },
+        appliedFilters: filters
+      });
+
+    } catch (error) {
+      console.error('Error in dynamic search:', error);
+      res.status(500).json({ error: 'Failed to search service scopes' });
+    }
+  });
+
+  // Add a new scope variable to an existing scope
+  app.post("/api/service-scopes/:scopeId/variables", requireManagerOrAbove, async (req, res) => {
+    try {
+      const { scopeId } = req.params;
+      const { variableName, value, type = 'auto' } = req.body;
+
+      if (!variableName || value === undefined) {
+        return res.status(400).json({ error: 'Variable name and value are required' });
+      }
+
+      // Use the SQL function to add the variable
+      await db.execute(sql`
+        SELECT add_scope_variable(${Number(scopeId)}, ${variableName}, ${String(value)}, ${type})
+      `);
+
+      res.json({ 
+        success: true, 
+        message: `Variable ${variableName} added to scope ${scopeId}` 
+      });
+
+    } catch (error) {
+      console.error('Error adding scope variable:', error);
+      res.status(500).json({ error: 'Failed to add scope variable' });
+    }
+  });
+
+  // Get statistics about variable usage
+  app.get("/api/service-scopes/variables/stats", requireAuth, async (req, res) => {
+    try {
+      const stats = await db.execute(sql`
+        SELECT 
+          svd.variable_name,
+          svd.display_name,
+          svd.variable_type,
+          svd.unit,
+          COUNT(svv.id) as usage_count,
+          CASE 
+            WHEN svd.variable_type = 'integer' THEN 
+              json_build_object(
+                'min', MIN(svv.value_integer),
+                'max', MAX(svv.value_integer),
+                'avg', ROUND(AVG(svv.value_integer), 2)
+              )
+            WHEN svd.variable_type = 'decimal' THEN 
+              json_build_object(
+                'min', MIN(svv.value_decimal),
+                'max', MAX(svv.value_decimal),
+                'avg', ROUND(AVG(svv.value_decimal), 2)
+              )
+            ELSE 
+              json_build_object(
+                'unique_values', COUNT(DISTINCT svv.value_text)
+              )
+          END as statistics
+        FROM scope_variable_definitions svd
+        LEFT JOIN scope_variable_values svv ON svd.variable_name = svv.variable_name
+        GROUP BY svd.variable_name, svd.display_name, svd.variable_type, svd.unit
+        ORDER BY usage_count DESC, svd.display_name
+      `);
+
+      res.json(stats.rows);
+    } catch (error) {
+      console.error('Error fetching variable stats:', error);
+      res.status(500).json({ error: 'Failed to fetch variable statistics' });
+    }
+  });
+
+  // Discover new variables from scope definitions
+  app.get("/api/service-scopes/variables/discover", requireManagerOrAbove, async (req, res) => {
+    try {
+      const discovered = await db.execute(sql`SELECT * FROM auto_discover_variables()`);
+      
+      res.json({
+        newVariables: discovered.rows,
+        message: `Found ${discovered.rows.length} potential new variables`
+      });
+    } catch (error) {
+      console.error('Error discovering variables:', error);
+      res.status(500).json({ error: 'Failed to discover variables' });
     }
   });
 
@@ -5362,6 +5924,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // External Widget Routes (general, register after specific routes)
   app.use("/api/external-widgets", externalWidgetRoutes);
 
+  // Dynamic Service Scope Variable Routes
+  app.use("/api/service-scopes", dynamicServiceScopeRoutes);
+
+  // Pool Validation Routes for Onboarding
+  app.use("/api/pools", poolValidationRoutes);
+
   // Widget Query Testing Endpoint
   app.post("/api/integration-engine/test-query", async (req, res) => {
     try {
@@ -6574,8 +7142,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create service
   app.post("/api/services", requireManagerOrAbove, async (req, res) => {
     try {
-      const serviceData = insertServiceSchema.parse(req.body);
-      const newService = await storage.createService(serviceData);
+      const result = insertServiceSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid service data", 
+          errors: result.error.issues 
+        });
+      }
+      
+      const newService = await storage.createService(result.data);
       res.status(201).json(newService);
     } catch (error) {
       console.error("Create service error:", error);
@@ -6778,7 +7354,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/hardware-assets", requireManagerOrAbove, async (req, res) => {
     try {
       const { quantity = 1, ...assetData } = req.body;
-      const parsedAssetData = apiHardwareAssetSchema.parse(assetData);
+      const result = apiHardwareAssetSchema.safeParse(assetData);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid hardware asset data", 
+          errors: result.error.issues 
+        });
+      }
+      
+      const parsedAssetData = result.data;
       
       if (quantity === 1) {
         // Single asset creation
@@ -6890,8 +7475,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create license pool
   app.post("/api/license-pools", requireManagerOrAbove, async (req, res) => {
     try {
-      const licenseData = apiLicensePoolSchema.parse(req.body);
-      const newLicensePool = await storage.createLicensePool(licenseData);
+      const result = apiLicensePoolSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid license pool data", 
+          errors: result.error.issues 
+        });
+      }
+      
+      const newLicensePool = await storage.createLicensePool(result.data);
       res.status(201).json(newLicensePool);
     } catch (error) {
       console.error("Create license pool error:", error);

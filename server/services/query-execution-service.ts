@@ -1,6 +1,6 @@
-import { ExternalSystem } from '../types/external-systems.js';
-import { db } from '../db.js';
-import { externalSystems } from '../../shared/schema.js';
+import { ExternalSystem } from '../types/external-systems.ts';
+import { db } from '../db.ts';
+import { externalSystems } from '../../shared/schema.ts';
 import { eq } from 'drizzle-orm';
 import {
   MethodConfig,
@@ -11,17 +11,7 @@ import {
   QueryExecutionError,
   ValidationError,
   TimeoutError
-} from '../types/query-execution.js';
-import {
-  MethodConfig,
-  TransformConfig,
-  AuthConfig,
-  QueryExecutionRequest,
-  QueryExecutionResult,
-  QueryExecutionError,
-  ValidationError,
-  TimeoutError
-} from '../types/query-execution.js';
+} from '../types/query-execution.ts';
 
 interface QueryRequest extends QueryExecutionRequest {
   query: string;

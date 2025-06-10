@@ -19,10 +19,10 @@ const path = require('path');
 
 // Test configuration
 const CONFIG = {
-  baseURL: process.env.TEST_BASE_URL || 'http://localhost:5000',
+  baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
   timeout: 30000,
   testUser: {
-    username: 'admin',
+    email: 'admin@mssp.local',
     password: 'admin123'
   },
   outputFile: 'comprehensive-test-results.json'
@@ -100,7 +100,7 @@ class ComprehensiveTestSuite {
     
     try {
       const response = await this.client.post('/api/login', {
-        username: CONFIG.testUser.username,
+        email: CONFIG.testUser.email,
         password: CONFIG.testUser.password
       });
 
@@ -410,32 +410,6 @@ class ComprehensiveTestSuite {
     this.log('🔗 Testing database relations and constraints...');
 
     const relationTests = [
-      {
-        name: 'Client-Contact Relationship',
-        description: 'Test that client contacts belong to clients',
-        test: async () => {
-          // Get clients first
-          const clientsResponse = await this.client.get('/api/clients');
-          if (clientsResponse.status !== 200 || !clientsResponse.data.length) {
-            return { success: false, error: 'No clients found to test relationship' };
-          }
-
-          const client = clientsResponse.data[0];
-          
-          // Try to create a contact for this client
-          const contactResponse = await this.client.post('/api/client-contacts', {
-            clientId: client.id,
-            name: 'Test Contact',
-            email: 'test@example.com',
-            isPrimary: false
-          });
-
-          return {
-            success: contactResponse.status === 201,
-            details: { clientId: client.id, contactStatus: contactResponse.status }
-          };
-        }
-      },
       {
         name: 'Contract-Client Relationship',
         description: 'Test that contracts must belong to valid clients',

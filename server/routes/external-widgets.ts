@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { externalWidgetRegistry } from '../services/external-widget-registry.js';
-import { storage } from '../storage.js';
+import { externalWidgetRegistry } from '../services/external-widget-registry.ts';
+import { storage } from '../storage.ts';
 
 // Authentication middleware
 function requireAuth(req: any, res: any, next: any) {

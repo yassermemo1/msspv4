@@ -1,5 +1,5 @@
-import { ExternalWidgetDefinition, WidgetManifest } from './external-widget-registry.js';
-import { ExternalSystem } from '../types/external-systems.js';
+import { ExternalWidgetDefinition, WidgetManifest } from './external-widget-registry.ts';
+import { ExternalSystem } from '../types/external-systems.ts';
 
 export interface IntegrationEngineWidget {
   id: string;

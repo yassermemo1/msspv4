@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { storage } from '../storage.js';
-import { integrationEngineAdapter } from '../services/integration-engine-adapter.js';
+import { storage } from '../storage.ts';
+import { integrationEngineAdapter } from '../services/integration-engine-adapter.ts';
 
 // Authentication middleware
 function requireAuth(req: any, res: any, next: any) {
