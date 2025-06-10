@@ -169,9 +169,12 @@ export default function SAFPage() {
       });
     }
   };
-);
-  };
-).format(parseFloat(amount.toString()));
+
+  const formatCurrency = (amount: number | string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(parseFloat(amount.toString()));
   };
 
   return (

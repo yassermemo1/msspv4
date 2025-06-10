@@ -176,8 +176,6 @@ export default function COCPage() {
       });
     }
   };
-);
-  };
 
   const isExpiringSoon = (expiryDate: string | Date | null) => {
     if (!expiryDate) return false;
