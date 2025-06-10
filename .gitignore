@@ -92,4 +92,7 @@ backups/
 migrations/meta/
 
 # Clean directories
-*-clean/ 
+*-clean/
+
+# Analysis cache
+.codebase-analysis-cache.json 

@@ -49,6 +49,7 @@ interface ImportResult {
     clients: { created: number; updated: number; skipped: number };
     contacts: { created: number; updated: number };
     contracts: { created: number; updated: number };
+    services: { created: number; updated: number };
     serviceScopes: { created: number; updated: number };
     licenseAssignments: { created: number; updated: number };
     hardwareAssignments: { created: number; updated: number };
@@ -114,23 +115,18 @@ const FIELD_DEFINITIONS = {
       required: false,
       example: 'Referral, Website, Cold Call'
     },
-    address: { 
-      description: 'Company address', 
-      dataType: 'text', 
-      required: false,
-      example: '123 Business St, City, State 12345'
+    
+    website: {
+      description: 'Company website URL',
+      type: 'string',
+      optional: true,
+      examples: ['https://company.com', 'www.company.com']
     },
-    website: { 
-      description: 'Company website URL', 
-      dataType: 'text', 
-      required: false,
-      example: 'https://www.acme.com'
-    },
-    notes: { 
-      description: 'Additional notes', 
-      dataType: 'text', 
-      required: false,
-      example: 'Important client requirements or notes'
+    notes: {
+      description: 'Additional notes about the client',
+      type: 'string',
+      optional: true,
+      examples: ['Key technology partner', 'Requires HIPAA compliance']
     }
   },
   contacts: {
@@ -239,6 +235,88 @@ const FIELD_DEFINITIONS = {
       dataType: 'text', 
       required: false,
       example: 'SIEM EPS allocation for Q1'
+    }
+  },
+  services: {
+    name: { 
+      description: 'Service name (Required)', 
+      dataType: 'text', 
+      required: true,
+      example: 'SIEM Monitoring'
+    },
+    category: { 
+      description: 'Service category (Required)', 
+      dataType: 'text', 
+      required: true,
+      example: 'Security Operations, Network Security, Compliance'
+    },
+    description: { 
+      description: 'Service description', 
+      dataType: 'text', 
+      required: false,
+      example: 'Real-time security event monitoring and analysis'
+    },
+    deliveryModel: { 
+      description: 'Service delivery model (Required)', 
+      dataType: 'text', 
+      required: true,
+      example: 'Serverless, On-Prem Engineer, Hybrid'
+    },
+    basePrice: { 
+      description: 'Base service price', 
+      dataType: 'number', 
+      required: false,
+      example: '5000.00'
+    },
+    pricingUnit: { 
+      description: 'Pricing unit', 
+      dataType: 'text', 
+      required: false,
+      example: 'per endpoint, per month, per GB/day'
+    },
+    isActive: { 
+      description: 'Is service active', 
+      dataType: 'boolean', 
+      required: false,
+      example: 'true, false'
+    }
+  },
+  serviceScopes: {
+    scopeDefinition: { 
+      description: 'Service scope parameters (JSON format)', 
+      dataType: 'text', 
+      required: false,
+      example: '{"service_level": "Standard", "monitoring_hours": "24/7", "response_time": "30 minutes"}'
+    },
+    startDate: { 
+      description: 'Service scope start date', 
+      dataType: 'date', 
+      required: false,
+      example: '2024-01-01'
+    },
+    endDate: { 
+      description: 'Service scope end date', 
+      dataType: 'date', 
+      required: false,
+      example: '2024-12-31'
+    },
+    status: { 
+      description: 'Service scope status', 
+      dataType: 'text', 
+      required: false,
+      example: 'active, pending, completed, cancelled'
+    },
+    monthlyValue: { 
+      description: 'Monthly service value', 
+      dataType: 'number', 
+      required: false,
+      example: '15000.00'
+    },
+    notes: { 
+      description: 'Service scope notes', 
+      dataType: 'text', 
+      required: false,
+      example: 'Custom requirements or SLA details'
     }
   },
   hardware: {
@@ -392,8 +470,7 @@ export default function ComprehensiveBulkImportPage() {
           targetField = 'status';
         } else if (lowerHeader.includes('source')) {
           targetField = 'source';
-        } else if (lowerHeader.includes('address')) {
-          targetField = 'address';
+        
         } else if (lowerHeader.includes('website')) {
           targetField = 'website';
         } else if (lowerHeader.includes('note')) {
@@ -452,6 +529,54 @@ export default function ComprehensiveBulkImportPage() {
           }
         } else if (lowerHeader.includes('document') || lowerHeader.includes('url')) {
           targetField = 'documentUrl';
+        } else if (lowerHeader.includes('note')) {
+          targetField = 'notes';
+        }
+      }
+      // Match service fields
+      else if (lowerHeader.includes('service')) {
+        entityType = 'services';
+        if (lowerHeader.includes('name')) {
+          targetField = 'name';
+          required = true;
+          dataType = 'text';
+        } else if (lowerHeader.includes('category')) {
+          targetField = 'category';
+          required = true;
+          dataType = 'text';
+        } else if (lowerHeader.includes('description')) {
+          targetField = 'description';
+        } else if (lowerHeader.includes('delivery') && lowerHeader.includes('model')) {
+          targetField = 'deliveryModel';
+          required = true;
+          dataType = 'text';
+        } else if (lowerHeader.includes('price') || lowerHeader.includes('base')) {
+          targetField = 'basePrice';
+          dataType = 'number';
+        } else if (lowerHeader.includes('pricing') && lowerHeader.includes('unit')) {
+          targetField = 'pricingUnit';
+        } else if (lowerHeader.includes('active')) {
+          targetField = 'isActive';
+          dataType = 'boolean';
+        }
+      }
+      // Match service scope fields
+      else if (lowerHeader.includes('scope')) {
+        entityType = 'serviceScopes';
+        if (lowerHeader.includes('definition')) {
+          targetField = 'scopeDefinition';
+          dataType = 'text';
+        } else if (lowerHeader.includes('start') && lowerHeader.includes('date')) {
+          targetField = 'startDate';
+          dataType = 'date';
+        } else if (lowerHeader.includes('end') && lowerHeader.includes('date')) {
+          targetField = 'endDate';
+          dataType = 'date';
+        } else if (lowerHeader.includes('status')) {
+          targetField = 'status';
+        } else if (lowerHeader.includes('monthly') && lowerHeader.includes('value')) {
+          targetField = 'monthlyValue';
+          dataType = 'number';
         } else if (lowerHeader.includes('note')) {
           targetField = 'notes';
         }
@@ -645,10 +770,10 @@ export default function ComprehensiveBulkImportPage() {
   };
 
   const generateSampleData = () => {
-    const sampleData = `Client Name	Short Name	Domain	Industry	Company Size	Status	Source	Address	Website	Contact Name	Contact Email	Contact Phone	Contact Title	Contract Name	Contract Start Date	Contract End Date	Contract Value	License Pool	License Quantity	Hardware Name	Hardware Category	Hardware Manufacturer	Hardware Model	Hardware Serial	Hardware Cost	Hardware Location
-Customer Apps	Customer Apps	C003	Technology	Large	active	nca	King Fahd Road, Riyadh 12345, Saudi Arabia	https://customerapps.com	John Smith	john.smith@customerapps.com	+966-11-234-5678	Chief Information Security Officer	Annual SIEM Monitoring Contract 2024	2024-01-01	2024-12-31	180000	SIEM EPS Pool	5000	Firewall Primary - Customer Apps	Network Security	Fortinet	FortiGate 600E	FG600E-C003-001	15000	Primary Data Center
-Saudi Information Technology Company	SITE	C004	Technology	Large	active	direct	King Abdul Aziz Road, Riyadh 11564, Saudi Arabia	https://site.sa	Ahmed Ali	ahmed.ali@site.sa	+966-11-345-6789	Director of Cybersecurity	Comprehensive IT Security Services 2024	2024-01-01	2024-12-31	250000	SIEM EPS Pool	10000	SOC Server - SITE	Server Hardware	Dell	PowerEdge R740	DELL-R740-C004-001	25000	SOC Operations Center
-Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red Sea Project, NEOM 49643, Saudi Arabia	https://theredsea.sa	Sarah Ahmed	sarah.ahmed@theredsea.sa	+966-12-456-7890	Chief Technology Officer	Smart Infrastructure Security Services 2024	2024-01-01	2024-12-31	320000	SIEM EPS Pool	7500	Security Gateway - Red Sea	Network Security	Cisco	ASA 5585-X	CISCO-ASA-R001-001	35000	Red Sea Data Center`;
+    const sampleData = `Client Name	Short Name	Domain	Industry	Company Size	Status	Source	Website	Contact Name	Contact Email	Contact Phone	Contact Title	Contract Name	Contract Start Date	Contract End Date	Contract Value	Service Name	Service Category	Service Description	Service Delivery Model	Hardware Name	Hardware Category	Hardware Model	Hardware Manufacturer	License Name	License Vendor	License Type	License Quantity	SAF Number	SAF Title	SAF Start Date	SAF End Date	COC Number	COC Title	COC Issued Date	COC Expiry Date
+Customer Apps	Customer Apps	C003	Technology	Large	active	nca	King Fahd Road, Riyadh 12345, Saudi Arabia	https://customerapps.com	John Smith	john.smith@customerapps.com	+966-11-234-5678	Chief Information Security Officer	Annual SIEM Monitoring Contract 2024	2024-01-01	2024-12-31	180000	SIEM Monitoring	Security Operations	Real-time security event monitoring and analysis	Serverless	5000	per endpoint	{"service_level": "Standard", "monitoring_hours": "24/7", "response_time": "30 minutes", "escalation_levels": 2}	2024-01-01	2024-12-31	active	15000	Critical alert escalation to C-level within 15 minutes	SIEM EPS Pool	5000	Firewall Primary - Customer Apps	Network Security	Fortinet	FortiGate 600E	FG600E-C003-001	15000	Primary Data Center
+Saudi Information Technology Company	SITE	C004	Technology	Large	active	direct	King Abdul Aziz Road, Riyadh 11564, Saudi Arabia	https://site.sa	Ahmed Ali	ahmed.ali@site.sa	+966-11-345-6789	Director of Cybersecurity	Comprehensive IT Security Services 2024	2024-01-01	2024-12-31	250000	Vulnerability Assessment	Network Security	Comprehensive vulnerability scanning and reporting	On-Prem Engineer	8000	per assessment	{"service_level": "Premium", "monitoring_hours": "Business Hours", "response_time": "15 minutes", "escalation_levels": 3}	2024-01-01	2024-12-31	active	20000	Monthly executive reports required	SIEM EPS Pool	10000	SOC Server - SITE	Server Hardware	Dell	PowerEdge R740	DELL-R740-C004-001	25000	SOC Operations Center
+Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red Sea Project, NEOM 49643, Saudi Arabia	https://theredsea.sa	Sarah Ahmed	sarah.ahmed@theredsea.sa	+966-12-456-7890	Chief Technology Officer	Smart Infrastructure Security Services 2024	2024-01-01	2024-12-31	320000	Incident Response	Security Operations	24/7 incident response and forensics	Hybrid	12000	per incident	{"service_level": "Enterprise", "monitoring_hours": "24/7", "response_time": "15 minutes", "escalation_levels": 4}	2024-01-01	2024-12-31	active	26000	On-site response capability required for critical incidents	SIEM EPS Pool	7500	Security Gateway - Red Sea	Network Security	Cisco	ASA 5585-X	CISCO-ASA-R001-001	35000	Red Sea Data Center`;
     
     setPastedData(sampleData);
     toast({
@@ -701,6 +826,8 @@ Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red S
       case 'clients': return <Users className="h-4 w-4" />;
       case 'contacts': return <Users className="h-4 w-4" />;
       case 'contracts': return <FileText className="h-4 w-4" />;
+      case 'services': return <BarChart3 className="h-4 w-4" />;
+      case 'serviceScopes': return <Settings className="h-4 w-4" />;
       case 'licenses': return <Key className="h-4 w-4" />;
       case 'hardware': return <HardDrive className="h-4 w-4" />;
       default: return <BarChart3 className="h-4 w-4" />;
@@ -856,6 +983,18 @@ Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red S
                               <div className="flex items-center space-x-2">
                                 <FileText className="h-4 w-4" />
                                 <span>Contracts</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="services">
+                              <div className="flex items-center space-x-2">
+                                <BarChart3 className="h-4 w-4" />
+                                <span>Services</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="serviceScopes">
+                              <div className="flex items-center space-x-2">
+                                <Settings className="h-4 w-4" />
+                                <span>Service Scopes</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="licenses">

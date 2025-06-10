@@ -2436,6 +2436,91 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+
+  // ========================================
+  // FIELD VISIBILITY CONFIGURATION
+  // ========================================
+
+  async getFieldVisibilityConfigs(): Promise<any[]> {
+    try {
+      const result = await db.execute(sql`
+        SELECT table_name, field_name, is_visible, context, created_at, updated_at
+        FROM field_visibility_config
+        ORDER BY table_name, field_name, context
+      `);
+      return result.rows;
+    } catch (error) {
+      console.error('Error fetching field visibility configs:', error);
+      return [];
+    }
+  }
+
+  async getFieldVisibilityForTable(tableName: string, context: string = 'form'): Promise<Record<string, boolean>> {
+    try {
+      const result = await db.execute(sql`
+        SELECT field_name, is_visible
+        FROM field_visibility_config
+        WHERE table_name = ${tableName} AND context = ${context}
+      `);
+      
+      const config: Record<string, boolean> = {};
+      result.rows.forEach((row: any) => {
+        config[row.field_name] = row.is_visible;
+      });
+      
+      return config;
+    } catch (error) {
+      console.error(`Error fetching field visibility for table ${tableName}:`, error);
+      return {};
+    }
+  }
+
+  async setFieldVisibility(tableName: string, fieldName: string, isVisible: boolean, context: string = 'form'): Promise<any> {
+    try {
+      const result = await db.execute(sql`
+        INSERT INTO field_visibility_config (table_name, field_name, is_visible, context, created_at, updated_at)
+        VALUES (${tableName}, ${fieldName}, ${isVisible}, ${context}, NOW(), NOW())
+        ON CONFLICT (table_name, field_name, context)
+        DO UPDATE SET
+          is_visible = ${isVisible},
+          updated_at = NOW()
+        RETURNING *
+      `);
+      
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error setting field visibility:', error);
+      throw error;
+    }
+  }
+
+  async resetFieldVisibility(tableName: string, fieldName: string, context: string = 'form'): Promise<void> {
+    try {
+      await db.execute(sql`
+        DELETE FROM field_visibility_config
+        WHERE table_name = ${tableName} AND field_name = ${fieldName} AND context = ${context}
+      `);
+    } catch (error) {
+      console.error('Error resetting field visibility:', error);
+      throw error;
+    }
+  }
+
+  async isFieldVisible(tableName: string, fieldName: string, context: string = 'form'): Promise<boolean> {
+    try {
+      const result = await db.execute(sql`
+        SELECT is_visible
+        FROM field_visibility_config
+        WHERE table_name = ${tableName} AND field_name = ${fieldName} AND context = ${context}
+      `);
+      
+      // If no configuration exists, default to visible
+      return result.rows.length > 0 ? (result.rows[0] as any).is_visible : true;
+    } catch (error) {
+      console.error('Error checking field visibility:', error);
+      return true; // Default to visible on error
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();

@@ -4,32 +4,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { 
   Shield, 
-  Building, 
-  FileText, 
-  ServerCog, 
-  Server, 
-  Users, 
-  DollarSign,
-  BarChart3, 
-  Settings,
   LogOut,
-  LayoutDashboard,
   Menu,
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Clients", href: "/clients", icon: Building },
-  { name: "Contracts", href: "/contracts", icon: FileText },
-  { name: "Services", href: "/services", icon: ServerCog },
-  { name: "Assets", href: "/assets", icon: Server },
-  { name: "Financial", href: "/financial", icon: DollarSign },
-  { name: "Team", href: "/team", icon: Users },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Settings", href: "/settings", icon: Settings },
-];
+import { mainNavigation } from "@/config/navigation";
 
 export function MobileNav() {
   const [location, navigate] = useLocation();
@@ -89,7 +69,7 @@ export function MobileNav() {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          {navigation.map((item) => {
+          {mainNavigation.map((item) => {
             const isActive = location === item.href;
             return (
               <button

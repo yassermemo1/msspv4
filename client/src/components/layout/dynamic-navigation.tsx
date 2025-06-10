@@ -68,10 +68,10 @@ export function DynamicNavigation({
 
   // Query for accessible pages with proper cache invalidation
   const { data: accessiblePages = [], isLoading } = useQuery<AccessiblePage[]>({
-    queryKey: ["/api/user/accessible-pages"],
+    queryKey: ["/api/user/accessible-pages", "field-visibility-added-2025-06-08"],
     enabled: !!user, // Only fetch if user is authenticated
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 0, // Don't use stale cache to ensure fresh data
+    gcTime: 0, // Don't cache results
   });
 
   const handleNavigate = (href: string) => {

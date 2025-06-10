@@ -70,13 +70,13 @@ export function WidgetConfigModal({
   useEffect(() => {
     if (widget) {
       setFormData({
-        title: widget.title,
-        widgetType: widget.widgetType,
-        dataSource: widget.dataSource,
+        title: widget.title || '',
+        widgetType: widget.widgetType || 'kpi',
+        dataSource: widget.dataSource || '',
         config: widget.config || {}
       });
       
-      const ds = dataSources.find(ds => ds.name === widget.dataSource);
+      const ds = dataSources.find(ds => ds.name === (widget.dataSource || ''));
       setSelectedDataSource(ds || null);
     } else {
       setFormData({
@@ -136,14 +136,17 @@ export function WidgetConfigModal({
   };
 
   const handleSave = () => {
-    if (!formData.title.trim() || !formData.dataSource) {
+    if (!formData.title?.trim() || !formData.dataSource) {
       return;
     }
 
+    // Find the dataSourceId from the selected dataSource name
+    const selectedDs = dataSources.find(ds => ds.name === formData.dataSource);
+    
     const widgetData = {
-      title: formData.title.trim(),
+      name: formData.title.trim(),  // Server expects 'name' not 'title'
       widgetType: formData.widgetType,
-      dataSource: formData.dataSource,
+      dataSourceId: selectedDs?.id,  // Server expects 'dataSourceId' (number) not 'dataSource' (string)
       config: formData.config,
       position: widget?.position || { x: 0, y: 0, w: 1, h: 1 }
     };
@@ -386,7 +389,7 @@ export function WidgetConfigModal({
               <Label htmlFor="widgetTitle">Widget Title</Label>
               <Input
                 id="widgetTitle"
-                value={formData.title}
+                value={formData.title || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="e.g., Client Overview"
               />
@@ -495,7 +498,7 @@ export function WidgetConfigModal({
             </Button>
             <Button 
               onClick={handleSave}
-              disabled={!formData.title.trim() || !formData.dataSource}
+              disabled={!formData.title?.trim() || !formData.dataSource}
             >
               {widget ? 'Update Widget' : 'Create Widget'}
             </Button>

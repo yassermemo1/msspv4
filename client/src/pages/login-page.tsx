@@ -143,7 +143,7 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "admin@mssp.local",
-                            password: "SecureTestPass123!"
+                            password: "admin123"
                           });
                         }}
                       >
@@ -157,7 +157,7 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "manager@mssp.local",
-                            password: "SecureTestPass123!"
+                            password: "admin123"
                           });
                         }}
                       >
@@ -171,7 +171,7 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "engineer@mssp.local",
-                            password: "SecureTestPass123!"
+                            password: "admin123"
                           });
                         }}
                       >
@@ -185,7 +185,7 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "user@mssp.local",
-                            password: "SecureTestPass123!"
+                            password: "admin123"
                           });
                         }}
                       >
@@ -275,7 +275,7 @@ export default function LoginPage() {
                 <p><strong>Manager:</strong> manager@mssp.local</p>
                 <p><strong>Engineer:</strong> engineer@mssp.local</p>
                 <p><strong>User:</strong> user@mssp.local</p>
-                <p className="text-gray-400">Password: SecureTestPass123!</p>
+                <p className="text-gray-400">Password: admin123</p>
               </div>
               <p className="text-xs text-gray-500 pt-2">
                 <strong>Test LDAP Account:</strong> einstein / password

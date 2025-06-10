@@ -63,7 +63,7 @@ export function ColumnVisibility({
                   disabled={isMandatory}
                 />
                 <Label 
-                  htmlFor={`column-${column.key}`}
+                  htmlFor={`a${column.key}`}
                   className={`text-sm flex-1 ${isMandatory ? 'text-muted-foreground' : ''}`}
                 >
                   {column.label}

@@ -247,7 +247,7 @@ export default function DashboardPage() {
   // Update widget
   const updateWidget = async (widgetId: number, widgetData: any) => {
     try {
-      const response = await fetch(`/api/widgets/${widgetId}`, {
+      const response = await fetch(`/api/dashboard-widgets/${widgetId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -283,7 +283,7 @@ export default function DashboardPage() {
   // Delete widget
   const deleteWidget = async (widgetId: number) => {
     try {
-      const response = await fetch(`/api/widgets/${widgetId}`, {
+      const response = await fetch(`/api/dashboard-widgets/${widgetId}`, {
         method: 'DELETE',
       });
 

@@ -1428,6 +1428,26 @@ export const schemaVersions = pgTable("schema_versions", {
 export type SchemaVersion = typeof schemaVersions.$inferSelect;
 export type InsertSchemaVersion = typeof schemaVersions.$inferInsert;
 
+// Field visibility configuration table for hiding fields from UI forms
+export const fieldVisibilityConfig = pgTable("field_visibility_config", {
+  id: serial("id").primaryKey(),
+  tableName: text("table_name").notNull(),
+  fieldName: text("field_name").notNull(),
+  isVisible: boolean("is_visible").notNull().default(true),
+  context: text("context").notNull().default("form"), // 'form', 'table', 'export', etc.
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  // Unique constraint to prevent duplicate configurations
+  unique("field_visibility_unique").on(table.tableName, table.fieldName, table.context),
+  // Index for quick lookups
+  index("idx_field_visibility_table_context").on(table.tableName, table.context),
+]);
+
+export const insertFieldVisibilityConfigSchema = createInsertSchema(fieldVisibilityConfig);
+export type InsertFieldVisibilityConfig = z.infer<typeof insertFieldVisibilityConfigSchema>;
+export type FieldVisibilityConfig = typeof fieldVisibilityConfig.$inferSelect;
+
 // Enhanced external widget templates with custom query support
 export const externalWidgetTemplates = pgTable("externalWidgetTemplates", {
   id: serial("id").primaryKey(),

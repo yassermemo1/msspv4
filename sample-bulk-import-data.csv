@@ -1,0 +1,7 @@
+Company Name,Company Domain,Contact Name,Contact Email,Contact Phone,Contact Title,Contract Name,Contract Start Date,Contract End Date,Service Name,Service Category,Service Scope,Hardware Type,Hardware Model
+Acme Corporation,acme.com,John Smith,john.smith@acme.com,+1-555-123-4567,IT Director,Annual Security Services Agreement,2024-01-01,2024-12-31,24/7 SIEM Monitoring,Security Operations,Network Monitoring,Firewall,Cisco ASA 5516-X
+TechCorp Solutions,techcorp.com,Jane Doe,jane.doe@techcorp.com,+1-555-987-6543,CISO,Security Assessment Contract,2024-02-01,2024-06-30,Vulnerability Assessment,Security Testing,External Network Assessment,Scanner,Nessus Professional
+Global Industries,globalind.com,Bob Johnson,bob.johnson@globalind.com,+1-555-555-1234,IT Manager,Managed Security Services,2024-03-01,2025-02-28,SOC as a Service,Managed Services,24/7 Monitoring,SIEM,IBM QRadar
+StartupTech Inc,startuptech.io,Alice Brown,alice.brown@startuptech.io,+1-555-111-2222,CTO,Cloud Security Assessment,2024-04-01,2024-05-31,Cloud Security Review,Security Testing,AWS Security Assessment,Tool,CloudFormation Scanner
+Enterprise Corp,enterprise.com,Charlie Wilson,charlie.wilson@enterprise.com,+1-555-333-4444,Security Manager,Compliance Audit Services,2024-05-01,2024-08-31,SOC 2 Audit,Compliance,SOC 2 Type II,Documentation,Compliance Framework
+MediumBiz LLC,mediumbiz.net,Diana Green,diana.green@mediumbiz.net,+1-555-777-8888,IT Specialist,Incident Response Retainer,2024-06-01,2025-05-31,Incident Response,Emergency Services,Breach Response,Forensics,EnCase Enterprise 

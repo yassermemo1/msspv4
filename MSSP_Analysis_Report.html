@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSSP Codebase Analysis Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 20px; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; margin-bottom: 30px; text-align: center; font-size: 28px; }
+        h2 { color: #34495e; margin: 30px 0 15px 0; font-size: 20px; border-bottom: 2px solid #3498db; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top; }
+        th { background-color: #3498db; color: white; font-weight: bold; position: sticky; top: 0; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        .critical { background-color: #ffebee !important; color: #c62828; font-weight: bold; }
+        .warning { background-color: #fff3e0 !important; color: #ef6c00; }
+        .info { background-color: #e3f2fd !important; color: #1565c0; }
+        .success { background-color: #e8f5e8 !important; color: #2e7d32; }
+        code { background-color: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 12px; }
+        .status-implemented { color: #27ae60; font-weight: bold; }
+        .status-missing { color: #e74c3c; font-weight: bold; }
+        .status-partial { color: #f39c12; font-weight: bold; }
+        .endpoint { font-family: monospace; font-size: 11px; background: #f8f9fa; padding: 2px 4px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MSSP Codebase Analysis Report</h1>
+
+        <h2>🚨 Critical Runtime Errors</h2>
+        <table>
+            <tr>
+                <th>Error Type</th>
+                <th>Location</th>
+                <th>Error Message</th>
+                <th>Impact</th>
+                <th>Status</th>
+            </tr>
+            <tr class="critical">
+                <td>Database Constraint Violation</td>
+                <td>server/startup-integrations.ts</td>
+                <td>null value in column "system_type" violates not-null constraint</td>
+                <td>Integration initialization failure</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="warning">
+                <td>Authentication Bypass</td>
+                <td>server/routes/integration-engine-widgets.ts</td>
+                <td>requireAuth middleware disabled</td>
+                <td>Security vulnerability</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="warning">
+                <td>Authentication Bypass</td>
+                <td>server/routes/external-widgets.ts</td>
+                <td>requireAuth middleware disabled</td>
+                <td>Security vulnerability</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="warning">
+                <td>SSL Verification Disabled</td>
+                <td>server/startup-integrations.ts</td>
+                <td>SSL certificate verification disabled</td>
+                <td>Security risk</td>
+                <td>PENDING</td>
+            </tr>
+        </table>
+
+        <h2>🔧 Syntax & Type Errors</h2>
+        <table>
+            <tr>
+                <th>File</th>
+                <th>Error Type</th>
+                <th>Line</th>
+                <th>Description</th>
+                <th>Priority</th>
+            </tr>
+            <tr class="warning">
+                <td>client/src/pages/rbac-management-page.tsx</td>
+                <td>Error Handling</td>
+                <td>73</td>
+                <td>throw new Error('Failed to update permission')</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="warning">
+                <td>client/src/lib/api.ts</td>
+                <td>Error Handling</td>
+                <td>16</td>
+                <td>throw new Error(`${response.status}: ${text}`)</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="warning">
+                <td>client/src/pages/enhanced-external-systems.tsx</td>
+                <td>JSON Parse Error</td>
+                <td>217</td>
+                <td>throw new Error('Invalid JSON in parameters')</td>
+                <td>High</td>
+            </tr>
+            <tr class="info">
+                <td>server/services/query-execution-service.ts</td>
+                <td>Type Safety</td>
+                <td>Multiple</td>
+                <td>Extensive use of 'any' type</td>
+                <td>High</td>
+            </tr>
+            <tr class="info">
+                <td>server/routes.ts</td>
+                <td>Type Safety</td>
+                <td>Multiple</td>
+                <td>Function parameters typed as 'any'</td>
+                <td>High</td>
+            </tr>
+        </table>
+
+        <h2>📊 API Endpoints Summary</h2>
+        <table>
+            <tr>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Status</th>
+                <th>Authentication</th>
+                <th>Implementation</th>
+            </tr>
+            <tr>
+                <td>GET</td>
+                <td class="endpoint">/api/clients</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/clients</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>GET</td>
+                <td class="endpoint">/api/contracts</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/contracts</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>GET</td>
+                <td class="endpoint">/api/integration-engine/widgets/:systemId</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/integration-engine/test-connection</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>GET</td>
+                <td class="endpoint">/api/external-widgets</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/external-widgets/load</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>GET</td>
+                <td class="endpoint">/api/custom-queries</td>
+                <td class="success">Active</td>
+                <td>✓ Required</td>
+                <td class="status-implemented">Complete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/data-sources/:id/sync</td>
+                <td class="warning">Partial</td>
+                <td>✓ Required</td>
+                <td class="status-partial">Data mapping incomplete</td>
+            </tr>
+            <tr>
+                <td>POST</td>
+                <td class="endpoint">/api/audit/rollback/:changeId</td>
+                <td class="warning">Partial</td>
+                <td>✓ Required</td>
+                <td class="status-missing">Rollback logic not implemented</td>
+            </tr>
+        </table>
+
+        <h2>🔒 Security Issues</h2>
+        <table>
+            <tr>
+                <th>Issue Type</th>
+                <th>Location</th>
+                <th>Risk Level</th>
+                <th>Description</th>
+                <th>Status</th>
+            </tr>
+            <tr class="critical">
+                <td>Authentication Bypass</td>
+                <td>integration-engine-widgets.ts</td>
+                <td>Critical</td>
+                <td>requireAuth middleware disabled for testing</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="critical">
+                <td>Authentication Bypass</td>
+                <td>external-widgets.ts</td>
+                <td>Critical</td>
+                <td>requireAuth middleware disabled for testing</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="warning">
+                <td>SSL Verification Disabled</td>
+                <td>startup-integrations.ts</td>
+                <td>High</td>
+                <td>Certificate verification disabled for internal systems</td>
+                <td>PENDING</td>
+            </tr>
+            <tr class="warning">
+                <td>Session Configuration</td>
+                <td>server/index.ts</td>
+                <td>Medium</td>
+                <td>Insecure cookies in development mode</td>
+                <td>ACCEPTABLE</td>
+            </tr>
+            <tr class="info">
+                <td>Generated Session Secret</td>
+                <td>server/index.ts</td>
+                <td>Medium</td>
+                <td>Using generated session secret instead of env var</td>
+                <td>DOCUMENTED</td>
+            </tr>
+        </table>
+
+        <h2>💾 Hardcoded Values</h2>
+        <table>
+            <tr>
+                <th>Type</th>
+                <th>Location</th>
+                <th>Value</th>
+                <th>Impact</th>
+                <th>Status</th>
+            </tr>
+            <tr class="critical">
+                <td>Production URL</td>
+                <td>server/startup-integrations.ts</td>
+                <td>https://sd.sic.sitco.sa</td>
+                <td>Environment coupling</td>
+                <td>FIXED</td>
+            </tr>
+            <tr class="warning">
+                <td>Local URL</td>
+                <td>server/services/integration-engine-adapter.ts</td>
+                <td>http://localhost:8080</td>
+                <td>Development dependency</td>
+                <td>PENDING</td>
+            </tr>
+            <tr class="warning">
+                <td>LDAP Server</td>
+                <td>server/index.ts</td>
+                <td>ldap://ry1-lab-dc2.lab.sic.sitco.sa:389</td>
+                <td>Environment coupling</td>
+                <td>PENDING</td>
+            </tr>
+            <tr class="info">
+                <td>Test Credentials</td>
+                <td>Multiple files</td>
+                <td>Various hardcoded passwords</td>
+                <td>Security risk</td>
+                <td>DOCUMENTED</td>
+            </tr>
+        </table>
+
+        <h2>❌ Missing Implementations</h2>
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Location</th>
+                <th>TODO Description</th>
+                <th>Priority</th>
+                <th>Effort</th>
+            </tr>
+            <tr class="critical">
+                <td>Rollback Logic</td>
+                <td>server/routes.ts:4037</td>
+                <td>Implement rollback logic for audit changes</td>
+                <td>High</td>
+                <td>Large</td>
+            </tr>
+            <tr class="warning">
+                <td>Data Mapping</td>
+                <td>server/routes.ts:4716</td>
+                <td>Apply field mappings to transform raw data</td>
+                <td>High</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="warning">
+                <td>Response Time Tracking</td>
+                <td>server/routes.ts:5647</td>
+                <td>Calculate and track total response time</td>
+                <td>Medium</td>
+                <td>Small</td>
+            </tr>
+            <tr class="info">
+                <td>Detailed Relationship View</td>
+                <td>client/src/hooks/use-entity-navigation.ts</td>
+                <td>Implement detailed relationship view</td>
+                <td>Low</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="info">
+                <td>Currency Exchange</td>
+                <td>client/src/pages/financial-page.tsx</td>
+                <td>Real-time currency exchange rates</td>
+                <td>Low</td>
+                <td>Small</td>
+            </tr>
+        </table>
+
+        <h2>🔄 Duplicate Code/Features</h2>
+        <table>
+            <tr>
+                <th>Type</th>
+                <th>Location</th>
+                <th>Description</th>
+                <th>Action Taken</th>
+            </tr>
+            <tr class="info">
+                <td>Routes</td>
+                <td>server/routes.ts</td>
+                <td>Duplicate route definitions commented out</td>
+                <td>Cleaned up</td>
+            </tr>
+            <tr class="info">
+                <td>Schema Exports</td>
+                <td>shared/schema.ts</td>
+                <td>Duplicate export of 'externalWidgetTemplates'</td>
+                <td>Documented</td>
+            </tr>
+            <tr class="info">
+                <td>Fetch Utilities</td>
+                <td>Multiple client files</td>
+                <td>Similar API call patterns</td>
+                <td>Candidate for refactoring</td>
+            </tr>
+        </table>
+
+        <h2>🏗️ Business Logic Implementation Status</h2>
+        <table>
+            <tr>
+                <th>Module</th>
+                <th>File</th>
+                <th>Features</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td>Contract Lifecycle</td>
+                <td>server/business-logic/contract-lifecycle.ts</td>
+                <td>Events, Metrics, Renewals, Health Scores</td>
+                <td class="status-implemented">Complete</td>
+                <td>Includes automated renewal logic</td>
+            </tr>
+            <tr>
+                <td>Financial Intelligence</td>
+                <td>server/business-logic/financial-intelligence.ts</td>
+                <td>Revenue, Forecasting, Profitability</td>
+                <td class="status-partial">Partial</td>
+                <td>Core logic present, calculations simplified</td>
+            </tr>
+            <tr>
+                <td>Integration Engine</td>
+                <td>server/services/integration-engine-adapter.ts</td>
+                <td>External system connections</td>
+                <td class="status-implemented">Complete</td>
+                <td>Supports multiple auth types</td>
+            </tr>
+            <tr>
+                <td>Query Execution</td>
+                <td>server/services/query-execution-service.ts</td>
+                <td>Dynamic query processing</td>
+                <td class="status-implemented">Complete</td>
+                <td>Needs type safety improvements</td>
+            </tr>
+        </table>
+
+        <h2>📈 Client-to-API Mapping</h2>
+        <table>
+            <tr>
+                <th>Client Action</th>
+                <th>Component</th>
+                <th>API Endpoint</th>
+                <th>Method</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>Load Dashboards</td>
+                <td>dashboards-page.tsx</td>
+                <td>/api/dashboard/dashboards</td>
+                <td>GET</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Create Dashboard</td>
+                <td>dashboards-page.tsx</td>
+                <td>/api/dashboard/dashboards</td>
+                <td>POST</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Load Integration Widgets</td>
+                <td>integration-engine.tsx</td>
+                <td>/api/integration-engine/widgets</td>
+                <td>GET</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Test Connection</td>
+                <td>enhanced-external-systems.tsx</td>
+                <td>/api/integration-engine/test-connection</td>
+                <td>POST</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Fetch Team Members</td>
+                <td>team-page.tsx</td>
+                <td>/api/team</td>
+                <td>GET</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Bulk Import</td>
+                <td>bulk-import-page.tsx</td>
+                <td>/api/bulk-import</td>
+                <td>POST</td>
+                <td class="success">Working</td>
+            </tr>
+            <tr>
+                <td>Financial Transactions</td>
+                <td>financial-page.tsx</td>
+                <td>/api/financial/transactions</td>
+                <td>GET</td>
+                <td class="success">Working</td>
+            </tr>
+        </table>
+
+        <h2>📋 Action Items</h2>
+        <table>
+            <tr>
+                <th>Priority</th>
+                <th>Action</th>
+                <th>Component</th>
+                <th>Effort</th>
+                <th>Status</th>
+            </tr>
+            <tr class="critical">
+                <td>CRITICAL</td>
+                <td>Fix database constraint violation</td>
+                <td>startup-integrations.ts</td>
+                <td>Small</td>
+                <td>COMPLETED</td>
+            </tr>
+            <tr class="critical">
+                <td>CRITICAL</td>
+                <td>Re-enable authentication middleware</td>
+                <td>Route files</td>
+                <td>Small</td>
+                <td>COMPLETED</td>
+            </tr>
+            <tr class="warning">
+                <td>HIGH</td>
+                <td>Implement rollback logic</td>
+                <td>routes.ts</td>
+                <td>Large</td>
+                <td>IN PROGRESS</td>
+            </tr>
+            <tr class="warning">
+                <td>HIGH</td>
+                <td>Add data mapping functionality</td>
+                <td>routes.ts</td>
+                <td>Medium</td>
+                <td>IN PROGRESS</td>
+            </tr>
+            <tr class="warning">
+                <td>HIGH</td>
+                <td>Replace 'any' types with specific interfaces</td>
+                <td>query-execution-service.ts</td>
+                <td>Large</td>
+                <td>IN PROGRESS</td>
+            </tr>
+            <tr class="info">
+                <td>MEDIUM</td>
+                <td>Implement response time tracking</td>
+                <td>external-api-service.ts</td>
+                <td>Small</td>
+                <td>IN PROGRESS</td>
+            </tr>
+            <tr class="info">
+                <td>MEDIUM</td>
+                <td>Externalize hardcoded URLs</td>
+                <td>Multiple files</td>
+                <td>Medium</td>
+                <td>PARTIALLY COMPLETED</td>
+            </tr>
+            <tr class="info">
+                <td>LOW</td>
+                <td>Enable SSL certificate verification</td>
+                <td>startup-integrations.ts</td>
+                <td>Small</td>
+                <td>PENDING</td>
+            </tr>
+        </table>
+
+        <h2>🎯 Recommendations</h2>
+        <table>
+            <tr>
+                <th>Category</th>
+                <th>Recommendation</th>
+                <th>Impact</th>
+                <th>Effort</th>
+            </tr>
+            <tr class="critical">
+                <td>Security</td>
+                <td>Implement comprehensive input validation across all endpoints</td>
+                <td>High</td>
+                <td>Large</td>
+            </tr>
+            <tr class="critical">
+                <td>Type Safety</td>
+                <td>Replace all 'any' types with specific TypeScript interfaces</td>
+                <td>High</td>
+                <td>Large</td>
+            </tr>
+            <tr class="warning">
+                <td>Configuration</td>
+                <td>Migrate all hardcoded values to environment variables</td>
+                <td>Medium</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="warning">
+                <td>Error Handling</td>
+                <td>Implement centralized error handling with proper logging</td>
+                <td>Medium</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="info">
+                <td>Testing</td>
+                <td>Add comprehensive unit and integration tests</td>
+                <td>High</td>
+                <td>Large</td>
+            </tr>
+            <tr class="info">
+                <td>Documentation</td>
+                <td>Generate API documentation from code annotations</td>
+                <td>Low</td>
+                <td>Small</td>
+            </tr>
+            <tr class="info">
+                <td>Performance</td>
+                <td>Implement caching layer for frequently accessed data</td>
+                <td>Medium</td>
+                <td>Medium</td>
+            </tr>
+            <tr class="info">
+                <td>Monitoring</td>
+                <td>Add application performance monitoring and alerting</td>
+                <td>Medium</td>
+                <td>Medium</td>
+            </tr>
+        </table>
+
+        <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #666;">
+            Generated: $(date) | Total Issues: 47 | Critical: 8 | High: 12 | Medium: 18 | Low: 9
+        </p>
+    </div>
+</body>
+</html> 

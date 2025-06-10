@@ -62,6 +62,7 @@ async function setupDefaultJiraSystem(db: any) {
     const jiraConfig = {
       systemName: 'jira',
       displayName: 'Production Jira (SITCO)',
+      systemType: 'ticketing',
       baseUrl: 'https://sd.sic.sitco.sa',
       authType: 'basic',
       authConfig: {

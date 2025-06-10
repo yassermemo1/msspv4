@@ -484,7 +484,7 @@ export function WidgetBuilder({ onClose }: WidgetBuilderProps) {
     setFormData({
       name: widget.name,
       description: widget.description || '',
-      systemId: widget.systemId,
+      systemId: widget.systemId || 0,
       widgetType: widget.widgetType,
       chartType: widget.chartType || 'bar',
       query: widget.query,
@@ -550,7 +550,7 @@ export function WidgetBuilder({ onClose }: WidgetBuilderProps) {
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label htmlFor="system">External System *</Label>
-          <Select value={formData.systemId.toString()} onValueChange={(value) => setFormData({ ...formData, systemId: parseInt(value) })}>
+          <Select value={formData.systemId > 0 ? formData.systemId.toString() : ""} onValueChange={(value) => setFormData({ ...formData, systemId: parseInt(value) })}>
             <SelectTrigger>
               <SelectValue placeholder="Select system" />
             </SelectTrigger>
@@ -601,7 +601,7 @@ export function WidgetBuilder({ onClose }: WidgetBuilderProps) {
       {getSelectedSystem()?.queryMethods && (
         <div>
           <Label htmlFor="method">Query Method</Label>
-          <Select value={formData.method} onValueChange={(value) => setFormData({ ...formData, method: value })}>
+          <Select value={formData.method || ""} onValueChange={(value) => setFormData({ ...formData, method: value })}>
             <SelectTrigger>
               <SelectValue placeholder="Select method (optional)" />
             </SelectTrigger>

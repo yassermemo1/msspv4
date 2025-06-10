@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { externalWidgetRegistry } from '../services/external-widget-registry.js';
 import { storage } from '../storage.js';
 
-// Authentication middleware - temporarily disabled for testing
+// Authentication middleware
 function requireAuth(req: any, res: any, next: any) {
-  // Temporarily bypass authentication for testing
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
   next();
 }
 

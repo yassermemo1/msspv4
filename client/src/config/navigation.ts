@@ -155,6 +155,14 @@ export const mainNavigation: NavigationItem[] = [
     icon: BarChart3,
     description: "Analytics and reporting"
   },
+
+  { 
+    name: "Field Visibility", 
+    href: "/field-visibility", 
+    icon: Shield,
+    description: "Manage form field visibility settings",
+    isNew: true
+  },
   { 
     name: "Settings", 
     href: "/settings", 

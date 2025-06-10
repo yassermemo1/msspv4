@@ -63,6 +63,7 @@ import dashboardBridge from './api/integration-engine/dashboard-bridge';
 import externalDataBridge from './api/integration-engine/external-data-bridge';
 import { externalWidgetRoutes } from './routes/external-widgets.js';
 import { integrationEngineWidgetRoutes } from './routes/integration-engine-widgets.js';
+import { codebaseAnalyzer } from './services/codebase-analyzer';
 
 const scryptAsync = promisify(scrypt);
 
@@ -347,6 +348,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       uptime: process.uptime(),
       timestamp: new Date().toISOString()
     });
+  });
+
+  // ========================================
+  // FIELD VISIBILITY CONFIGURATION ENDPOINTS
+  // ========================================
+
+  // Get all field visibility configurations
+  app.get('/api/field-visibility', requireAuth, async (req, res) => {
+    try {
+      const configs = await storage.getFieldVisibilityConfigs();
+      res.json(configs);
+    } catch (error) {
+      console.error('Error fetching field visibility configs:', error);
+      res.status(500).json({ error: 'Failed to fetch field visibility configurations' });
+    }
+  });
+
+  // Set field visibility
+  app.post('/api/field-visibility', requireAuth, async (req, res) => {
+    try {
+      const { tableName, fieldName, isVisible, context } = req.body;
+      
+      if (!tableName || !fieldName || typeof isVisible !== 'boolean') {
+        return res.status(400).json({ error: 'tableName, fieldName, and isVisible are required' });
+      }
+
+      const config = await storage.setFieldVisibility(tableName, fieldName, isVisible, context || 'form');
+      
+      // Log the change
+      try {
+        await storage.createAuditLog({
+          userId: req.user!.id,
+          action: 'field_visibility_update',
+          tableName: 'field_visibility_config',
+          recordId: null,
+          oldValues: null,
+          newValues: JSON.stringify({
+            tableName,
+            fieldName,
+            isVisible,
+            context,
+            action: 'update_field_visibility'
+          })
+        });
+      } catch (auditError) {
+        console.error('Audit log failed (non-critical):', auditError);
+        // Continue execution even if audit logging fails
+      }
+
+      res.json(config);
+    } catch (error) {
+      console.error('Error updating field visibility:', error);
+      res.status(500).json({ error: 'Failed to update field visibility' });
+    }
+  });
+
+  // Get field visibility for a specific table
+  app.get('/api/field-visibility/:tableName', requireAuth, async (req, res) => {
+    try {
+      const { tableName } = req.params;
+      const { context = 'form' } = req.query;
+      
+      const configs = await storage.getFieldVisibilityForTable(tableName, context as string);
+      res.json(configs);
+    } catch (error) {
+      console.error('Error fetching field visibility for table:', error);
+      res.status(500).json({ error: 'Failed to fetch field visibility for table' });
+    }
+  });
+
+  // Reset field visibility (back to default visible)
+  app.delete('/api/field-visibility/:tableName/:fieldName', requireAuth, async (req, res) => {
+    try {
+      const { tableName, fieldName } = req.params;
+      const { context = 'form' } = req.query;
+      
+      await storage.resetFieldVisibility(tableName, fieldName, context as string);
+      
+      await storage.createAuditLog({
+        userId: req.user!.id,
+        action: 'field_visibility_reset',
+        tableName: 'field_visibility_config',
+        recordId: null,
+        oldValues: null,
+        newValues: JSON.stringify({
+          tableName,
+          fieldName,
+          context,
+          action: 'reset_field_visibility'
+        })
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error resetting field visibility:', error);
+      res.status(500).json({ error: 'Failed to reset field visibility' });
+    }
   });
 
   // User authentication with bcrypt
@@ -8286,14 +8384,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recordsSkipped: 0,
         errors: [] as string[],
         warnings: [] as string[],
-        details: {
-          clients: { created: 0, updated: 0, skipped: 0 },
-          contacts: { created: 0, updated: 0 },
-          contracts: { created: 0, updated: 0 },
-          serviceScopes: { created: 0, updated: 0 },
-          licenseAssignments: { created: 0, updated: 0 },
-          hardwareAssignments: { created: 0, updated: 0 }
-        }
+                  details: {
+            clients: { created: 0, updated: 0, skipped: 0 },
+            contacts: { created: 0, updated: 0 },
+            contracts: { created: 0, updated: 0 },
+            services: { created: 0, updated: 0 },
+            serviceScopes: { created: 0, updated: 0 },
+            licenseAssignments: { created: 0, updated: 0 },
+            hardwareAssignments: { created: 0, updated: 0 }
+          }
       };
 
       // Begin transaction
@@ -8337,6 +8436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const row = rows[i];
           let rowSuccessful = true;
           let clientId: number | null = null;
+          let contractId: number | null = null;
 
           try {
             // 1. Process Client data (required)
@@ -8484,7 +8584,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Validate required fields for contracts
               if (contractData.name && contractData.startDate && contractData.endDate) {
-                let contractId: number;
                 
                 const existingContract = await tx.select()
                   .from(contracts)
@@ -8574,7 +8673,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
 
-            // 4. Process License assignments
+            // 4. Process Service data
+            let serviceId: number | null = null;
+            if (entityMappings.services) {
+              const serviceData = extractEntityData(row, entityMappings.services, mappings);
+              
+              // Validate required fields for services
+              if (serviceData.name && serviceData.category && serviceData.deliveryModel) {
+                // Check if service exists
+                const existingService = await tx.select()
+                  .from(services)
+                  .where(eq(services.name, serviceData.name))
+                  .limit(1);
+
+                if (existingService.length > 0) {
+                  // Update existing service
+                  await tx.update(services)
+                    .set({
+                      name: serviceData.name,
+                      category: serviceData.category,
+                      description: serviceData.description || existingService[0].description,
+                      deliveryModel: serviceData.deliveryModel,
+                      basePrice: serviceData.basePrice || existingService[0].basePrice,
+                      pricingUnit: serviceData.pricingUnit || existingService[0].pricingUnit,
+                      isActive: serviceData.isActive !== undefined ? serviceData.isActive : existingService[0].isActive
+                    })
+                    .where(eq(services.id, existingService[0].id));
+                  
+                  serviceId = existingService[0].id;
+                  results.details.services.updated++;
+                } else {
+                  // Create new service
+                  const [newService] = await tx.insert(services)
+                    .values({
+                      name: serviceData.name,
+                      category: serviceData.category,
+                      description: serviceData.description || null,
+                      deliveryModel: serviceData.deliveryModel,
+                      basePrice: serviceData.basePrice || null,
+                      pricingUnit: serviceData.pricingUnit || null,
+                      isActive: serviceData.isActive !== undefined ? serviceData.isActive : true
+                    })
+                    .returning({ id: services.id });
+                  
+                  serviceId = newService.id;
+                  results.details.services.created++;
+                }
+              } else {
+                // Log missing required fields
+                const missingFields = [];
+                if (!serviceData.name) missingFields.push('name');
+                if (!serviceData.category) missingFields.push('category');
+                if (!serviceData.deliveryModel) missingFields.push('deliveryModel');
+                
+                if (missingFields.length > 0) {
+                  results.warnings.push(`Row ${i + 1}: Skipping service creation - missing required fields: ${missingFields.join(', ')}`);
+                }
+              }
+            }
+
+            // 5. Process Service Scope data
+            if (entityMappings.serviceScopes && (serviceId || defaultServiceId)) {
+              const serviceScopeData = extractEntityData(row, entityMappings.serviceScopes, mappings);
+              const currentServiceId = serviceId || defaultServiceId;
+              
+              // We need a contract to create service scopes
+              if (contractId) {
+                // Check if service scope exists for this contract and service
+                const existingScope = await tx.select()
+                  .from(serviceScopes)
+                  .where(and(
+                    eq(serviceScopes.contractId, contractId),
+                    eq(serviceScopes.serviceId, currentServiceId)
+                  ))
+                  .limit(1);
+
+                if (existingScope.length > 0) {
+                  // Update existing service scope
+                  await tx.update(serviceScopes)
+                    .set({
+                      scopeDefinition: serviceScopeData.scopeDefinition ? serviceScopeData.scopeDefinition : existingScope[0].scopeDefinition,
+                      startDate: serviceScopeData.startDate ? new Date(serviceScopeData.startDate) : existingScope[0].startDate,
+                      endDate: serviceScopeData.endDate ? new Date(serviceScopeData.endDate) : existingScope[0].endDate,
+                      status: serviceScopeData.status || existingScope[0].status,
+                      monthlyValue: serviceScopeData.monthlyValue || existingScope[0].monthlyValue,
+                      notes: serviceScopeData.notes || existingScope[0].notes
+                    })
+                    .where(eq(serviceScopes.id, existingScope[0].id));
+                  
+                  results.details.serviceScopes.updated++;
+                } else {
+                  // Create new service scope
+                  await tx.insert(serviceScopes).values({
+                    contractId,
+                    serviceId: currentServiceId,
+                    scopeDefinition: serviceScopeData.scopeDefinition || JSON.stringify({
+                      service_level: 'Standard',
+                      monitoring_hours: '24/7',
+                      response_time: '30 minutes',
+                      escalation_levels: 2
+                    }),
+                    startDate: serviceScopeData.startDate ? new Date(serviceScopeData.startDate) : null,
+                    endDate: serviceScopeData.endDate ? new Date(serviceScopeData.endDate) : null,
+                    status: serviceScopeData.status || 'active',
+                    monthlyValue: serviceScopeData.monthlyValue || 15000,
+                    notes: serviceScopeData.notes || null
+                  });
+                  
+                  results.details.serviceScopes.created++;
+                }
+              } else {
+                results.warnings.push(`Row ${i + 1}: Cannot create service scope without a contract`);
+              }
+            }
+
+            // 6. Process License assignments
             if (entityMappings.licenses) {
               const licenseData = extractEntityData(row, entityMappings.licenses, mappings);
               
@@ -9156,6 +9369,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // External Data Integration Bridge
   app.use("/api/integration-engine/external-data", requireAuth, externalDataBridge);
+
+
 
   return httpServer;
 }

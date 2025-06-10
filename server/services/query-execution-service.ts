@@ -2,39 +2,60 @@ import { ExternalSystem } from '../types/external-systems.js';
 import { db } from '../db.js';
 import { externalSystems } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
+import {
+  MethodConfig,
+  TransformConfig,
+  AuthConfig,
+  QueryExecutionRequest,
+  QueryExecutionResult,
+  QueryExecutionError,
+  ValidationError,
+  TimeoutError
+} from '../types/query-execution.js';
+import {
+  MethodConfig,
+  TransformConfig,
+  AuthConfig,
+  QueryExecutionRequest,
+  QueryExecutionResult,
+  QueryExecutionError,
+  ValidationError,
+  TimeoutError
+} from '../types/query-execution.js';
 
-interface QueryRequest {
-  systemId: number;
+interface QueryRequest extends QueryExecutionRequest {
   query: string;
-  parameters?: Record<string, any>;
-  method?: string; // Default method if system supports multiple
   format?: string; // Response format preference
-  timeout?: number;
   transformations?: string[]; // Data transformation steps
 }
 
-interface QueryResponse {
-  success: boolean;
-  data?: any;
-  metadata?: {
+interface QueryResponse extends QueryExecutionResult {
+  metadata: {
     executionTime: number;
     recordCount: number;
     systemName: string;
     method: string;
     transformationsApplied?: string[];
-  };
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
+    cacheHit?: boolean;
+    retryCount?: number;
+    timestamp: string;
   };
 }
 
 interface SystemConfig {
   system: ExternalSystem;
-  queryMethods: Record<string, any>;
+  queryMethods: Record<string, MethodConfig>;
   authHeaders: Record<string, string>;
-  connectionSettings: any;
+  connectionSettings: ConnectionSettings;
+}
+
+interface ConnectionSettings {
+  timeout?: number;
+  retries?: number;
+  ssl?: boolean;
+  poolSize?: number;
+  keepAlive?: boolean;
+  compression?: boolean;
 }
 
 export class DynamicQueryExecutionService {
@@ -211,19 +232,19 @@ export class DynamicQueryExecutionService {
   /**
    * Validate and get the query method to use
    */
-  private validateAndGetMethod(queryRequest: QueryRequest, systemConfig: SystemConfig): any {
+  private validateAndGetMethod(queryRequest: QueryRequest, systemConfig: SystemConfig): { name: string; config: MethodConfig } {
     const availableMethods = systemConfig.queryMethods;
     
     if (!availableMethods || Object.keys(availableMethods).length === 0) {
-      throw new Error(`No query methods configured for system ${systemConfig.system.displayName}`);
+      throw new ValidationError('queryMethods', 'empty', 'non-empty object');
     }
 
     // Use specified method or default to first available method
-    const methodName = queryRequest.method || Object.keys(availableMethods)[0];
+    const methodName = queryRequest.methodName || Object.keys(availableMethods)[0];
     const method = availableMethods[methodName];
     
     if (!method) {
-      throw new Error(`Query method '${methodName}' not supported by system ${systemConfig.system.displayName}`);
+      throw new ValidationError('methodName', methodName, `one of: ${Object.keys(availableMethods).join(', ')}`);
     }
 
     return { name: methodName, config: method };
@@ -235,8 +256,8 @@ export class DynamicQueryExecutionService {
   private async performQuery(
     queryRequest: QueryRequest, 
     systemConfig: SystemConfig, 
-    method: any
-  ): Promise<any> {
+    method: { name: string; config: MethodConfig }
+  ): Promise<unknown> {
     const { system } = systemConfig;
     const methodConfig = method.config;
     const timeout = queryRequest.timeout || methodConfig.timeout || 30000;
@@ -272,9 +293,9 @@ export class DynamicQueryExecutionService {
   private async executeHttpGet(
     queryRequest: QueryRequest,
     systemConfig: SystemConfig,
-    methodConfig: any,
+    methodConfig: MethodConfig,
     timeout: number
-  ): Promise<any> {
+  ): Promise<unknown> {
     const { system, authHeaders } = systemConfig;
     
     // Build URL with query parameters
@@ -320,9 +341,9 @@ export class DynamicQueryExecutionService {
   private async executeHttpPost(
     queryRequest: QueryRequest,
     systemConfig: SystemConfig,
-    methodConfig: any,
+    methodConfig: MethodConfig,
     timeout: number
-  ): Promise<any> {
+  ): Promise<unknown> {
     const { system, authHeaders } = systemConfig;
     
     const url = new URL(methodConfig.endpoint || '', system.baseUrl);
@@ -362,9 +383,9 @@ export class DynamicQueryExecutionService {
   private async executeGraphQL(
     queryRequest: QueryRequest,
     systemConfig: SystemConfig,
-    methodConfig: any,
+    methodConfig: MethodConfig,
     timeout: number
-  ): Promise<any> {
+  ): Promise<unknown> {
     const { system, authHeaders } = systemConfig;
     
     const url = new URL(methodConfig.endpoint || '/graphql', system.baseUrl);
@@ -461,7 +482,7 @@ export class DynamicQueryExecutionService {
   /**
    * Build POST payload based on method configuration
    */
-  private buildPostPayload(queryRequest: QueryRequest, methodConfig: any): any {
+  private buildPostPayload(queryRequest: QueryRequest, methodConfig: MethodConfig): unknown {
     const payload: any = {};
     
     // Add the main query
@@ -491,7 +512,7 @@ export class DynamicQueryExecutionService {
   /**
    * Extract data from response based on method configuration
    */
-  private extractDataFromResponse(data: any, methodConfig: any): any {
+  private extractDataFromResponse(data: unknown, methodConfig: MethodConfig): unknown {
     if (methodConfig.dataPath) {
       // Navigate to the data using the specified path
       return this.getNestedValue(data, methodConfig.dataPath);

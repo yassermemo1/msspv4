@@ -1,6 +1,7 @@
 import React from "react";
 import { Switch, Route } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ThemeProvider } from "@/contexts/theme-context";
@@ -29,8 +30,10 @@ import FinancialPage from "@/pages/financial-page";
 import DocumentsPage from "@/pages/documents-page";
 import SettingsPage from "@/pages/settings-page";
 import ReportsPage from "@/pages/reports-page";
-import BulkImportPage from "@/pages/bulk-import-page";
+
 import ComprehensiveBulkImportPage from "@/pages/comprehensive-bulk-import";
+
+import FieldVisibilityManagerPage from "@/pages/field-visibility-manager";
 import ExternalSystemsPage from "@/pages/external-systems-page";
 import DashboardsPage from "@/pages/dashboards-page";
 import ServiceScopesPage from "@/pages/service-scopes-page";
@@ -217,13 +220,7 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/bulk-import" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/bulk-import">
-                        <BulkImportPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+
                   <Route path="/comprehensive-bulk-import" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/comprehensive-bulk-import">
@@ -235,6 +232,14 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/reports">
                         <ReportsPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+
+                  <Route path="/field-visibility" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/field-visibility">
+                        <FieldVisibilityManagerPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />
@@ -326,6 +331,7 @@ function App() {
                 </Switch>
               </div>
               <Toaster />
+              <SonnerToaster />
               {/* Debug button temporarily disabled to prevent blocking toast messages */}
               {/* To re-enable debug functionality, uncomment the line below: */}
               {/* <SimpleDebugButton /> */}
