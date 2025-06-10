@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -8,6 +8,10 @@ import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Separator } from '../components/ui/separator';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { 
   CheckCircle, 
   Circle, 
@@ -30,9 +34,12 @@ import {
   Zap,
   AlertTriangle,
   Database,
-  CheckCircle2
+  CheckCircle2,
+  RotateCcw,
+  Plus
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface OnboardingStep {
   id: string;
@@ -41,222 +48,224 @@ interface OnboardingStep {
   estimatedTime: string;
   icon: React.ReactNode;
   status: 'pending' | 'in-progress' | 'completed' | 'warning';
-  actions: Array<{
-    label: string;
-    url: string;
-    type: 'primary' | 'secondary';
-    icon: React.ReactNode;
-  }>;
+  formComponent?: React.ReactNode;
   checklist: string[];
   tips?: string[];
 }
 
-const onboardingSteps: OnboardingStep[] = [
-  {
-    id: 'client-info',
-    title: 'Client Information Setup',
-    description: 'Create client record with company details, contacts, and basic information',
-    estimatedTime: '5-10 minutes',
-    icon: <Building className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Add New Client',
-        url: '/clients',
-        type: 'primary',
-        icon: <Users className="h-4 w-4" />
-      },
-      {
-        label: 'View Existing Clients',
-        url: '/clients',
-        type: 'secondary',
-        icon: <Eye className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'Company name and industry',
-      'Primary contact information',
-      'Technical and billing contacts',
-      'Company address and details',
-      'Initial communication preferences'
-    ],
-    tips: [
-      'Gather all contact information before starting',
-      'Ensure email addresses are correct for notifications',
-      'Add multiple contacts for redundancy'
-    ]
-  },
-  {
-    id: 'contract-setup',
-    title: 'Contract & Legal Setup',
-    description: 'Create contracts, upload documents, and set up legal framework',
-    estimatedTime: '10-15 minutes',
-    icon: <FileText className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Create Contract',
-        url: '/contracts',
-        type: 'primary',
-        icon: <FileText className="h-4 w-4" />
-      },
-      {
-        label: 'Upload Documents',
-        url: '/documents',
-        type: 'secondary',
-        icon: <Link className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'Master Service Agreement (MSA)',
-      'Statement of Work (SOW)',
-      'Service Level Agreements (SLA)',
-      'Data Processing Agreements (DPA)',
-      'Contract start and end dates',
-      'Pricing and billing terms'
-    ],
-    tips: [
-      'Use templates for standard agreements',
-      'Review SLA requirements carefully',
-      'Set up automatic renewal reminders'
-    ]
-  },
-  {
-    id: 'service-scopes',
-    title: 'Service Scopes with Pool Validation',
-    description: 'Define services with automatic license and hardware pool validation',
-    estimatedTime: '15-20 minutes',
-    icon: <Shield className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Enhanced Service Form',
-        url: '/service-scopes',
-        type: 'primary',
-        icon: <Settings className="h-4 w-4" />
-      },
-      {
-        label: 'Check Pool Status',
-        url: '/assets',
-        type: 'secondary',
-        icon: <Database className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'Service type and tier selection',
-      'SIEM license pool validation',
-      'EDR license pool validation',
-      'NDR license pool validation',
-      'Hardware asset assignment',
-      'Scope variables (EPS, endpoints)',
-      'Coverage hours and response times',
-      'Service-specific requirements'
-    ],
-    tips: [
-      'Check pool availability before promising capacity',
-      'Yellow ⚠️ indicators show pool issues',
-      'Validate all allocations before finalizing'
-    ]
-  },
-  {
-    id: 'resource-allocation',
-    title: 'Resource & Team Allocation',
-    description: 'Assign team members, assets, and configure access controls',
-    estimatedTime: '10-15 minutes',
-    icon: <Users className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Assign Team Members',
-        url: '/team',
-        type: 'primary',
-        icon: <Users className="h-4 w-4" />
-      },
-      {
-        label: 'Configure Access',
-        url: '/users',
-        type: 'secondary',
-        icon: <Key className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'Primary account manager assignment',
-      'Technical lead assignment',
-      'SOC analyst team allocation',
-      'Escalation procedures setup',
-      'Client portal access creation',
-      'Tool and system access provisioning'
-    ]
-  },
-  {
-    id: 'integration-setup',
-    title: 'External System Integration',
-    description: 'Configure integrations with client systems and external tools',
-    estimatedTime: '15-25 minutes',
-    icon: <Link className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Configure Integrations',
-        url: '/external-systems',
-        type: 'primary',
-        icon: <Link className="h-4 w-4" />
-      },
-      {
-        label: 'Test Connections',
-        url: '/external-systems',
-        type: 'secondary',
-        icon: <Zap className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'SIEM system integration',
-      'Ticketing system setup (Jira/ServiceNow)',
-      'Communication channels (Slack/Teams)',
-      'Client environment connectivity',
-      'Log source configuration',
-      'Alert forwarding setup',
-      'API access and authentication'
-    ]
-  },
-  {
-    id: 'verification',
-    title: 'Final Verification & Go-Live',
-    description: 'Complete verification, testing, and activate all services',
-    estimatedTime: '10-15 minutes',
-    icon: <CheckCircle className="h-5 w-5" />,
-    status: 'pending',
-    actions: [
-      {
-        label: 'Run Tests',
-        url: '/testing',
-        type: 'primary',
-        icon: <Zap className="h-4 w-4" />
-      },
-      {
-        label: 'Activate Services',
-        url: '/clients',
-        type: 'secondary',
-        icon: <CheckCircle className="h-4 w-4" />
-      }
-    ],
-    checklist: [
-      'End-to-end service testing',
-      'License allocation verification',
-      'Hardware deployment confirmation',
-      'Integration connectivity tests',
-      'Team notification setup',
-      'Client communication templates',
-      'Go-live scheduling and execution'
-    ]
-  }
-];
+interface FormData {
+  // Client Information
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  industry?: string;
+  // Contract
+  contractType?: string;
+  startDate?: string;
+  endDate?: string;
+  value?: string;
+  // Service Scope
+  serviceType?: string;
+  endpoints?: string;
+  eps?: string;
+  coverage?: string;
+}
 
 export default function ClientOnboardingPage() {
+  const { toast } = useToast();
+  const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [location, setLocation] = useLocation();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState<FormData>({});
+
+  // Fetch pool status for real-time validation
+  const { data: poolStatus } = useQuery({
+    queryKey: ['/api/pools/status'],
+    refetchInterval: 30000,
+  });
+
+  // Create client mutation
+  const createClientMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create client');
+      return response.json();
+    },
+    onSuccess: () => {
+      markStepCompleted('client-info');
+      setShowForm(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      toast({
+        title: "Success",
+        description: "Client created successfully",
+      });
+    },
+  });
+
+  // Create contract mutation
+  const createContractMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create contract');
+      return response.json();
+    },
+    onSuccess: () => {
+      markStepCompleted('contract-setup');
+      setShowForm(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      toast({
+        title: "Success",
+        description: "Contract created successfully",
+      });
+    },
+  });
+
+  // Create service mutation
+  const createServiceMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create service');
+      return response.json();
+    },
+    onSuccess: () => {
+      markStepCompleted('service-scopes');
+      setShowForm(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      toast({
+        title: "Success",
+        description: "Service created successfully",
+      });
+    },
+  });
+
+  // Memoized handlers to prevent focus loss
+  const handleClientNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, clientName: e.target.value }));
+  }, []);
+
+  const handleClientEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, clientEmail: e.target.value }));
+  }, []);
+
+  const handleClientPhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, clientPhone: e.target.value }));
+  }, []);
+
+  const handleClientAddressChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFormData(prev => ({ ...prev, clientAddress: e.target.value }));
+  }, []);
+
+  const handleIndustryChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, industry: value }));
+  }, []);
+
+  const handleContractTypeChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, contractType: value }));
+  }, []);
+
+  const handleValueChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, value: e.target.value }));
+  }, []);
+
+  const handleStartDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, startDate: e.target.value }));
+  }, []);
+
+  const handleEndDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, endDate: e.target.value }));
+  }, []);
+
+  const handleServiceTypeChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, serviceType: value }));
+  }, []);
+
+  const handleCoverageChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, coverage: value }));
+  }, []);
+
+  const handleEndpointsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, endpoints: e.target.value }));
+  }, []);
+
+  const handleEpsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, eps: e.target.value }));
+  }, []);
+
+  const markStepCompleted = (stepId: string) => {
+    if (!completedSteps.includes(stepId)) {
+      setCompletedSteps(prev => [...prev, stepId]);
+    }
+    
+    // Check completion after state update
+    setCompletedSteps(prev => {
+      if (prev.length === 5) { // 6 total steps minus 1 for current completion
+        setShowCelebration(true);
+      }
+      return prev;
+    });
+  };
+
+  const markStepIncomplete = (stepId: string) => {
+    setCompletedSteps(prev => prev.filter(id => id !== stepId));
+  };
+
+  const resetOnboarding = () => {
+    setCurrentStep(0);
+    setCompletedSteps([]);
+    setFormData({});
+    setShowForm(false);
+  };
+
+  const handleFormSubmit = (stepId: string) => {
+    switch (stepId) {
+      case 'client-info':
+        createClientMutation.mutate({
+          name: formData.clientName,
+          email: formData.clientEmail,
+          phone: formData.clientPhone,
+          address: formData.clientAddress,
+          industry: formData.industry,
+        });
+        break;
+      case 'contract-setup':
+        createContractMutation.mutate({
+          clientName: formData.clientName,
+          type: formData.contractType,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          value: formData.value,
+        });
+        break;
+      case 'service-scopes':
+        createServiceMutation.mutate({
+          clientName: formData.clientName,
+          serviceType: formData.serviceType,
+          endpoints: formData.endpoints,
+          eps: formData.eps,
+          coverage: formData.coverage,
+        });
+        break;
+      default:
+        markStepCompleted(stepId);
+        setShowForm(false);
+    }
+  };
 
   // Load progress from localStorage
   useEffect(() => {
@@ -276,38 +285,334 @@ export default function ClientOnboardingPage() {
     }));
   }, [currentStep, completedSteps]);
 
-  // Fetch pool status for real-time validation
-  const { data: poolStatus } = useQuery({
-    queryKey: ['/api/pools/status'],
-    refetchInterval: 30000, // Refresh every 30 seconds
-  });
+  // Client Information Form - Memoized to prevent focus loss
+  const ClientForm = useCallback(() => (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Add New Client</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="clientName">Company Name *</Label>
+          <Input
+            id="clientName"
+            value={formData.clientName || ''}
+            onChange={handleClientNameChange}
+            placeholder="Enter company name"
+          />
+        </div>
+        <div>
+          <Label htmlFor="industry">Industry</Label>
+          <Select value={formData.industry} onValueChange={handleIndustryChange}>
+            <SelectTrigger id="industry">
+              <SelectValue placeholder="Select industry" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="finance">Finance</SelectItem>
+              <SelectItem value="healthcare">Healthcare</SelectItem>
+              <SelectItem value="technology">Technology</SelectItem>
+              <SelectItem value="manufacturing">Manufacturing</SelectItem>
+              <SelectItem value="retail">Retail</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="clientEmail">Primary Email *</Label>
+          <Input
+            id="clientEmail"
+            type="email"
+            value={formData.clientEmail || ''}
+            onChange={handleClientEmailChange}
+            placeholder="contact@company.com"
+          />
+        </div>
+        <div>
+          <Label htmlFor="clientPhone">Phone Number</Label>
+          <Input
+            id="clientPhone"
+            value={formData.clientPhone || ''}
+            onChange={handleClientPhoneChange}
+            placeholder="+1 (555) 123-4567"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <Label htmlFor="clientAddress">Company Address</Label>
+          <Textarea
+            id="clientAddress"
+            value={formData.clientAddress || ''}
+            onChange={handleClientAddressChange}
+            placeholder="Enter company address"
+            rows={3}
+          />
+        </div>
+      </div>
+      <div className="flex justify-end space-x-3">
+        <Button variant="outline" onClick={() => setShowForm(false)}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => handleFormSubmit('client-info')}
+          disabled={!formData.clientName || !formData.clientEmail || createClientMutation.isPending}
+        >
+          {createClientMutation.isPending ? 'Creating...' : 'Create Client'}
+        </Button>
+      </div>
+    </div>
+  ), [formData, createClientMutation.isPending, handleClientNameChange, handleClientEmailChange, handleClientPhoneChange, handleClientAddressChange, handleIndustryChange]);
 
-  const progressPercentage = (completedSteps.length / onboardingSteps.length) * 100;
+  // Contract Setup Form - Memoized to prevent focus loss
+  const ContractForm = useCallback(() => (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Create Contract</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="contractType">Contract Type *</Label>
+          <Select value={formData.contractType} onValueChange={handleContractTypeChange}>
+            <SelectTrigger id="contractType">
+              <SelectValue placeholder="Select contract type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="msa">Master Service Agreement (MSA)</SelectItem>
+              <SelectItem value="sow">Statement of Work (SOW)</SelectItem>
+              <SelectItem value="support">Support Contract</SelectItem>
+              <SelectItem value="maintenance">Maintenance Agreement</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="value">Contract Value</Label>
+          <Input
+            id="value"
+            type="number"
+            value={formData.value || ''}
+            onChange={handleValueChange}
+            placeholder="Enter contract value"
+          />
+        </div>
+        <div>
+          <Label htmlFor="startDate">Start Date *</Label>
+          <Input
+            id="startDate"
+            type="date"
+            value={formData.startDate || ''}
+            onChange={handleStartDateChange}
+          />
+        </div>
+        <div>
+          <Label htmlFor="endDate">End Date *</Label>
+          <Input
+            id="endDate"
+            type="date"
+            value={formData.endDate || ''}
+            onChange={handleEndDateChange}
+          />
+        </div>
+      </div>
+      <div className="flex justify-end space-x-3">
+        <Button variant="outline" onClick={() => setShowForm(false)}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => handleFormSubmit('contract-setup')}
+          disabled={!formData.contractType || !formData.startDate || !formData.endDate || createContractMutation.isPending}
+        >
+          {createContractMutation.isPending ? 'Creating...' : 'Create Contract'}
+        </Button>
+      </div>
+    </div>
+  ), [formData, createContractMutation.isPending, handleContractTypeChange, handleValueChange, handleStartDateChange, handleEndDateChange]);
 
-  const markStepCompleted = (stepId: string) => {
-    if (!completedSteps.includes(stepId)) {
-      const newCompleted = [...completedSteps, stepId];
-      setCompletedSteps(newCompleted);
+  // Service Configuration Form - Memoized to prevent focus loss
+  const ServiceForm = useCallback(() => (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">Configure Service</h3>
       
-      if (newCompleted.length === onboardingSteps.length) {
-        setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 5000);
-      }
-    }
-  };
+      {/* Pool Status Display */}
+      {poolStatus && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">📊 Current License Pool Status</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            {Object.entries(poolStatus.licenseStatus || {}).map(([type, status]: [string, any]) => (
+              <div key={type} className="space-y-1">
+                <div className="font-medium text-gray-700 capitalize">{type}</div>
+                <div className={cn(
+                  "text-sm font-semibold",
+                  status.status === 'healthy' && "text-green-600",
+                  status.status === 'warning' && "text-yellow-600",
+                  status.status === 'depleted' && "text-red-600"
+                )}>
+                  {status.available.toLocaleString()} / {status.total.toLocaleString()} available
+                </div>
+                <div className="text-xs text-gray-500">
+                  {status.status === 'healthy' && '✅ Sufficient capacity'}
+                  {status.status === 'warning' && '⚠️ Low capacity'}
+                  {status.status === 'depleted' && '🚫 No capacity'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-  const markStepIncomplete = (stepId: string) => {
-    if (completedSteps.includes(stepId)) {
-      const newCompleted = completedSteps.filter(id => id !== stepId);
-      setCompletedSteps(newCompleted);
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="serviceType">Service Type *</Label>
+          <Select value={formData.serviceType} onValueChange={handleServiceTypeChange}>
+            <SelectTrigger id="serviceType">
+              <SelectValue placeholder="Select service type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="siem">SIEM Management</SelectItem>
+              <SelectItem value="edr">EDR Management</SelectItem>
+              <SelectItem value="ndr">NDR Management</SelectItem>
+              <SelectItem value="incident-response">Incident Response</SelectItem>
+              <SelectItem value="threat-hunting">Threat Hunting</SelectItem>
+              <SelectItem value="vulnerability">Vulnerability Management</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="coverage">Coverage Hours</Label>
+          <Select value={formData.coverage} onValueChange={handleCoverageChange}>
+            <SelectTrigger id="coverage">
+              <SelectValue placeholder="Select coverage" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="8x5">8x5 (Business Hours)</SelectItem>
+              <SelectItem value="24x5">24x5 (Business Days)</SelectItem>
+              <SelectItem value="24x7">24x7 (Always On)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="endpoints">Number of Endpoints</Label>
+          <Input
+            id="endpoints"
+            type="number"
+            value={formData.endpoints || ''}
+            onChange={handleEndpointsChange}
+            placeholder="e.g., 100"
+          />
+        </div>
+        <div>
+          <Label htmlFor="eps">Events Per Second (EPS)</Label>
+          <Input
+            id="eps"
+            type="number"
+            value={formData.eps || ''}
+            onChange={handleEpsChange}
+            placeholder="e.g., 1000"
+          />
+        </div>
+      </div>
+      <div className="flex justify-end space-x-3">
+        <Button variant="outline" onClick={() => setShowForm(false)}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => handleFormSubmit('service-scopes')}
+          disabled={!formData.serviceType || createServiceMutation.isPending}
+        >
+          {createServiceMutation.isPending ? 'Creating...' : 'Create Service'}
+        </Button>
+      </div>
+    </div>
+  ), [formData, poolStatus, createServiceMutation.isPending, handleServiceTypeChange, handleCoverageChange, handleEndpointsChange, handleEpsChange]);
+
+  // Define onboarding steps - moved inside component to avoid hoisting issues
+  const onboardingSteps: OnboardingStep[] = useMemo(() => [
+    {
+      id: 'client-info',
+      title: 'Client Information',
+      description: 'Create client record with company details and contacts',
+      estimatedTime: '5-10 minutes',
+      icon: <Building className="h-5 w-5" />,
+      status: 'pending',
+      formComponent: <ClientForm />,
+      checklist: [
+        'Company name and industry',
+        'Primary contact information',
+        'Company address and details'
+      ]
+    },
+    {
+      id: 'contract-setup',
+      title: 'Contract Setup',
+      description: 'Create contracts and set up legal framework',
+      estimatedTime: '10-15 minutes',
+      icon: <FileText className="h-5 w-5" />,
+      status: 'pending',
+      formComponent: <ContractForm />,
+      checklist: [
+        'Contract type selection',
+        'Start and end dates',
+        'Contract value'
+      ]
+    },
+    {
+      id: 'service-scopes',
+      title: 'Service Configuration',
+      description: 'Configure services with pool validation',
+      estimatedTime: '15-20 minutes',
+      icon: <Shield className="h-5 w-5" />,
+      status: 'pending',
+      formComponent: <ServiceForm />,
+      checklist: [
+        'Service type selection',
+        'Coverage hours',
+        'License pool validation',
+        'Resource allocation'
+      ]
+    },
+    {
+      id: 'team-allocation',
+      title: 'Team Assignment',
+      description: 'Assign team members and configure access',
+      estimatedTime: '10-15 minutes',
+      icon: <Users className="h-5 w-5" />,
+      status: 'pending',
+      checklist: [
+        'Account manager assignment',
+        'Technical team allocation',
+        'Access provisioning'
+      ]
+    },
+    {
+      id: 'integration-setup',
+      title: 'System Integration',
+      description: 'Configure integrations and external systems',
+      estimatedTime: '15-25 minutes',
+      icon: <Link className="h-5 w-5" />,
+      status: 'pending',
+      checklist: [
+        'SIEM integration',
+        'Ticketing system setup',
+        'Communication channels'
+      ]
+    },
+    {
+      id: 'final-verification',
+      title: 'Go-Live',
+      description: 'Final verification and activation',
+      estimatedTime: '10-15 minutes',
+      icon: <Zap className="h-5 w-5" />,
+      status: 'pending',
+      checklist: [
+        'Configuration testing',
+        'Client acceptance',
+        'Service activation'
+      ]
     }
-  };
+  ], [ClientForm, ContractForm, ServiceForm]);
+
+  const progressPercentage = useMemo(() => 
+    (completedSteps.length / onboardingSteps.length) * 100,
+    [completedSteps.length, onboardingSteps.length]
+  );
 
   const getStepStatus = (step: OnboardingStep, index: number) => {
     if (completedSteps.includes(step.id)) return 'completed';
     if (index === currentStep) return 'in-progress';
     if (step.id === 'service-scopes' && poolStatus) {
-      // Check for pool warnings
       const hasPoolIssues = Object.values(poolStatus.licenseStatus || {}).some(
         (status: any) => status.status === 'depleted'
       );
@@ -329,39 +634,10 @@ export default function ClientOnboardingPage() {
     }
   };
 
-  const PoolStatusAlert = () => {
-    if (!poolStatus) return null;
-
-    const hasIssues = Object.entries(poolStatus.licenseStatus || {}).some(
-      ([, status]: [string, any]) => status.status === 'depleted'
-    );
-
-    if (!hasIssues) return null;
-
-    return (
-      <Alert className="mb-6 border-yellow-200 bg-yellow-50">
-        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-        <AlertDescription>
-          <strong>Pool Capacity Warning:</strong> Some license pools are running low or depleted. 
-          Check pool status before allocating licenses to new clients.
-          <div className="mt-2 space-y-1">
-            {Object.entries(poolStatus.licenseStatus).map(([poolType, status]: [string, any]) => (
-              status.status === 'depleted' && (
-                <div key={poolType} className="text-sm">
-                  • <strong>{poolType} Pool:</strong> {status.totalRemaining || 0} licenses remaining
-                </div>
-              )
-            ))}
-          </div>
-        </AlertDescription>
-      </Alert>
-    );
-  };
-
   return (
     <AppLayout 
       title="Client Onboarding Workflow"
-      subtitle="Step-by-step guide for onboarding new clients with pool validation"
+      subtitle="Integrated step-by-step client onboarding with embedded forms"
     >
       <div className="max-w-6xl mx-auto space-y-6">
         
@@ -372,8 +648,7 @@ export default function ClientOnboardingPage() {
               <Sparkles className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-green-600 mb-2">🎉 Onboarding Complete!</h2>
               <p className="text-gray-600 mb-4">
-                Congratulations! The client has been successfully onboarded with all 
-                services configured and validated.
+                Congratulations! The client has been successfully onboarded.
               </p>
               <Button onClick={() => setShowCelebration(false)}>
                 Continue to Dashboard
@@ -387,9 +662,15 @@ export default function ClientOnboardingPage() {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Onboarding Progress</span>
-              <Badge variant={progressPercentage === 100 ? 'default' : 'secondary'}>
-                {completedSteps.length} of {onboardingSteps.length} steps completed
-              </Badge>
+              <div className="flex gap-2 items-center">
+                <Badge variant={progressPercentage === 100 ? 'default' : 'secondary'}>
+                  {completedSteps.length} of {onboardingSteps.length} completed
+                </Badge>
+                <Button variant="outline" size="sm" onClick={resetOnboarding}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -398,7 +679,7 @@ export default function ClientOnboardingPage() {
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Progress: {Math.round(progressPercentage)}%</span>
                 <span>
-                  Estimated time remaining: {
+                  Est. time remaining: {
                     onboardingSteps
                       .slice(completedSteps.length)
                       .reduce((total, step) => total + parseInt(step.estimatedTime.split('-')[0]), 0)
@@ -414,7 +695,14 @@ export default function ClientOnboardingPage() {
         </Card>
 
         {/* Pool Status Alert */}
-        <PoolStatusAlert />
+        {poolStatus && Object.values(poolStatus.licenseStatus || {}).some((status: any) => status.status === 'depleted') && (
+          <Alert className="border-yellow-200 bg-yellow-50">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription>
+              <strong>Pool Capacity Warning:</strong> Some license pools are running low or depleted.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Step Navigation */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -432,7 +720,7 @@ export default function ClientOnboardingPage() {
                 onClick={() => setCurrentStep(index)}
               >
                 {getStatusIcon(status)}
-                <span className="font-medium">{step.title.split(' ')[0]} {step.title.split(' ')[1]}</span>
+                <span className="font-medium text-center">{step.title}</span>
               </Button>
             );
           })}
@@ -454,125 +742,65 @@ export default function ClientOnboardingPage() {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            
-            {/* Actions */}
-            <div>
-              <h3 className="font-medium mb-3">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {onboardingSteps[currentStep].actions.map((action, index) => (
-                  <Button
-                    key={index}
-                    variant={action.type === 'primary' ? 'default' : 'outline'}
-                    onClick={() => window.open(action.url, '_blank')}
-                    className="h-16 flex items-center justify-center space-x-2"
-                  >
-                    {action.icon}
-                    <span>{action.label}</span>
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                ))}
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Checklist */}
+              <div>
+                <h3 className="font-semibold mb-3">Requirements Checklist</h3>
+                <ul className="space-y-2">
+                  {onboardingSteps[currentStep].checklist.map((item, index) => (
+                    <li key={index} className="flex items-center gap-2 text-sm">
+                      <Circle className="h-4 w-4 text-gray-400" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
 
-            <Separator />
-
-            {/* Checklist */}
-            <div>
-              <h3 className="font-medium mb-3">Completion Checklist</h3>
-              <div className="space-y-2">
-                {onboardingSteps[currentStep].checklist.map((item, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <Circle className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tips */}
-            {onboardingSteps[currentStep].tips && (
-              <>
-                <Separator />
+              {/* Tips */}
+              {onboardingSteps[currentStep].tips && (
                 <div>
-                  <h3 className="font-medium mb-3">💡 Pro Tips</h3>
-                  <div className="space-y-2">
+                  <h3 className="font-semibold mb-3">💡 Tips</h3>
+                  <ul className="space-y-2">
                     {onboardingSteps[currentStep].tips.map((tip, index) => (
-                      <div key={index} className="flex items-start space-x-2">
-                        <div className="h-2 w-2 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-sm text-gray-600">{tip}</span>
-                      </div>
+                      <li key={index} className="text-sm text-gray-600">
+                        • {tip}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
-              </>
-            )}
+              )}
+            </div>
 
-            {/* Special Pool Validation for Service Scopes Step */}
-            {currentStep === 2 && poolStatus && (
-              <>
-                <Separator />
-                <div>
-                  <h3 className="font-medium mb-3">🔍 Pool Status Overview</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {Object.entries(poolStatus.licenseStatus || {}).map(([poolType, status]: [string, any]) => (
-                      <div key={poolType} className="p-4 border rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">{poolType} Pool</h4>
-                          <Badge 
-                            variant={status.status === 'available' ? 'default' : 'destructive'}
-                          >
-                            {status.status}
-                          </Badge>
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span>Available:</span>
-                            <span className="font-medium">{status.totalRemaining?.toLocaleString() || 0}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Total Capacity:</span>
-                            <span>{status.totalCapacity?.toLocaleString() || 0}</span>
-                          </div>
-                          <Progress 
-                            value={status.utilizationRate || 0} 
-                            className="h-1 mt-2"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+            <Separator className="my-6" />
 
-            {/* Step Completion */}
-            <div className="flex justify-between pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-                disabled={currentStep === 0}
-              >
-                Previous Step
-              </Button>
-              
-              <div className="space-x-3">
-                {!completedSteps.includes(onboardingSteps[currentStep].id) ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => markStepCompleted(onboardingSteps[currentStep].id)}
-                  >
-                    Mark Complete
-                  </Button>
-                ) : (
-                  <div className="flex space-x-2">
+            {/* Form Section */}
+            {showForm && onboardingSteps[currentStep].formComponent ? (
+              <div>
+                {onboardingSteps[currentStep].formComponent}
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <div className="space-x-3">
+                  {onboardingSteps[currentStep].formComponent ? (
                     <Button
-                      variant="outline"
-                      className="bg-green-50 border-green-300 text-green-700"
-                      disabled
+                      onClick={() => setShowForm(true)}
+                      className="flex items-center gap-2"
                     >
-                      Completed ✓
+                      <Plus className="h-4 w-4" />
+                      Start {onboardingSteps[currentStep].title}
                     </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleFormSubmit(onboardingSteps[currentStep].id)}
+                      className="flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Mark Complete
+                    </Button>
+                  )}
+                  
+                  {completedSteps.includes(onboardingSteps[currentStep].id) && (
                     <Button
                       variant="outline"
                       onClick={() => markStepIncomplete(onboardingSteps[currentStep].id)}
@@ -580,22 +808,29 @@ export default function ClientOnboardingPage() {
                     >
                       Mark Incomplete
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
                 
-                <Button
-                  onClick={() => setCurrentStep(Math.min(onboardingSteps.length - 1, currentStep + 1))}
-                  disabled={currentStep === onboardingSteps.length - 1}
-                >
-                  Next Step
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
+                <div className="space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+                    disabled={currentStep === 0}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    onClick={() => setCurrentStep(Math.min(onboardingSteps.length - 1, currentStep + 1))}
+                    disabled={currentStep === onboardingSteps.length - 1}
+                  >
+                    Next Step
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
               </div>
-            </div>
-
+            )}
           </CardContent>
         </Card>
-
       </div>
     </AppLayout>
   );

@@ -812,7 +812,7 @@ export function WidgetBuilder({ systems, widget, onSave, onCancel, onTest, onPre
                 value={widgetForm.systemId.toString()} 
                 onValueChange={(value) => setWidgetForm({ ...widgetForm, systemId: parseInt(value) })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="systemSelect">
                   <SelectValue placeholder="Select system" />
                 </SelectTrigger>
                 <SelectContent>
@@ -879,7 +879,7 @@ export function WidgetBuilder({ systems, widget, onSave, onCancel, onTest, onPre
                     })}
                     disabled={discovering}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="endpoint">
                       <SelectValue placeholder={
                         discovering 
                           ? "🔍 Discovering endpoints..." 
@@ -979,7 +979,7 @@ export function WidgetBuilder({ systems, widget, onSave, onCancel, onTest, onPre
                       queryConfig: { ...widgetForm.queryConfig, method: value }
                     })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="method">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

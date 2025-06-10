@@ -826,7 +826,7 @@ function CardCreatorForm({
                 value={card.type || 'metric'} 
                 onValueChange={(value: any) => updateCard({ type: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="card-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -845,7 +845,7 @@ function CardCreatorForm({
                 value={card.size || 'small'} 
                 onValueChange={(value: any) => updateCard({ size: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="card-size">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -863,7 +863,7 @@ function CardCreatorForm({
                 value={card.config?.color || 'blue'} 
                 onValueChange={(value) => updateConfig({ color: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="card-color">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -887,7 +887,7 @@ function CardCreatorForm({
                 value={card.dataSource || 'clients'} 
                 onValueChange={(value) => updateCard({ dataSource: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="data-source">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -906,7 +906,7 @@ function CardCreatorForm({
                 value={card.config?.aggregation || 'count'} 
                 onValueChange={(value) => updateConfig({ aggregation: value as 'count' | 'sum' | 'average' | 'max' | 'min' })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="aggregation">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -927,7 +927,7 @@ function CardCreatorForm({
                     value={card.config?.compareWith || ''} 
                     onValueChange={(value) => updateConfig({ compareWith: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="compare-with">
                       <SelectValue placeholder="Select data source to compare" />
                     </SelectTrigger>
                     <SelectContent>
@@ -946,7 +946,7 @@ function CardCreatorForm({
                 value={card.config?.comparisonType || 'vs'} 
                 onValueChange={(value) => updateConfig({ comparisonType: value as 'vs' | 'ratio' | 'diff' | 'trend' })}
               >
-                    <SelectTrigger>
+                    <SelectTrigger id="comparison-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -967,7 +967,7 @@ function CardCreatorForm({
                 value={card.config?.format || 'number'} 
                 onValueChange={(value) => updateConfig({ format: value as 'number' | 'currency' | 'percentage' })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="format">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -986,7 +986,7 @@ function CardCreatorForm({
                 value={card.config?.timeRange || 'monthly'} 
                 onValueChange={(value) => updateConfig({ timeRange: value as 'daily' | 'weekly' | 'monthly' | 'yearly' })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="time-range">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1007,7 +1007,7 @@ function CardCreatorForm({
                 value={card.config?.groupBy || ''} 
                 onValueChange={(value) => updateConfig({ groupBy: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="group-by">
                   <SelectValue placeholder="Select field to group by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1095,7 +1095,7 @@ function CardCreatorForm({
                   externalSystemId: value ? parseInt(value) : undefined 
                 })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="external-system">
                   <SelectValue placeholder="Select external system (optional)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1116,7 +1116,7 @@ function CardCreatorForm({
                   externalDataSourceId: value ? parseInt(value) : undefined 
                 })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="external-data-source">
                   <SelectValue placeholder="Select external data source (optional)" />
                 </SelectTrigger>
                 <SelectContent>

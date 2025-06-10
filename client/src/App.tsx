@@ -55,6 +55,7 @@ import ProfilePage from "@/pages/profile-page";
 import TestErrorPage from "@/pages/test-error-page";
 import NotFound from "@/pages/not-found";
 import ClientOnboardingPage from "@/pages/client-onboarding-page";
+import TestingPage from "@/pages/testing-page";
 
 // Component that provides the query client with error handling
 function QueryClientWrapper({ children }: { children: React.ReactNode }) {
@@ -304,6 +305,13 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/test-dashboard">
                         <TestDashboardPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/testing" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/testing">
+                        <TestingPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />

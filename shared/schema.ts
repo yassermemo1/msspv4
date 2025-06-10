@@ -321,6 +321,7 @@ export const serviceAuthorizationForms = pgTable("service_authorization_forms", 
   contractId: integer("contract_id").references(() => contracts.id).notNull(),
   serviceScopeId: integer("service_scope_id").references(() => serviceScopes.id),
   safNumber: text("saf_number").notNull(),
+  title: text("title").notNull(), // Added missing title column
   description: text("description"),
   status: text("status").default("pending"), // pending, approved, rejected, expired
   requestedDate: timestamp("requested_date").notNull(),
@@ -611,12 +612,7 @@ export const insertIndividualLicenseSchema = createInsertSchema(individualLicens
   updatedAt: true,
 });
 
-export const insertServiceAuthorizationFormSchema = createInsertSchema(serviceAuthorizationForms, {
-  // Transform string dates to Date objects for timestamp fields
-  startDate: z.string().transform((str) => new Date(str)),
-  endDate: z.string().transform((str) => new Date(str)),
-  approvedDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-}).omit({
+export const insertServiceAuthorizationFormSchema = createInsertSchema(serviceAuthorizationForms).omit({
   id: true,
   createdAt: true,
   updatedAt: true,

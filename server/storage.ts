@@ -31,8 +31,6 @@ import {
   documents,
   documentVersions,
   documentAccess,
-  userDashboards,
-  dashboardWidgets,
   externalSystems,
   clientExternalMappings,
   type User,
@@ -97,15 +95,10 @@ import {
   type InsertDocumentVersion,
   type DocumentAccess,
   type InsertDocumentAccess,
-  type UserDashboard,
-  type InsertUserDashboard,
-  type DashboardWidget,
-  type InsertDashboardWidget,
   type ExternalSystem,
   type InsertExternalSystem,
   type ClientExternalMapping,
   type InsertClientExternalMapping,
-  ServiceScopeTemplate,
   PaginatedResponse,
   PaginationParams,
   ScopeDefinitionTemplateResponse,
@@ -397,17 +390,10 @@ export class DatabaseStorage implements IStorage {
     // Handle both UUID and integer ID formats
     console.log("getUserById called with ID:", id, "Type:", typeof id);
     
-    // If it looks like a UUID, use it directly
-    if (id.includes('-') && id.length === 36) {
-      console.log("Treating as UUID ID");
-      const [user] = await db.select().from(users).where(eq(users.id, id));
-      return user || undefined;
-    }
-    
-    // Otherwise, try to parse as integer
+    // The users.id column is numeric, so we need to parse string to number
     const numericId = parseInt(id);
     if (isNaN(numericId)) {
-      console.warn("Invalid user ID format - not a valid integer or UUID:", id);
+      console.warn("Invalid user ID format - not a valid integer:", id);
       return undefined;
     }
     
@@ -1814,11 +1800,25 @@ export class DatabaseStorage implements IStorage {
   
   // Widgets
   async getDashboardWidgets(dashboardId: number): Promise<DashboardWidget[]> {
-    return await db
-      .select()
+    const results = await db
+      .select({
+        id: dashboardWidgets.id,
+        name: dashboardWidgets.name,
+        widgetType: dashboardWidgets.widgetType,
+        config: dashboardWidgets.config,
+        dataSourceId: dashboardWidgets.dataSourceId,
+        refreshInterval: dashboardWidgets.refreshInterval,
+        isActive: dashboardWidgets.isActive,
+        createdBy: dashboardWidgets.createdBy,
+        createdAt: dashboardWidgets.createdAt,
+        updatedAt: dashboardWidgets.updatedAt,
+      })
       .from(dashboardWidgets)
-      .where(eq(dashboardWidgets.dashboardId, dashboardId))
+      .innerJoin(dashboardWidgetAssignments, eq(dashboardWidgets.id, dashboardWidgetAssignments.widgetId))
+      .where(eq(dashboardWidgetAssignments.dashboardId, dashboardId))
       .orderBy(dashboardWidgets.createdAt);
+    
+    return results;
   }
 
   async getWidget(id: number): Promise<DashboardWidget | undefined> {
@@ -1850,15 +1850,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateWidgetPositions(widgetUpdates: Array<{ id: number; position: any }>): Promise<boolean> {
     try {
-      // Update each widget's position
+      // Update each widget assignment's position
       for (const update of widgetUpdates) {
         await db
-          .update(dashboardWidgets)
+          .update(dashboardWidgetAssignments)
           .set({ 
-            position: update.position,
-            updatedAt: new Date()
+            position: update.position
           })
-          .where(eq(dashboardWidgets.id, update.id));
+          .where(eq(dashboardWidgetAssignments.widgetId, update.id));
       }
       return true;
     } catch (error) {
@@ -2088,14 +2087,7 @@ export class DatabaseStorage implements IStorage {
     return !!deletedField;
   }
 
-  async createServiceScope(scope: InsertServiceScope): Promise<ServiceScope> {
-    const [createdScope] = await db
-      .insert(serviceScopes)
-      .values(scope)
-      .returning();
-    
-    return createdScope;
-  }
+
 
   // Service scopes
   async getServiceScopes(): Promise<ServiceScope[]> {

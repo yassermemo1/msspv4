@@ -1,0 +1,92 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+    name: TypeScript Type Checking
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: TypeScript type check
+      run: npx tsc --noEmit
+      
+    - name: Type check client separately
+      run: |
+        cd client
+        npx tsc --noEmit
+        
+    - name: Type check server separately  
+      run: |
+        cd server
+        npx tsc --noEmit
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Linting
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run ESLint
+      run: npm run lint --if-present
+      
+  build:
+    runs-on: ubuntu-latest
+    name: Build Check
+    needs: [type-check, lint]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: npm run build --if-present
+      
+  quality-gate:
+    runs-on: ubuntu-latest
+    name: Quality Gate
+    needs: [type-check, lint, build]
+    
+    steps:
+    - name: Quality Gate Check
+      run: |
+        echo "✅ All TypeScript checks passed"
+        echo "✅ All linting checks passed" 
+        echo "✅ Build completed successfully"
+        echo "🚀 Ready for deployment" 

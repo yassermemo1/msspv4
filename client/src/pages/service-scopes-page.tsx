@@ -36,7 +36,7 @@ import {
   X,
   ChevronDown
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -56,6 +56,7 @@ export default function ServiceScopesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { format } = useCurrency();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
@@ -76,6 +77,59 @@ export default function ServiceScopesPage() {
   const [endpointsMax, setEndpointsMax] = useState('');
   const [responseTimeMin, setResponseTimeMin] = useState('');
   const [responseTimeMax, setResponseTimeMax] = useState('');
+
+  // Memoized handlers to prevent focus loss on filter inputs
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleEpsMinChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEpsMin(e.target.value);
+  }, []);
+
+  const handleEpsMaxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEpsMax(e.target.value);
+  }, []);
+
+  const handleEndpointsMinChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndpointsMin(e.target.value);
+  }, []);
+
+  const handleEndpointsMaxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEndpointsMax(e.target.value);
+  }, []);
+
+  const handleResponseTimeMinChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setResponseTimeMin(e.target.value);
+  }, []);
+
+  const handleResponseTimeMaxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setResponseTimeMax(e.target.value);
+  }, []);
+
+  // Memoized handlers for Select components to prevent focus loss
+  const handleServiceTierChange = useCallback((value: string) => {
+    setServiceTierFilter(value);
+  }, []);
+
+  const handleCoverageChange = useCallback((value: string) => {
+    setCoverageFilter(value);
+  }, []);
+
+  const handleStatusFilterChange = useCallback((value: string) => {
+    setStatusFilter(value);
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
+    setServiceTierFilter('all');
+    setCoverageFilter('all');
+    setEpsMin('');
+    setEpsMax('');
+    setEndpointsMin('');
+    setEndpointsMax('');
+    setResponseTimeMin('');
+    setResponseTimeMax('');
+  }, []);
   
   // Fetch service scopes, contracts, services, and clients
   const { data: contracts = [] } = useQuery<Contract[]>({
@@ -275,7 +329,8 @@ export default function ServiceScopesPage() {
     }
   };
 
-  const formatLocalDate = (dateString: string) => {
+  const formatLocalDate = (dateString: string | null) => {
+    if (!dateString) return 'Not specified';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -481,13 +536,13 @@ export default function ServiceScopesPage() {
                       <Input
                         placeholder="Search service scopes, clients, services..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={handleSearchChange}
                         className="pl-10"
                       />
                     </div>
                   </div>
                   
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
                     <SelectTrigger className="w-32">
                       <SelectValue />
                     </SelectTrigger>
@@ -515,9 +570,9 @@ export default function ServiceScopesPage() {
                 <Collapsible open={isAdvancedFilterOpen} onOpenChange={setIsAdvancedFilterOpen}>
                   <CollapsibleContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
-                      <div>
+                      <div key="service-tier-filter">
                         <label className="text-sm font-medium text-gray-700 mb-2 block">Service Tier</label>
-                        <Select value={serviceTierFilter} onValueChange={setServiceTierFilter}>
+                        <Select key="service-tier-select" value={serviceTierFilter} onValueChange={handleServiceTierChange}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -530,9 +585,9 @@ export default function ServiceScopesPage() {
                         </Select>
                       </div>
 
-                      <div>
+                      <div key="coverage-filter">
                         <label className="text-sm font-medium text-gray-700 mb-2 block">Coverage Hours</label>
-                        <Select value={coverageFilter} onValueChange={setCoverageFilter}>
+                        <Select key="coverage-select" value={coverageFilter} onValueChange={handleCoverageChange}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -545,19 +600,21 @@ export default function ServiceScopesPage() {
                         </Select>
                       </div>
 
-                      <div>
+                      <div key="eps-filter">
                         <label className="text-sm font-medium text-gray-700 mb-2 block">EPS Range</label>
                         <div className="flex space-x-2">
                           <Input
+                            key="eps-min-input"
                             placeholder="Min"
                             value={epsMin}
-                            onChange={(e) => setEpsMin(e.target.value)}
+                            onChange={handleEpsMinChange}
                             type="number"
                           />
                           <Input
+                            key="eps-max-input"
                             placeholder="Max"
                             value={epsMax}
-                            onChange={(e) => setEpsMax(e.target.value)}
+                            onChange={handleEpsMaxChange}
                             type="number"
                           />
                         </div>
@@ -569,13 +626,13 @@ export default function ServiceScopesPage() {
                           <Input
                             placeholder="Min"
                             value={endpointsMin}
-                            onChange={(e) => setEndpointsMin(e.target.value)}
+                            onChange={handleEndpointsMinChange}
                             type="number"
                           />
                           <Input
                             placeholder="Max"
                             value={endpointsMax}
-                            onChange={(e) => setEndpointsMax(e.target.value)}
+                            onChange={handleEndpointsMaxChange}
                             type="number"
                           />
                         </div>
@@ -587,13 +644,13 @@ export default function ServiceScopesPage() {
                           <Input
                             placeholder="Min"
                             value={responseTimeMin}
-                            onChange={(e) => setResponseTimeMin(e.target.value)}
+                            onChange={handleResponseTimeMinChange}
                             type="number"
                           />
                           <Input
                             placeholder="Max"
                             value={responseTimeMax}
-                            onChange={(e) => setResponseTimeMax(e.target.value)}
+                            onChange={handleResponseTimeMaxChange}
                             type="number"
                           />
                         </div>
@@ -602,16 +659,7 @@ export default function ServiceScopesPage() {
                       <div className="flex items-end">
                         <Button
                           variant="outline"
-                          onClick={() => {
-                            setServiceTierFilter('all');
-                            setCoverageFilter('all');
-                            setEpsMin('');
-                            setEpsMax('');
-                            setEndpointsMin('');
-                            setEndpointsMax('');
-                            setResponseTimeMin('');
-                            setResponseTimeMax('');
-                          }}
+                          onClick={clearAllFilters}
                           className="w-full"
                         >
                           <X className="h-4 w-4 mr-2" />
@@ -726,7 +774,7 @@ export default function ServiceScopesPage() {
                       {(filteredScopes || []).map((scope) => {
                         const contract = contracts.find(c => c.id === scope.contractId);
                         const service = services.find(s => s.id === scope.serviceId);
-                        const client = clients.find(c => c.id === (contract?.clientId || scope.clientId));
+                        const client = clients.find(c => c.id === (contract?.clientId || (scope as any).clientId));
                         
                         return (
                           <TableRow key={scope.id}>
@@ -742,8 +790,8 @@ export default function ServiceScopesPage() {
                                 <span>{client?.name || getScopeClientName(scope)}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="max-w-xs truncate" title={scope.contractName}>
-                              {scope.contractName || "No contract name"}
+                            <TableCell className="max-w-xs truncate" title={(scope as any).contractName}>
+                              {(scope as any).contractName || "No contract name"}
                             </TableCell>
                             <TableCell>
                               {scope.serviceTier && (
@@ -786,12 +834,12 @@ export default function ServiceScopesPage() {
                             <TableCell>
                               <div className="flex items-center space-x-2">
                                 <Calendar className="h-4 w-4 text-gray-600" />
-                                <span>{formatLocalDate(scope.startDate?.toString())}</span>
+                                <span>{formatLocalDate(scope.startDate?.toString() || null)}</span>
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="max-w-xs truncate" title={scope.scopeDefinition?.description || scope.description}>
-                                {scope.scopeDefinition?.description || scope.description || "No description provided"}
+                              <div className="max-w-xs truncate" title={(scope.scopeDefinition as any)?.description || (scope as any).description}>
+                                {(scope.scopeDefinition as any)?.description || (scope as any).description || "No description provided"}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -846,7 +894,7 @@ export default function ServiceScopesPage() {
                               
                               <div className="flex items-center space-x-2">
                                 <Calendar className="h-4 w-4" />
-                                <span>Start: {formatLocalDate(scope.startDate?.toString())}</span>
+                                <span>Start: {formatLocalDate(scope.startDate?.toString() || null)}</span>
                               </div>
                               
                               <div className="flex items-center space-x-2">
@@ -886,8 +934,8 @@ export default function ServiceScopesPage() {
                               )}
                             </div>
                             
-                            {(scope.scopeDefinition?.description || scope.description) && (
-                              <p className="text-gray-700 mb-3">{scope.scopeDefinition?.description || scope.description}</p>
+                            {((scope.scopeDefinition as any)?.description || (scope as any).description) && (
+                              <p className="text-gray-700 mb-3">{(scope.scopeDefinition as any)?.description || (scope as any).description}</p>
                             )}
                             
                             {/* Deliverables */}
@@ -895,7 +943,7 @@ export default function ServiceScopesPage() {
                               <h4 className="text-sm font-medium text-gray-900 mb-2">Key Deliverables:</h4>
                               <div className="flex flex-wrap gap-2">
                                 {(() => {
-                                  const deliverables = scope.scopeDefinition?.deliverables || scope.deliverables || [];
+                                  const deliverables = (scope.scopeDefinition as any)?.deliverables || (scope as any).deliverables || [];
                                   if (deliverables.length === 0) {
                                     return <span className="text-gray-500 text-xs">No deliverables specified</span>;
                                   }
@@ -973,11 +1021,11 @@ export default function ServiceScopesPage() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm text-gray-500">Start Date</p>
-                                              <p className="font-medium">{formatLocalDate(selectedScope.startDate.toString())}</p>
+                      <p className="font-medium">{formatLocalDate(selectedScope.startDate?.toString() || null)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">End Date</p>
-                                              <p className="font-medium">{formatLocalDate(selectedScope.endDate.toString())}</p>
+                      <p className="font-medium">{formatLocalDate(selectedScope.endDate?.toString() || null)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Timeline</p>
@@ -1063,16 +1111,16 @@ export default function ServiceScopesPage() {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                                                            <SelectValue placeholder="Select a service" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {(services || []).map((service) => (
-                                <SelectItem key={service.id} value={service.id.toString()}>
-                                  {service.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SelectValue placeholder="Select a service" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(services || []).map((service) => (
+                            <SelectItem key={service.id} value={service.id.toString()}>
+                              {service.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>

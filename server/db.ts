@@ -5,6 +5,8 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import ws from "ws";
 import * as schema from "@shared/schema";
+import type { NeonDatabase } from 'drizzle-orm/neon-serverless';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 // Load environment variables
 config();
@@ -17,14 +19,17 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// Type for our database instance
+type DatabaseType = NeonDatabase<typeof schema> | NodePgDatabase<typeof schema>;
+
 // Determine if we're using Neon (serverless) or local PostgreSQL
 const isNeon = process.env.DATABASE_URL.includes('neon.tech') || process.env.DATABASE_URL.includes('neon.database');
 
 // SSL configuration - only enable if explicitly set to true
 const sslConfig = process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false;
 
-let pool;
-let db;
+let pool: NeonPool | PgPool;
+let db: DatabaseType;
 
 if (isNeon) {
   // Use Neon serverless
@@ -48,3 +53,4 @@ if (isNeon) {
 };
 
 export { pool, db };
+export type { DatabaseType };
