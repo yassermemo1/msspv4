@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { ClientInfoForm } from "@/components/onboarding/client-info-form";
 
 interface OnboardingStep {
   id: string;
@@ -154,27 +155,7 @@ export default function ClientOnboardingPage() {
     },
   });
 
-  // Memoized handlers to prevent focus loss
-  const handleClientNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, clientName: e.target.value }));
-  }, []);
-
-  const handleClientEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, clientEmail: e.target.value }));
-  }, []);
-
-  const handleClientPhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, clientPhone: e.target.value }));
-  }, []);
-
-  const handleClientAddressChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFormData(prev => ({ ...prev, clientAddress: e.target.value }));
-  }, []);
-
-  const handleIndustryChange = useCallback((value: string) => {
-    setFormData(prev => ({ ...prev, industry: value }));
-  }, []);
-
+  // === Field Handler Callbacks ===
   const handleContractTypeChange = useCallback((value: string) => {
     setFormData(prev => ({ ...prev, contractType: value }));
   }, []);
@@ -191,6 +172,7 @@ export default function ClientOnboardingPage() {
     setFormData(prev => ({ ...prev, endDate: e.target.value }));
   }, []);
 
+  // Service scope field handlers
   const handleServiceTypeChange = useCallback((value: string) => {
     setFormData(prev => ({ ...prev, serviceType: value }));
   }, []);
@@ -206,6 +188,8 @@ export default function ClientOnboardingPage() {
   const handleEpsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, eps: e.target.value }));
   }, []);
+
+  // Form update handlers - direct inline to prevent focus loss
 
   const markStepCompleted = (stepId: string) => {
     if (!completedSteps.includes(stepId)) {
@@ -285,79 +269,16 @@ export default function ClientOnboardingPage() {
     }));
   }, [currentStep, completedSteps]);
 
-  // Client Information Form - Memoized to prevent focus loss
-  const ClientForm = useCallback(() => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Add New Client</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="clientName">Company Name *</Label>
-          <Input
-            id="clientName"
-            value={formData.clientName || ''}
-            onChange={handleClientNameChange}
-            placeholder="Enter company name"
-          />
-        </div>
-        <div>
-          <Label htmlFor="industry">Industry</Label>
-          <Select value={formData.industry} onValueChange={handleIndustryChange}>
-            <SelectTrigger id="industry">
-              <SelectValue placeholder="Select industry" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="finance">Finance</SelectItem>
-              <SelectItem value="healthcare">Healthcare</SelectItem>
-              <SelectItem value="technology">Technology</SelectItem>
-              <SelectItem value="manufacturing">Manufacturing</SelectItem>
-              <SelectItem value="retail">Retail</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="clientEmail">Primary Email *</Label>
-          <Input
-            id="clientEmail"
-            type="email"
-            value={formData.clientEmail || ''}
-            onChange={handleClientEmailChange}
-            placeholder="contact@company.com"
-          />
-        </div>
-        <div>
-          <Label htmlFor="clientPhone">Phone Number</Label>
-          <Input
-            id="clientPhone"
-            value={formData.clientPhone || ''}
-            onChange={handleClientPhoneChange}
-            placeholder="+1 (555) 123-4567"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <Label htmlFor="clientAddress">Company Address</Label>
-          <Textarea
-            id="clientAddress"
-            value={formData.clientAddress || ''}
-            onChange={handleClientAddressChange}
-            placeholder="Enter company address"
-            rows={3}
-          />
-        </div>
-      </div>
-      <div className="flex justify-end space-x-3">
-        <Button variant="outline" onClick={() => setShowForm(false)}>
-          Cancel
-        </Button>
-        <Button
-          onClick={() => handleFormSubmit('client-info')}
-          disabled={!formData.clientName || !formData.clientEmail || createClientMutation.isPending}
-        >
-          {createClientMutation.isPending ? 'Creating...' : 'Create Client'}
-        </Button>
-      </div>
-    </div>
-  ), [formData, createClientMutation.isPending, handleClientNameChange, handleClientEmailChange, handleClientPhoneChange, handleClientAddressChange, handleIndustryChange]);
+  // Stable client info form element
+  const clientInfoFormElement = (
+    <ClientInfoForm
+      data={formData}
+      setData={setFormData}
+      isSubmitting={createClientMutation.isPending}
+      onSubmit={() => handleFormSubmit('client-info')}
+      onCancel={() => setShowForm(false)}
+    />
+  );
 
   // Contract Setup Form - Memoized to prevent focus loss
   const ContractForm = useCallback(() => (
@@ -527,7 +448,7 @@ export default function ClientOnboardingPage() {
       estimatedTime: '5-10 minutes',
       icon: <Building className="h-5 w-5" />,
       status: 'pending',
-      formComponent: <ClientForm />,
+      formComponent: clientInfoFormElement,
       checklist: [
         'Company name and industry',
         'Primary contact information',
@@ -602,7 +523,7 @@ export default function ClientOnboardingPage() {
         'Service activation'
       ]
     }
-  ], [ClientForm, ContractForm, ServiceForm]);
+  ], [clientInfoFormElement, ContractForm, ServiceForm]);
 
   const progressPercentage = useMemo(() => 
     (completedSteps.length / onboardingSteps.length) * 100,
