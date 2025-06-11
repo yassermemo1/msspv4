@@ -66,6 +66,7 @@ import { integrationEngineWidgetRoutes } from './routes/integration-engine-widge
 import { codebaseAnalyzer } from './services/codebase-analyzer';
 import { router as dynamicServiceScopeRoutes } from './api/dynamic-service-scopes';
 import poolValidationRoutes from './api/pool-validation';
+import { mockJiraRoutes } from './routes/mock-jira.ts';
 
 const scryptAsync = promisify(scrypt);
 
@@ -248,6 +249,9 @@ function requireEngineerOrAbove(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ---- Mock data routes for Jira ticket widgets ----
+  app.use('/api/mock-jira', mockJiraRoutes);
+
   // Auth routes are now set up in server/index.ts
 
   // Serve uploaded files
@@ -456,8 +460,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // TWO-FACTOR AUTHENTICATION ENDPOINTS
   // ========================================
 
-  // Get 2FA status for current user
-  // Get 2FA status for current user
   // Get 2FA status for current user
   app.get("/api/user/2fa/status", requireAuth, async (req, res) => {
     try {
@@ -673,21 +675,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get dashboard widgets
   app.get("/api/dashboard/widgets", requireAuth, async (req, res) => {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      // Get all available dashboard widgets
-      const allWidgets = await db
-        .select()
-        .from(dashboardWidgets)
-        .where(eq(dashboardWidgets.isActive, true));
-
-      res.json(allWidgets);
+      const widgets = await db.select().from(dashboardWidgets);
+      res.json(widgets);
     } catch (error) {
-      console.error("Get dashboard widgets error:", error);
-      res.status(500).json({ message: "Failed to fetch dashboard widgets" });
+      console.error("Error fetching widgets:", error);
+      res.status(500).json({ error: "Failed to fetch widgets" });
     }
   });
 
@@ -2355,7 +2347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const { serviceId, description, deliverables, monthlyValue, startDate, endDate, status } = req.body;
 
-      // Get existing scope for audit comparison
+      // Get existing scope for audit logging before deletion
       const [existingScope] = await db
         .select()
         .from(serviceScopes)
@@ -6046,6 +6038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
   // Enhanced query testing endpoint
   app.post("/api/external-systems/test-query", requireAuth, async (req, res) => {
     try {
@@ -8121,7 +8114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get service audit forms
+  // Get service authorization forms
   app.get("/api/service-audit-forms", requireAuth, async (req, res) => {
     try {
       const { contractId } = req.query;
@@ -9963,7 +9956,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // External Data Integration Bridge
   app.use("/api/integration-engine/external-data", requireAuth, externalDataBridge);
 
-
+  // Get clients with stats
+  app.get("/api/clients/with-stats", requireAuth, async (req, res) => {
+    try {
+      const clients = await storage.getClientsWithStats();
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients with stats:", error);
+      res.status(500).json({ error: "Failed to fetch clients with stats" });
+    }
+  });
 
   return httpServer;
 }

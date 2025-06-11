@@ -9,11 +9,12 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ScrollArea } from '../ui/scroll-area';
-import { AlertCircle, Plus, Settings, TestTube, Trash2, Edit, CheckCircle, XCircle, Loader2, Play, BarChart3, Clock, Download, Copy } from 'lucide-react';
+import { AlertCircle, Plus, Settings, TestTube, Trash2, Edit, CheckCircle, XCircle, Loader2, Play, BarChart3, Clock, Download, Copy, MoreVertical } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 interface ExternalSystem {
   id: number;
@@ -410,6 +411,42 @@ export function ExternalSystemsManagement() {
                             <XCircle className="w-4 h-4 text-red-500" />
                           )}
                         </div>
+
+                        {/* Row-action dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-6 h-6"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                startEditing(system);
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                deleteSystem(system.id);
+                              }}
+                              className="flex items-center gap-2 text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       <p className="text-sm text-muted-foreground truncate">
                         {system.baseUrl}

@@ -47,6 +47,9 @@ export default function ClientsPage() {
     { key: "domain", label: "Domain", defaultVisible: true, mandatory: true },
     { key: "industry", label: "Industry", defaultVisible: true },
     { key: "companySize", label: "Company Size", defaultVisible: false },
+    { key: "contractsCount", label: "Contracts", defaultVisible: false },
+    { key: "servicesCount", label: "Services", defaultVisible: false },
+    { key: "licensesCount", label: "Licenses", defaultVisible: false },
     { key: "status", label: "Status", defaultVisible: true },
     { key: "source", label: "Source", defaultVisible: true },
     { key: "address", label: "Address", defaultVisible: false },
@@ -94,7 +97,14 @@ export default function ClientsPage() {
     }
   ];
 
-  const { data: clients = [], isLoading } = useQuery<Client[]>({
+  // Extend Client type with aggregated stats
+  interface ClientWithStats extends Client {
+    contractsCount?: number;
+    servicesCount?: number;
+    licensesCount?: number;
+  }
+
+  const { data: clients = [], isLoading } = useQuery<ClientWithStats[]>({
     queryKey: ["/api/clients"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/clients");
@@ -514,6 +524,9 @@ export default function ClientsPage() {
                       {isColumnVisible("domain") && <TableHead>Domain</TableHead>}
                       {isColumnVisible("industry") && <TableHead>Industry</TableHead>}
                       {isColumnVisible("companySize") && <TableHead>Company Size</TableHead>}
+                      {isColumnVisible("contractsCount") && <TableHead>Contracts</TableHead>}
+                      {isColumnVisible("servicesCount") && <TableHead>Services</TableHead>}
+                      {isColumnVisible("licensesCount") && <TableHead>Licenses</TableHead>}
                       {isColumnVisible("status") && <TableHead>Status</TableHead>}
                       {isColumnVisible("source") && <TableHead>Source</TableHead>}
                       {isColumnVisible("address") && <TableHead>Address</TableHead>}
@@ -563,6 +576,15 @@ export default function ClientsPage() {
                         )}
                         {isColumnVisible("companySize") && (
                           <TableCell>{client.companySize || "—"}</TableCell>
+                        )}
+                        {isColumnVisible("contractsCount") && (
+                          <TableCell>{client.contractsCount || "—"}</TableCell>
+                        )}
+                        {isColumnVisible("servicesCount") && (
+                          <TableCell>{client.servicesCount || "—"}</TableCell>
+                        )}
+                        {isColumnVisible("licensesCount") && (
+                          <TableCell>{client.licensesCount || "—"}</TableCell>
                         )}
                         {isColumnVisible("status") && (
                           <TableCell>{getStatusBadge(client.status)}</TableCell>

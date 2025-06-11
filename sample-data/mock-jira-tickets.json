@@ -1,0 +1,12 @@
+[
+  {"id":1,"key":"MSSP-1","summary":"Issue with login","status":"Open","clientShortName":"ABC","created":"2025-06-01T10:00:00Z"},
+  {"id":2,"key":"MSSP-2","summary":"Database optimization","status":"In Progress","clientShortName":"XYZ","created":"2025-06-02T11:30:00Z"},
+  {"id":3,"key":"MSSP-3","summary":"Upgrade SSL certificates","status":"Open","clientShortName":"ABC","created":"2025-06-03T09:15:00Z"},
+  {"id":4,"key":"MSSP-4","summary":"Email notifications failing","status":"Resolved","clientShortName":"DEF","created":"2025-06-04T14:45:00Z"},
+  {"id":5,"key":"MSSP-5","summary":"Integrate payment gateway","status":"Open","clientShortName":"XYZ","created":"2025-06-05T08:20:00Z"},
+  {"id":6,"key":"MSSP-6","summary":"Refactor authentication flow","status":"In Progress","clientShortName":"DEF","created":"2025-06-06T16:00:00Z"},
+  {"id":7,"key":"MSSP-7","summary":"Add multi-language support","status":"Open","clientShortName":"ABC","created":"2025-06-07T12:10:00Z"},
+  {"id":8,"key":"MSSP-8","summary":"Improve dashboard performance","status":"Open","clientShortName":"XYZ","created":"2025-06-08T09:50:00Z"},
+  {"id":9,"key":"MSSP-9","summary":"Migrate to new server","status":"In Progress","clientShortName":"GHI","created":"2025-06-09T13:35:00Z"},
+  {"id":10,"key":"MSSP-10","summary":"Update documentation","status":"Resolved","clientShortName":"DEF","created":"2025-06-10T07:25:00Z"}
+] 

@@ -54,6 +54,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
 import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
+import { JiraTicketsKpi } from '@/components/widgets/jira-tickets-kpi';
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -211,6 +212,15 @@ export default function ClientDetailPage() {
   // Fetch all services for reference
   const { data: allServices = [] } = useQuery<Service[]>({
     queryKey: ["/api/services"],
+    queryFn: async () => {
+      const response = await fetch("/api/services", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch services");
+      }
+      return response.json();
+    },
     enabled: !!client,
   });
 
@@ -423,9 +433,10 @@ export default function ClientDetailPage() {
   };
 
   // Helper functions for new tabs
-  const getServiceName = (serviceId: number) => {
-    const service = allServices.find(s => s.id === serviceId);
-    return service?.name || 'Unknown Service';
+  const getServiceName = (serviceId: number | string) => {
+    const idNum = Number(serviceId);
+    const service = allServices.find(s => Number(s.id) === idNum);
+    return service?.name ?? `Service #${serviceId}`;
   };
 
   const getLicensePoolName = (licensePoolId: number) => {
@@ -841,6 +852,9 @@ export default function ClientDetailPage() {
                       </div>
                     </>
                   )}
+
+                  {/* Jira Tickets KPI Card */}
+                  <JiraTicketsKpi clientShortName={client.shortName || ''} />
                 </CardContent>
               </Card>
             </div>
@@ -1138,11 +1152,32 @@ export default function ClientDetailPage() {
                                 <div>
                                   <p className="text-sm font-medium text-gray-700 mb-2">Deliverables:</p>
                                   <div className="flex flex-wrap gap-2">
-                                    {deliverables.map((deliverable, index) => (
-                                      <Badge key={index} variant="outline" className="text-xs">
-                                        {deliverable}
-                                      </Badge>
-                                    ))}
+                                    {deliverables.map((deliverable, index) => {
+                                      const getLabel = (d: any) => {
+                                        if (d == null) return '';
+                                        if (typeof d === 'string' || typeof d === 'number') return String(d);
+                                        if (typeof d === 'object') {
+                                          // Common field names to display
+                                          if ('item' in d && d.item) return String((d as any).item);
+                                          if ('name' in d && d.name) return String((d as any).name);
+                                          if ('title' in d && d.title) return String((d as any).title);
+                                          if ('value' in d && d.value) return String((d as any).value);
+                                          // Fallback – stringify the object in a compact form
+                                          try {
+                                            return JSON.stringify(d);
+                                          } catch (_) {
+                                            return '[object]';
+                                          }
+                                        }
+                                        return String(d);
+                                      };
+
+                                      return (
+                                        <Badge key={index} variant="outline" className="text-xs">
+                                          {getLabel(deliverable)}
+                                        </Badge>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}

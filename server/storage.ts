@@ -134,6 +134,7 @@ export interface IStorage {
   
   // Client management
   getAllClients(): Promise<Client[]>;
+  getClientsWithStats(): Promise<(Client & { contractsCount: number; servicesCount: number; licensesCount: number; })[]>;
   getClient(id: number): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: number, client: Partial<InsertClient>): Promise<Client | undefined>;
@@ -505,6 +506,35 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(clients)
       .where(isNull(clients.deletedAt))
       .orderBy(desc(clients.createdAt));
+  }
+
+  async getClientsWithStats(): Promise<(Client & { contractsCount: number; servicesCount: number; licensesCount: number; })[]> {
+    // Return all active (non-archived) clients with aggregated relationship counts
+    const results = await db.execute(sql`
+      SELECT
+        c.*, 
+        (
+          SELECT COUNT(*)
+          FROM ${contracts} ct
+          WHERE ct."clientId" = c.id AND ct."deletedAt" IS NULL
+        ) AS "contractsCount",
+        (
+          SELECT COUNT(*)
+          FROM ${serviceScopes} ss
+          JOIN ${contracts} ct2 ON ct2.id = ss."contract_id"
+          WHERE ct2."clientId" = c.id
+        ) AS "servicesCount",
+        (
+          SELECT COUNT(*)
+          FROM ${clientLicenses} cl
+          WHERE cl."client_id" = c.id
+        ) AS "licensesCount"
+      FROM ${clients} c
+      WHERE c."deletedAt" IS NULL
+      ORDER BY c."createdAt" DESC;
+    `).then(r => r.rows as any);
+
+    return results;
   }
 
   async getClient(id: number): Promise<Client | undefined> {
@@ -2513,6 +2543,9 @@ export class DatabaseStorage implements IStorage {
       return true; // Default to visible on error
     }
   }
+
+  // Client management
+  async getClientsWithStats(): Promise<(Client & { contractsCount: number; servicesCount: number; licensesCount: number; })[]>;
 }
 
 export const storage = new DatabaseStorage();
