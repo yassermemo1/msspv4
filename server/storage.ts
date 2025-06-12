@@ -1954,11 +1954,82 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientExternalMappings(clientId: number): Promise<ClientExternalMapping[]> {
-    return await db
+    // Fetch explicit per-client mappings first
+    const explicitMappings: ClientExternalMapping[] = await db
       .select()
       .from(clientExternalMappings)
       .where(eq(clientExternalMappings.clientId, clientId))
       .orderBy(clientExternalMappings.id);
+
+    // Index explicit mappings by systemName for quick lookup
+    const mappingIndex = new Map<string, ClientExternalMapping>(
+      explicitMappings.map(m => [m.systemName, m])
+    );
+
+    // Retrieve *active* external systems that define a default mapping rule
+    const systemsWithDefaults = await db
+      .select()
+      .from(externalSystems)
+      .where(eq(externalSystems.isActive, true));
+
+    // Get client record (needed for template substitution)
+    const client = await this.getClient(clientId);
+
+    // Helper – recursively replace {{field}} tokens with client values
+    function applyTemplate(input: any, ctx: any): any {
+      if (input == null) return input;
+      if (typeof input === 'string') {
+        return input.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, p1) => {
+          return ctx?.[p1] ?? '';
+        });
+      }
+      if (Array.isArray(input)) {
+        return input.map(v => applyTemplate(v, ctx));
+      }
+      if (typeof input === 'object') {
+        const out: any = {};
+        for (const [k, v] of Object.entries(input)) {
+          out[k] = applyTemplate(v, ctx);
+        }
+        return out;
+      }
+      return input;
+    }
+
+    for (const system of systemsWithDefaults) {
+      // Skip if explicit mapping exists or no default mapping defined
+      if (mappingIndex.has(system.systemName) || !system.defaultMapping) continue;
+
+      // If client not found (should not happen) just skip
+      if (!client) continue;
+
+      const defaultCfg: any = system.defaultMapping;
+
+      // Support both flat and template-based structures
+      const externalIdentifierTemplate =
+        defaultCfg.externalIdentifierTemplate ?? defaultCfg.externalIdentifier ?? '{{shortName}}';
+
+      const externalIdentifier = applyTemplate(externalIdentifierTemplate, client);
+
+      const metadataTemplate = defaultCfg.metadataTemplate ?? defaultCfg.metadata ?? {};
+      const metadata = applyTemplate(metadataTemplate, client);
+
+      // Build synthetic mapping (not persisted)
+      const syntheticMapping: ClientExternalMapping = {
+        id: 0, // 0 indicates derived
+        clientId,
+        systemName: system.systemName,
+        externalIdentifier,
+        metadata,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as unknown as ClientExternalMapping;
+
+      mappingIndex.set(system.systemName, syntheticMapping);
+    }
+
+    return Array.from(mappingIndex.values());
   }
 
   async getClientExternalMapping(id: number): Promise<ClientExternalMapping | undefined> {

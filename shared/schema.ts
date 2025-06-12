@@ -1093,6 +1093,8 @@ export const externalSystems = pgTable("external_systems", {
   apiEndpoints: jsonb("api_endpoints"), // Endpoint configurations
   healthCheckConfig: jsonb("health_check_config"), // Health check configuration
   rateLimitConfig: jsonb("rate_limit_config"), // Rate limiting configuration
+  // System-wide default mapping rule (applied when a client has no explicit override)
+  defaultMapping: jsonb("default_mapping"),
   errorHandling: jsonb("error_handling"), // Error handling rules
   isActive: boolean("is_active").notNull().default(true),
   createdBy: integer("created_by").notNull().references(() => users.id),
