@@ -67,6 +67,7 @@ import { codebaseAnalyzer } from './services/codebase-analyzer';
 import { router as dynamicServiceScopeRoutes } from './api/dynamic-service-scopes';
 import poolValidationRoutes from './api/pool-validation';
 import { mockJiraRoutes } from './routes/mock-jira.ts';
+import { getPlugin } from "./plugins/plugin-manager";
 
 const scryptAsync = promisify(scrypt);
 

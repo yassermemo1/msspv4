@@ -12,6 +12,8 @@ import { initializeDefaultIntegrations } from "./startup-integrations";
 import compression from "compression";
 import path from "path";
 import fs from "fs";
+// Register all stub plugins (phase-1)
+import "./plugins/stub-plugins";
 
 const app = express();
 
