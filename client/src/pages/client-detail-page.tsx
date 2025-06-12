@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { ClientForm } from "@/components/forms/client-form";
 import { ClientLicenseForm } from "@/components/forms/client-license-form";
-import { ClientExternalMappings } from "@/components/external-systems/client-external-mappings";
+import { ClientExternalMappings } from "@/unused-scripts/external-systems/client-external-mappings";
 import { HistoryTimeline } from "@/components/ui/history-timeline";
 import { EntityRelationshipsPanel } from "@/components/ui/entity-relationships-panel";
 import { EntityRelationshipTree } from "@/components/ui/entity-relationship-tree";

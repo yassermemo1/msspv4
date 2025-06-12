@@ -30,10 +30,10 @@ import {
   Code,
   Play
 } from 'lucide-react';
-import { WidgetBuilder } from '@/components/integration-engine/widget-builder';
-import { CustomQueryBuilder } from '@/components/integration-engine/custom-query-builder';
+import { WidgetBuilder } from '@/unused-scripts/integration-engine/widget-builder';
+import { CustomQueryBuilder } from '@/unused-scripts/integration-engine/custom-query-builder';
 import { DashboardGrid } from '@/components/dashboard/dashboard-grid';
-import { PlatformConnector } from '@/components/integration-engine/platform-connector';
+import { PlatformConnector } from '@/unused-scripts/integration-engine/platform-connector';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api';
 
