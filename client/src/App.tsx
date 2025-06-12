@@ -351,7 +351,7 @@ function App() {
                   )} />
                   
                   {/* 404 Not Found - This should be the last route */}
-                  <Route component={NotFound} />
+                  <Route path="*" component={NotFound} />
                 </Switch>
               </div>
               <Toaster />
