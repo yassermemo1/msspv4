@@ -14,6 +14,12 @@ import path from "path";
 import fs from "fs";
 // Register all stub plugins (phase-1)
 import "./plugins/stub-plugins";
+// Phase-2: real plugin implementations (override stubs)
+import "./plugins/jira-plugin";
+import "./plugins/qradar-plugin";
+import "./plugins/splunk-plugin";
+import "./plugins/elastic-plugin";
+import "./plugins/grafana-plugin";
 
 const app = express();
 

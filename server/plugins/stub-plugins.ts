@@ -1,11 +1,8 @@
 import { registerPlugin, QueryPlugin } from './plugin-manager';
 
 const systems = [
-  'jira',
-  'qradar',
-  'splunk',
-  'elastic',
-  'grafana',
+  // Implemented in Phase 2 (real plugins)
+  // 'jira', 'qradar', 'splunk', 'elastic', 'grafana',
   'fortigate',
   'paloalto',
   'carbonblack',
