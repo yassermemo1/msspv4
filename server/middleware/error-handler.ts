@@ -6,7 +6,7 @@ import {
   NotFoundError,
   DuplicateError,
   DatabaseError,
-  ExternalServiceError,
+  // ExternalServiceError, // REMOVED - external systems deprecated
   ConfigurationError,
   BusinessLogicError,
   RateLimitError,
@@ -57,7 +57,7 @@ function getStatusCode(error: Error): number {
     
     case 'ConfigurationError':
     case 'DatabaseError':
-    case 'ExternalServiceError':
+    // case 'ExternalServiceError': // REMOVED - external systems deprecated
     case 'FileProcessingError':
       return 500; // Internal Server Error
     
@@ -78,7 +78,7 @@ function getErrorCode(error: Error): string {
     case 'NotFoundError': return 'RESOURCE_NOT_FOUND';
     case 'DuplicateError': return 'DUPLICATE_RESOURCE';
     case 'DatabaseError': return 'DATABASE_ERROR';
-    case 'ExternalServiceError': return 'EXTERNAL_SERVICE_ERROR';
+    // case 'ExternalServiceError': return 'EXTERNAL_SERVICE_ERROR'; // REMOVED - external systems deprecated
     case 'ConfigurationError': return 'CONFIGURATION_ERROR';
     case 'BusinessLogicError': return 'BUSINESS_RULE_VIOLATION';
     case 'RateLimitError': return 'RATE_LIMIT_EXCEEDED';

@@ -6,7 +6,6 @@ import { emailService } from "./email";
 import { scheduler } from "./scheduler";
 import { setupVite, serveStatic } from "./vite";
 import { environmentConfig } from "./lib/environment-config";
-import { configureAuth } from "./auth";
 import { setupDatabaseAutoSync } from "./db-auto-sync";
 // import { initializeDefaultIntegrations } from "./startup-integrations"; // TODO: Create this module
 import { initializeDefaultPagePermissions } from "./startup-page-permissions";
@@ -101,7 +100,7 @@ type WithError = {
 
   // Setup Vite/static serving based on environment
   if (config.server.environment === "development") {
-    await setupVite(app);
+    await setupVite(app, server);
   } else {
     serveStatic(app);
   }

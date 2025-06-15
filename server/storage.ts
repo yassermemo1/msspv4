@@ -1125,7 +1125,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(serviceAuthorizationForms)
       .where(eq(serviceAuthorizationForms.clientId, clientId))
-      .orderBy(serviceAuthorizationForms.title);
+      .orderBy(serviceAuthorizationForms.createdAt);
   }
 
   async createServiceAuthorizationForm(saf: InsertServiceAuthorizationForm): Promise<ServiceAuthorizationForm> {
@@ -1158,7 +1158,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(serviceAuthorizationForms)
       .where(eq(serviceAuthorizationForms.clientId, clientId))
-      .orderBy(serviceAuthorizationForms.title);
+      .orderBy(serviceAuthorizationForms.createdAt);
   }
 
   // Certificate of Compliance (COC)

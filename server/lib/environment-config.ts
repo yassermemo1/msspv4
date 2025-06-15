@@ -28,7 +28,7 @@ export interface EnvironmentConfig {
     sessionTimeout: number;
     maxLoginAttempts: number;
     passwordMinLength: number;
-    requireTwoFactor: boolean;
+
     allowedFileTypes: string[];
     maxFileSize: number;
   };
@@ -156,7 +156,7 @@ class EnvironmentConfigManager {
         sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '28800'), // 8 hours
         maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5'),
         passwordMinLength: parseInt(process.env.PASSWORD_MIN_LENGTH || '8'),
-        requireTwoFactor: process.env.REQUIRE_2FA === 'true',
+
         allowedFileTypes: process.env.ALLOWED_FILE_TYPES?.split(',') || ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png'],
         maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760') // 10MB
       },
@@ -376,7 +376,6 @@ class EnvironmentConfigManager {
     console.log(`LDAP: ${config.ldap.enabled ? 'Enabled' : 'Disabled'}`);
     console.log(`Email: ${config.email.enabled ? 'Enabled' : 'Disabled'}`);
     console.log(`Testing: ${config.testing.enabled ? 'Enabled' : 'Disabled'}`);
-    console.log(`Security: 2FA ${config.security.requireTwoFactor ? 'Required' : 'Optional'}`);
     console.log('════════════════════════════════════\n');
 
     // Log test credentials only in development

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.ts';
-import { customQueries, customQueryWidgets, externalSystems, widgetExecutionCache } from '../../shared/schema.ts';
+// TODO: Re-enable when schema exports are added
+// import { customQueries, customQueryWidgets, widgetExecutionCache } from '../../shared/schema.ts';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { DynamicQueryExecutionService } from '../services/query-execution-service.ts';
 import crypto from 'crypto';
@@ -32,11 +33,8 @@ router.get('/', async (req, res) => {
         tags: customQueries.tags,
         createdAt: customQueries.createdAt,
         updatedAt: customQueries.updatedAt,
-        systemName: externalSystems.systemName,
-        systemDisplayName: externalSystems.displayName,
       })
       .from(customQueries)
-      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
       .where(
         and(
           customQueries.isActive,
@@ -255,21 +253,12 @@ router.post('/:id/add-to-dashboard', async (req, res) => {
 });
 
 /**
- * GET /api/custom-queries/systems - Get available external systems for queries
+ * GET /api/custom-queries/systems - External systems endpoint removed
  */
 router.get('/systems', async (req, res) => {
-  try {
-    const systems = await db
-      .select()
-      .from(externalSystems)
-      .where(eq(externalSystems.isActive, true))
-      .orderBy(externalSystems.displayName);
-
-    res.json(systems);
-  } catch (error) {
-    console.error('Error fetching external systems:', error);
-    res.status(500).json({ message: 'Failed to fetch systems' });
-  }
+  res.status(410).json({ 
+    message: 'External systems have been migrated to plugins. Use plugin endpoints instead.' 
+  });
 });
 
 /**
@@ -304,15 +293,9 @@ router.get('/widgets/:dashboardId', async (req, res) => {
           refreshInterval: customQueries.refreshInterval,
           cacheEnabled: customQueries.cacheEnabled,
         },
-        system: {
-          id: externalSystems.id,
-          systemName: externalSystems.systemName,
-          displayName: externalSystems.displayName,
-        }
       })
       .from(customQueryWidgets)
       .leftJoin(customQueries, eq(customQueryWidgets.customQueryId, customQueries.id))
-      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
       .where(
         and(
           whereCondition,
@@ -341,11 +324,9 @@ router.get('/widgets/:widgetId/data', async (req, res) => {
       .select({
         widget: customQueryWidgets,
         query: customQueries,
-        system: externalSystems,
       })
       .from(customQueryWidgets)
       .leftJoin(customQueries, eq(customQueryWidgets.customQueryId, customQueries.id))
-      .leftJoin(externalSystems, eq(customQueries.systemId, externalSystems.id))
       .where(eq(customQueryWidgets.id, widgetId))
       .limit(1);
 
@@ -353,7 +334,7 @@ router.get('/widgets/:widgetId/data', async (req, res) => {
       return res.status(404).json({ message: 'Widget not found' });
     }
 
-    const { widget: widgetData, query: queryData, system: systemData } = widget[0];
+    const { widget: widgetData, query: queryData } = widget[0];
 
     // Check cache if not forcing refresh and cache is enabled
     if (!forceRefresh && queryData.cacheEnabled) {

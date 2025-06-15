@@ -90,7 +90,7 @@ function getCategoryFromNavItem(navItem: any): string {
   
   if (['dashboard', 'clients', 'contracts', 'services'].includes(name)) return 'main';
   if (['user management', 'role management', 'settings', 'audit logs'].includes(name)) return 'admin';
-  if (['integration engine', 'plugins', 'external systems'].includes(name)) return 'integration';
+      if (['plugins', 'external systems'].includes(name)) return 'integration';
   if (['reports', 'analytics'].includes(name)) return 'reports';
   if (['dynamic dashboards', 'global widgets', 'widget manager'].includes(name)) return 'advanced';
   

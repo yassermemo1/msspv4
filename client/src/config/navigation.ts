@@ -161,13 +161,7 @@ export const mainNavigation: NavigationItem[] = [
     description: "Connector instances management",
     isNew: true 
   },
-  { 
-    name: "Integration Engine", 
-    href: "/integration-engine", 
-    icon: Zap,
-    description: "External API integrations and data sync",
-    isNew: true
-  },
+
   { 
     name: "Entity Navigation Demo", 
     href: "/entity-navigation-demo", 

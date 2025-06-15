@@ -53,21 +53,7 @@ export class DatabaseError extends Error {
   }
 }
 
-export class ExternalServiceError extends Error {
-  constructor(
-    service: string, 
-    operation: string, 
-    statusCode?: number, 
-    originalError?: Error
-  ) {
-    const message = statusCode 
-      ? `${service} ${operation} failed with status ${statusCode}: ${originalError?.message || 'Unknown error'}`
-      : `${service} ${operation} failed: ${originalError?.message || 'Unknown error'}`;
-    super(message);
-    this.name = 'ExternalServiceError';
-    this.cause = originalError;
-  }
-}
+// ExternalServiceError removed - external systems deprecated
 
 export class ConfigurationError extends Error {
   constructor(setting: string, expectedValue?: string) {
@@ -163,6 +149,4 @@ export function isDatabaseError(error: Error): error is DatabaseError {
   return error.name === 'DatabaseError';
 }
 
-export function isExternalServiceError(error: Error): error is ExternalServiceError {
-  return error.name === 'ExternalServiceError';
-} 
+// isExternalServiceError removed - external systems deprecated 

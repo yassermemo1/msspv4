@@ -8,7 +8,7 @@ import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer
 import { DynamicDashboardCard } from "@/components/dashboard/dynamic-dashboard-card";
 import { useDashboardSettings } from "@/hooks/use-dashboard-settings";
 import { DashboardWidget } from "@/components/ui/dashboard-widget";
-import { useDashboardWidgets } from "@/hooks/use-integrated-data";
+// Dashboard widgets import removed - deprecated
 import { 
   TrendingUp, 
   Users, 
@@ -31,7 +31,9 @@ export default function HomePage() {
   const { user } = useAuth();
   const { formatAmount } = useCurrency();
   const [, setLocation] = useLocation();
-  const { widgetsWithData, refetch } = useDashboardWidgets();
+  // Dashboard widgets hook removed - deprecated
+  const widgetsWithData: any[] = [];
+  const refetch = () => Promise.resolve();
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [showWidgetManager, setShowWidgetManager] = useState(false);
   const { toast } = useToast();
@@ -163,30 +165,7 @@ export default function HomePage() {
           </Card>
         )}
 
-        {/* Integration Engine Widgets */}
-        <div className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Integration Engine Widgets</h2>
-              <p className="text-gray-600 text-sm sm:text-base">Real-time data from your integrated systems</p>
-            </div>
-            <Button 
-              onClick={() => setShowWidgetManager(true)}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Manage Widgets
-            </Button>
-          </div>
-
-          <ClientWidgetsManager
-            clientId={null}
-            onWidgetUpdate={() => {
-              // Refresh widgets if needed
-            }}
-          />
-        </div>
+        {/* External Widgets Section - Removed (deprecated) */}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Recent Clients */}

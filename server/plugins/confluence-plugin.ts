@@ -1,6 +1,6 @@
 import { QueryPlugin, registerPlugin } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
+// External system instances removed - deprecated
 
 function buildUrl(base: string, path: string) {
   if (path.startsWith('http')) return path;
@@ -9,7 +9,7 @@ function buildUrl(base: string, path: string) {
 
 const confluencePlugin: QueryPlugin = {
   systemName: 'confluence',
-  async executeQuery(query: string, method = 'GET', instance: ExternalSystemInstance, opts) {
+  async executeQuery(query: string, method = 'GET', instance: any, opts) {
     // In Confluence Cloud the API base is /wiki/rest/api
     const base = instance.baseUrl || instance.host || '';
     const url = buildUrl(base, query);

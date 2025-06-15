@@ -1,6 +1,7 @@
-import { DataSourceMapping } from "@shared/schema";
+// TODO: Re-enable when DataSourceMapping is added to schema
+// import { DataSourceMapping } from "@shared/schema";
 
-export function applyMappings(data: any[], mappings: DataSourceMapping[]): any[] {
+export function applyMappings(data: any[], mappings: any[]): any[] {
   if (!mappings || mappings.length === 0) {
     return data;
   }

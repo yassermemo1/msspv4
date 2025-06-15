@@ -401,195 +401,9 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
   },
 
   // =================
-  // EXTERNAL DATA SOURCE CARDS
+  // EXTERNAL DATA SOURCE CARDS - DEPRECATED
+  // External data source cards have been migrated to the plugin system
   // =================
-  {
-    id: "external-siem-logs",
-    title: "SIEM Log Sources",
-    type: "external",
-    category: "external",
-    dataSource: "external",
-    size: "medium",
-    visible: true,
-    position: 200,
-    config: {
-      icon: "Activity",
-      color: "red",
-      format: "number",
-      aggregation: "count",
-      externalSource: "siem_api",
-      refreshInterval: 300000, // 5 minutes
-      endpoint: "/api/external/siem/log-sources"
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-  {
-    id: "external-grafana-dashboards",
-    title: "Grafana Dashboards",
-    type: "external",
-    category: "external", 
-    dataSource: "external",
-    size: "small",
-    visible: true,
-    position: 201,
-    config: {
-      icon: "Monitor",
-      color: "orange",
-      format: "number",
-      aggregation: "count",
-      externalSource: "grafana_api",
-      refreshInterval: 600000, // 10 minutes
-      endpoint: "/api/external/grafana/dashboards"
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-  {
-    id: "external-ms-licenses",
-    title: "Microsoft Licenses",
-    type: "external",
-    category: "external",
-    dataSource: "external",
-    size: "medium",
-    visible: true,
-    position: 202,
-    config: {
-      icon: "Key",
-      color: "blue",
-      format: "number",
-      aggregation: "sum",
-      externalSource: "microsoft_graph_api",
-      refreshInterval: 3600000, // 1 hour
-      endpoint: "/api/external/microsoft/licenses"
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-  {
-    id: "external-edr-endpoints",
-    title: "EDR Protected Endpoints",
-    type: "external", 
-    category: "external",
-    dataSource: "external",
-    size: "medium",
-    visible: true,
-    position: 203,
-    config: {
-      icon: "Shield",
-      color: "cyan",
-      format: "number",
-      aggregation: "count",
-      externalSource: "edr_api",
-      refreshInterval: 900000, // 15 minutes
-      endpoint: "/api/external/edr/endpoints"
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-  {
-    id: "external-asset-inventory",
-    title: "Total Assets (External)",
-    type: "external",
-    category: "external",
-    dataSource: "external",
-    size: "medium",
-    visible: true,
-    position: 204,
-    config: {
-      icon: "HardDrive",
-      color: "green",
-      format: "number",
-      aggregation: "count",
-      externalSource: "asset_management_api",
-      refreshInterval: 1800000, // 30 minutes
-      endpoint: "/api/external/assets/inventory"
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-
-  // =================
-  // ENHANCED COMPARISON WITH EXTERNAL DATA
-  // =================
-  {
-    id: "internal-vs-external-assets",
-    title: "Internal vs External Assets",
-    type: "comparison",
-    category: "comparison",
-    dataSource: "comparison",
-    size: "large",
-    visible: true,
-    position: 300,
-    config: {
-      icon: "Database",
-      color: "slate",
-      format: "comparison",
-      chartType: "bar",
-      comparison: {
-        internal_assets: {
-          table: "hardware_assets",
-          aggregation: "count",
-          filters: {},
-          label: "Internal Asset DB",
-          color: "#64748b"
-        },
-        external_assets: {
-          table: "external",
-          dataSourceId: 1, // Asset management API data source
-          aggregation: "count",
-          filters: {},
-          label: "External Asset API",
-          color: "#06b6d4"
-        }
-      }
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
-  {
-    id: "license-pools-vs-external-licenses",
-    title: "License Pools vs External Licenses",
-    type: "comparison",
-    category: "comparison",
-    dataSource: "comparison", 
-    size: "large",
-    visible: true,
-    position: 301,
-    config: {
-      icon: "Key",
-      color: "blue",
-      format: "comparison",
-      chartType: "composed",
-      comparison: {
-        internal_licenses: {
-          table: "license_pools",
-          aggregation: "sum",
-          filters: {},
-          label: "Internal License Pools",
-          color: "#3b82f6"
-        },
-        microsoft_licenses: {
-          table: "external",
-          dataSourceId: 2, // Microsoft Graph API data source
-          aggregation: "sum",
-          filters: {},
-          label: "Microsoft API Licenses",
-          color: "#06b6d4"
-        },
-        edr_licenses: {
-          table: "external",
-          dataSourceId: 3, // EDR API data source
-          aggregation: "sum", 
-          filters: {},
-          label: "EDR API Licenses",
-          color: "#8b5cf6"
-        }
-      }
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
 
   // =================
   // LICENSE POOL CARDS (STANDARDIZED)
@@ -796,27 +610,9 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
   },
 
   // =================
-  // EXTERNAL SYSTEM MONITORING
+  // EXTERNAL SYSTEM MONITORING - DEPRECATED
   // =================
-  {
-    id: "external-systems-health",
-    title: "External Systems Health",
-    type: "metric",
-    category: "external",
-    dataSource: "external_systems",
-    size: "medium",
-    visible: true,
-    position: 500,
-    config: {
-      icon: "Activity",
-      color: "red",
-      format: "health_status",
-      aggregation: "health_check",
-      showStatusBreakdown: true
-    },
-    isBuiltIn: true,
-    isRemovable: true,
-  },
+  // External system cards removed - migrated to plugin system
   {
     id: "integration-data-freshness",
     title: "Integration Data Freshness",
@@ -866,7 +662,8 @@ export const getComparisonCards = (): StandardizedDashboardCard[] => {
 };
 
 export const getExternalCards = (): StandardizedDashboardCard[] => {
-  return getCardsByCategory('external');
+  // External cards removed - deprecated
+  return [];
 };
 
 export const getAnalyticsCards = (): StandardizedDashboardCard[] => {
@@ -934,25 +731,6 @@ export const createExternalCard = (config: {
   aggregation?: string;
   refreshInterval?: number;
 }): StandardizedDashboardCard => {
-  return {
-    id: config.id,
-    title: config.title,
-    type: "external",
-    category: "external",
-    dataSource: "external",
-    size: "medium",
-    visible: true,
-    position: 9999, // Will be repositioned when added
-    config: {
-      icon: "ExternalLink",
-      color: "indigo",
-      format: "number",
-      aggregation: config.aggregation || "count",
-      externalSource: config.externalSource,
-      endpoint: config.endpoint,
-      refreshInterval: config.refreshInterval || 300000 // 5 minutes default
-    },
-    isBuiltIn: false,
-    isRemovable: true,
-  };
+  // External cards removed - deprecated
+  throw new Error('External cards have been deprecated. Use plugin system instead.');
 }; 

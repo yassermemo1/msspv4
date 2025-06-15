@@ -1,6 +1,6 @@
 import { QueryPlugin, registerPlugin } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
+// import { ExternalSystemInstance } from '@shared/schema'; // REMOVED - External system instances deprecated
 
 function buildUrl(base: string, path: string) {
   if (path.startsWith('http')) return path;
@@ -32,7 +32,7 @@ export const sysdigDefaultQueries: SysdigQueryDef[] = [
 
 const sysdigPlugin: QueryPlugin = {
   systemName: 'sysdig',
-  async executeQuery(query: string, method = 'GET', instance: ExternalSystemInstance, opts) {
+  async executeQuery(query: string, method = 'GET', instance: any, opts) {
     const base = instance.baseUrl || instance.host || '';
     const url = buildUrl(base, query);
 
@@ -59,4 +59,6 @@ const sysdigPlugin: QueryPlugin = {
 
 (sysdigPlugin as any).defaultQueries = sysdigDefaultQueries;
 
-registerPlugin(sysdigPlugin); 
+registerPlugin(sysdigPlugin);
+
+export { sysdigPlugin }; 

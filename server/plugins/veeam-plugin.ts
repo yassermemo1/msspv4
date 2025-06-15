@@ -1,6 +1,6 @@
 import { QueryPlugin, registerPlugin } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
+// External system instances removed - deprecated
 
 function buildUrl(base: string, path: string) {
   if (path.startsWith('http')) return path;
@@ -32,7 +32,7 @@ export const veeamDefaultQueries: VeeamQueryDef[] = [
 
 const veeamPlugin: QueryPlugin = {
   systemName: 'veeam',
-  async executeQuery(query: string, method = 'GET', instance: ExternalSystemInstance, opts) {
+  async executeQuery(query: string, method = 'GET', instance: any, opts) {
     const base = instance.baseUrl || instance.host || '';
     const url = buildUrl(base, query);
 

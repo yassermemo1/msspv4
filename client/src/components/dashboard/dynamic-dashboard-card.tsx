@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { DashboardCard } from "@/hooks/use-dashboard-settings";
 import { apiRequest } from "@/lib/api";
-// import { IntegrationEngineWidget } from "@/components/external-widgets/integration-engine-widget";
+// IntegrationEngineWidget removed - integration engine deprecated
 
 const AVAILABLE_ICONS = {
   Building,
@@ -49,40 +49,15 @@ interface DynamicDashboardCardProps {
 }
 
 export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProps) {
-  // Check if this is an Integration Engine widget
-  const isIntegrationEngineWidget = false; // integration engine support disabled
+  // Integration Engine widget support removed - deprecated
 
   // Create stable config object to prevent infinite re-renders
   const stableConfig = React.useMemo(() => {
-    if (isIntegrationEngineWidget) {
-      // Use the EXACT configuration from Integration Engine
-      const ieData = card.config.integrationEngineData;
-      return {
-        // Visual configuration
-        chartType: ieData.visualConfig?.chartType || 'bar',
-        colors: ieData.visualConfig?.colors || ['#3b82f6', '#1e40af', '#60a5fa', '#93c5fd'],
-        showLegend: ieData.visualConfig?.showLegend !== undefined ? ieData.visualConfig.showLegend : true,
-        showGrid: ieData.visualConfig?.showGrid !== undefined ? ieData.visualConfig.showGrid : true,
-        height: ieData.visualConfig?.height || 300,
-        
-        // Data configuration
-        systemId: card.config.systemId,
-        endpoint: ieData.queryConfig?.endpoint,
-        method: ieData.queryConfig?.method || 'GET',
-        params: ieData.queryConfig?.params || {},
-        refreshInterval: ieData.queryConfig?.refreshInterval || 60,
-        
-        // Widget metadata
-        widgetType: ieData.type,
-        dataParams: {}
-      };
-    }
-    
     return {
       refreshInterval: card.config.refreshInterval || 60,
       dataParams: {}
     };
-  }, [card.config, isIntegrationEngineWidget]);
+  }, [card.config]);
 
   // Regular widget handling for non-external widgets
   const { data, isLoading, error, refetch } = useQuery({

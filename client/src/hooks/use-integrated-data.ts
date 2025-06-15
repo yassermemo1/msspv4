@@ -296,76 +296,10 @@ export function useDataSource(dataSourceId: number) {
 
 // Hook for dashboard widgets with data
 export function useDashboardWidgets() {
-  const [widgetsWithData, setWidgetsWithData] = useState<Array<{
-    widget: DashboardWidget;
-    data: any[];
-    loading: boolean;
-  }>>([]);
-  const { widgets, getWidgetData, fetchWidgets } = useIntegratedData();
-  const { toast } = useToast();
-
-  const loadWidgetData = async (widgetsToLoad = widgets) => {
-    const widgetPromises = widgetsToLoad.map(async (widget) => {
-      try {
-        const data = await getWidgetData(widget);
-        return { widget, data, loading: false };
-      } catch (error) {
-        console.error(`Error loading data for widget ${widget.name}:`, error);
-        return { widget, data: [], loading: false };
-      }
-    });
-
-    const results = await Promise.all(widgetPromises);
-    setWidgetsWithData(results);
-  };
-
-  const refetchAll = async () => {
-    try {
-      console.log('🔄 Refreshing widgets and data...');
-      
-      // First refresh the widgets list from the API
-      const updatedWidgets = await fetchWidgets();
-      console.log('📋 Fetched widgets:', updatedWidgets?.length || 0);
-      
-      // Then reload the data for the updated widgets
-      if (updatedWidgets && updatedWidgets.length > 0) {
-        await loadWidgetData(updatedWidgets);
-        console.log('✅ Widget data refresh complete');
-        
-        // Count total records across all widgets
-        const totalRecords = widgetsWithData.reduce((sum, { data }) => sum + data.length, 0);
-        
-        toast({
-          title: "Data Refreshed",
-          description: `Successfully refreshed ${updatedWidgets.length} widgets with ${totalRecords} total records`,
-        });
-      } else {
-        setWidgetsWithData([]);
-        console.log('📭 No widgets found');
-        
-        toast({
-          title: "No Widgets",
-          description: "No active widgets found to refresh",
-        });
-      }
-    } catch (error) {
-      console.error('❌ Error during refresh:', error);
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to refresh widget data. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (widgets.length > 0) {
-      loadWidgetData();
-    }
-  }, [widgets]);
-
+  // Dashboard widgets removed - deprecated
   return {
-    widgetsWithData,
-    refetch: refetchAll
+    widgetsWithData: [],
+    refetch: () => Promise.resolve()
   };
+  // Function content removed - deprecated
 } 

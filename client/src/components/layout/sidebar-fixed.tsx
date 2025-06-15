@@ -93,7 +93,6 @@ export function Sidebar() {
             return true;
           }).map((item) => {
             const isActive = location === item.href;
-            const isDynamicDashboards = item.name === "Dynamic Dashboards";
             return (
               <button
                 key={item.name}
@@ -101,15 +100,11 @@ export function Sidebar() {
                 className={cn(
                   "w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors",
                   isActive
-                    ? isDynamicDashboards 
-                      ? "bg-red-100 text-red-700 border border-red-200"
-                      : "bg-primary/10 text-primary"
-                    : isDynamicDashboards
-                      ? "text-red-600 hover:bg-red-50 border border-red-200"
-                      : "text-gray-700 hover:bg-gray-50"
+                    ? "bg-primary/10 text-primary"
+                    : "text-gray-700 hover:bg-gray-50"
                 )}
               >
-                <item.icon className={cn("h-5 w-5", isDynamicDashboards && "text-red-600")} />
+                <item.icon className="h-5 w-5" />
                 <span className="flex-1 text-left">{item.name}</span>
                 {item.isNew && (
                   <Badge variant="secondary" className="text-xs">

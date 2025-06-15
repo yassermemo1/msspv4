@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Services API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .result { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { margin: 5px; padding: 8px 15px; cursor: pointer; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>Services API Test</h1>
+    <p><strong>Instructions:</strong> First log in to the application in another tab, then run these tests.</p>
+    
+    <div class="test-section">
+        <h3>1. Get All Services</h3>
+        <button onclick="testGetServices()">Test GET /api/services</button>
+        <div id="get-services-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Create Service</h3>
+        <button onclick="testCreateService()">Test POST /api/services</button>
+        <div id="create-service-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Get Service by ID</h3>
+        <input type="number" id="service-id" placeholder="Service ID" value="1">
+        <button onclick="testGetServiceById()">Test GET /api/services/:id</button>
+        <div id="get-service-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Update Service</h3>
+        <input type="number" id="update-service-id" placeholder="Service ID" value="1">
+        <button onclick="testUpdateService()">Test PUT /api/services/:id</button>
+        <div id="update-service-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Delete Service</h3>
+        <input type="number" id="delete-service-id" placeholder="Service ID" value="9">
+        <button onclick="testDeleteService()">Test DELETE /api/services/:id</button>
+        <div id="delete-service-result" class="result"></div>
+    </div>
+
+    <script>
+        async function makeRequest(method, url, data = null) {
+            const options = {
+                method,
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            try {
+                const response = await fetch(url, options);
+                const responseData = await response.text();
+                
+                return {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: responseData ? JSON.parse(responseData) : null,
+                    success: response.ok
+                };
+            } catch (error) {
+                return {
+                    status: 0,
+                    statusText: 'Network Error',
+                    data: { error: error.message },
+                    success: false
+                };
+            }
+        }
+
+        function displayResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            const className = result.success ? 'success' : 'error';
+            element.className = `result ${className}`;
+            element.innerHTML = `
+                <strong>Status:</strong> ${result.status} ${result.statusText}<br>
+                <strong>Response:</strong><br>
+                <pre>${JSON.stringify(result.data, null, 2)}</pre>
+            `;
+        }
+
+        async function testGetServices() {
+            const result = await makeRequest('GET', '/api/services');
+            displayResult('get-services-result', result);
+        }
+
+        async function testCreateService() {
+            const serviceData = {
+                name: 'Test Service ' + Date.now(),
+                category: 'Security Operations',
+                description: 'Test service created via API',
+                deliveryModel: 'managed',
+                isActive: true
+            };
+            
+            const result = await makeRequest('POST', '/api/services', serviceData);
+            displayResult('create-service-result', result);
+        }
+
+        async function testGetServiceById() {
+            const serviceId = document.getElementById('service-id').value;
+            const result = await makeRequest('GET', `/api/services/${serviceId}`);
+            displayResult('get-service-result', result);
+        }
+
+        async function testUpdateService() {
+            const serviceId = document.getElementById('update-service-id').value;
+            const updateData = {
+                description: 'Updated description ' + Date.now()
+            };
+            
+            const result = await makeRequest('PUT', `/api/services/${serviceId}`, updateData);
+            displayResult('update-service-result', result);
+        }
+
+        async function testDeleteService() {
+            const serviceId = document.getElementById('delete-service-id').value;
+            if (!confirm(`Are you sure you want to delete service ${serviceId}?`)) {
+                return;
+            }
+            
+            const result = await makeRequest('DELETE', `/api/services/${serviceId}`);
+            displayResult('delete-service-result', result);
+        }
+    </script>
+</body>
+</html> 

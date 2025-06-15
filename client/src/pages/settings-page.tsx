@@ -10,7 +10,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/contexts/theme-context";
 import { useCurrency } from "@/contexts/currency-context";
 import { PasswordChangeForm } from "@/components/forms/password-change-form";
-import { TwoFASetupForm } from "@/components/forms/twofa-setup-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -97,12 +96,6 @@ export default function SettingsPage() {
   // Fetch user settings
   const { data: settings, isLoading: settingsLoading } = useQuery<UserSettings>({
     queryKey: ["/api/user/settings"],
-    enabled: !!user,
-  });
-
-  // Get 2FA status for display
-  const { data: twoFAStatus } = useQuery({
-    queryKey: ['/api/user/2fa/status'],
     enabled: !!user,
   });
 
@@ -601,25 +594,7 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Two-Factor Authentication</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Add an extra layer of security to your account
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant={twoFAStatus?.enabled ? 'default' : 'secondary'}>
-                    {twoFAStatus?.enabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                  <TwoFASetupForm>
-                    <Button variant="outline" size="sm">
-                      <Shield className="h-4 w-4 mr-2" />
-                      {twoFAStatus?.enabled ? 'Manage' : 'Setup'}
-                    </Button>
-                  </TwoFASetupForm>
-                </div>
-              </div>
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label className="text-base">Session Timeout</Label>

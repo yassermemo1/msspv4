@@ -9,10 +9,8 @@ import {
   clients, clientContacts, contracts, services, serviceScopes, proposals, 
   licensePools, clientLicenses, individualLicenses, hardwareAssets, 
   clientHardwareAssignments, financialTransactions, auditLogs, changeHistory,
-  securityEvents, dataAccessLogs, dashboardWidgets, userDashboards,
-  dashboardWidgetAssignments, externalSystems, clientExternalMappings,
-  externalWidgetTemplates, widgetExecutionCache, pagePermissions,
-  savedSearches, searchHistory, users, userSettings, companySettings
+  securityEvents, dataAccessLogs, clientExternalMappings,
+  pagePermissions, savedSearches, searchHistory, users, userSettings, companySettings
 } from '../../shared/schema';
 
 export interface ColumnMetadata {
@@ -134,13 +132,7 @@ class CodebaseAnalyzer {
       ['changeHistory', changeHistory],
       ['securityEvents', securityEvents],
       ['dataAccessLogs', dataAccessLogs],
-      ['dashboardWidgets', dashboardWidgets],
-      ['userDashboards', userDashboards],
-      ['dashboardWidgetAssignments', dashboardWidgetAssignments],
-      ['externalSystems', externalSystems],
       ['clientExternalMappings', clientExternalMappings],
-      ['externalWidgetTemplates', externalWidgetTemplates],
-      ['widgetExecutionCache', widgetExecutionCache],
       ['pagePermissions', pagePermissions],
       ['savedSearches', savedSearches],
       ['searchHistory', searchHistory],

@@ -130,7 +130,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
           <div className="text-gray-500 mb-4">
             <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p className="font-medium">No columns configured</p>
-            <p className="text-sm">Configure table columns in the Integration Engine</p>
+                            <p className="text-sm">Configure table columns in the widget settings</p>
             <p className="text-xs text-blue-600 mt-2">
               💡 Tip: Use the "Quick Setup" buttons when creating table widgets
             </p>

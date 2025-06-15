@@ -146,7 +146,17 @@ class ComprehensiveTestSuite {
     const endpoints = [
       // Health and version endpoints
       { method: 'GET', path: '/api/health', name: 'Health Check', requiresAuth: false },
-      { method: 'GET', path: '/api/version', name: 'Version Info', requiresAuth: false },
+      { method: 'GET', path: '/api/auth/me', name: 'Auth Me', requiresAuth: true },
+      { method: 'GET', path: '/api/clients', name: 'Clients List', requiresAuth: true },
+      { method: 'GET', path: '/api/contracts', name: 'Contracts List', requiresAuth: true },
+      { method: 'GET', path: '/api/services', name: 'Services List', requiresAuth: true },
+      { method: 'GET', path: '/api/assets', name: 'Assets List', requiresAuth: true },
+      { method: 'GET', path: '/api/team', name: 'Team List', requiresAuth: true },
+      { method: 'GET', path: '/api/financial/summary', name: 'Financial Summary', requiresAuth: true },
+      { method: 'GET', path: '/api/documents', name: 'Documents List', requiresAuth: true },
+      { method: 'GET', path: '/api/reports', name: 'Reports List', requiresAuth: true },
+      { method: 'GET', path: '/api/dashboard/cards', name: 'Dashboard Cards', requiresAuth: true },
+      { method: 'GET', path: '/api/plugins', name: 'Plugins List', requiresAuth: true },
 
       // User and authentication endpoints
       { method: 'GET', path: '/api/user', name: 'Current User', requiresAuth: true },
@@ -158,14 +168,9 @@ class ComprehensiveTestSuite {
       { method: 'GET', path: '/api/company/settings', name: 'Company Settings', requiresAuth: true },
 
       // Client management endpoints
-      { method: 'GET', path: '/api/clients', name: 'Clients List', requiresAuth: true },
       { method: 'GET', path: '/api/clients/archived', name: 'Archived Clients', requiresAuth: true },
 
-      // Contract management endpoints
-      { method: 'GET', path: '/api/contracts', name: 'Contracts List', requiresAuth: true },
-
       // Service management endpoints
-      { method: 'GET', path: '/api/services', name: 'Services List', requiresAuth: true },
       { method: 'GET', path: '/api/services/categories', name: 'Service Categories', requiresAuth: true },
 
       // Hardware and license endpoints
@@ -194,9 +199,6 @@ class ComprehensiveTestSuite {
 
       // Audit and security endpoints
       { method: 'GET', path: '/api/audit-logs', name: 'Audit Logs', requiresAuth: true },
-
-      // Integration engine endpoints
-      { method: 'GET', path: '/api/integration-engine/health', name: 'Integration Engine Health', requiresAuth: true },
 
       // Entity relations endpoints
       { method: 'GET', path: '/api/entity-relations/types', name: 'Entity Relation Types', requiresAuth: true },
@@ -883,21 +885,6 @@ class ComprehensiveTestSuite {
     this.log('🔌 Testing external integrations...');
 
     const integrationTests = [
-      {
-        name: 'Integration Engine Health',
-        test: async () => {
-          const response = await this.client.get('/api/integration-engine/health');
-          return {
-            success: response.status === 200,
-            details: { 
-              status: response.status,
-              healthStatus: response.data?.status,
-              dataSourcesCount: response.data?.dataSourcesCount,
-              widgetsCount: response.data?.widgetsCount
-            }
-          };
-        }
-      },
       {
         name: 'External Systems Configuration',
         test: async () => {

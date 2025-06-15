@@ -17,7 +17,7 @@ import {
   certificatesOfCompliance,
   dataSources,
   integratedData,
-  externalSystems,
+  // externalSystems removed - deprecated
   clientExternalMappings
 } from '@/lib/schema';
 import { sql, count, sum, avg, max, min, and, eq, like, gte, lte, ne, isNull, isNotNull } from 'drizzle-orm';
@@ -47,7 +47,7 @@ const TABLE_MAP = {
   // Integration and external system tables
   data_sources: dataSources,
   integrated_data: integratedData,
-  external_systems: externalSystems,
+      // external_systems removed - deprecated
   client_external_mappings: clientExternalMappings,
 };
 
@@ -428,19 +428,8 @@ async function getEnhancedMetadata(table: string, tableSchema: any, whereClause:
         break;
 
       case 'external_systems':
-        // External system health
-        const systemStatus = await db
-          .select({
-            status: externalSystems.status,
-            count: count()
-          })
-          .from(externalSystems)
-          .groupBy(externalSystems.status);
-        
-        metadata.systemStatusBreakdown = systemStatus.reduce((acc, { status, count }) => {
-          acc[status] = count;
-          return acc;
-        }, {} as Record<string, number>);
+        // External systems removed - deprecated
+        return { value: 0, metadata: { systemStatusBreakdown: {} } };
         break;
 
       case 'integrated_data':

@@ -38,7 +38,7 @@ export interface EnhancedDashboardCard {
   id: string;
   title: string;
   type: 'metric' | 'chart' | 'comparison' | 'pool-comparison';
-  category: 'dashboard' | 'kpi' | 'comparison' | 'integration-engine';
+  category: 'dashboard' | 'kpi' | 'comparison';
   dataSource: string;
   size: 'small' | 'medium' | 'large' | 'xlarge';
   visible: boolean;
@@ -70,8 +70,7 @@ export interface EnhancedDashboardCard {
     dataSource?: string;
     // Name / label helpful for external widgets
     name?: string;
-    // External system integration
-    externalSystemId?: number;
+    // External system integration - deprecated
     customApiEndpoint?: string;
     refreshInterval?: number; // In seconds
     // Advanced options
@@ -80,21 +79,7 @@ export interface EnhancedDashboardCard {
     enableDrillDown?: boolean;
     customColors?: string[];
     colors?: string[]; // alias for custom colors array
-    // Integration Engine specific properties
-    integrationEngineId?: string;
-    integrationEngineData?: {
-      originalWidget: any;
-      apiEndpoint?: string;
-      dataSource?: string;
-      component?: string;
-      metadata?: any;
-      name?: string;
-      description?: string;
-      type?: string;
-      visualConfig?: any;
-      queryConfig?: any;
-      isActive?: boolean;
-    };
+
   };
   isBuiltIn: boolean;
   isRemovable: boolean;
@@ -171,7 +156,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
   const { toast } = useToast();
   const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
   const [showAddCard, setShowAddCard] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
+
   const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
   const [newCard, setNewCard] = useState<Partial<EnhancedDashboardCard>>({
     title: '',
@@ -196,36 +181,10 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     isRemovable: true
   });
 
-  // Fetch external systems
-  const { data: externalSystems = [] } = useQuery({
-    queryKey: ['external-systems'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/external-systems');
-      return response.json();
-    }
-  });
+  // External systems functionality has been disabled
+  // External systems removed - deprecated
 
-  // Fetch Integration Engine widget templates from database
-  const { data: integrationEngineWidgets = [] } = useQuery({
-    queryKey: ['integration-engine-widget-templates'],
-    queryFn: async () => {
-      try {
-        console.log('🔌 Fetching Integration Engine widget templates from database...');
-        
-        // Get widgets from our local database (externalWidgetTemplates table)
-        const response = await fetch('/api/integration-engine/widget-templates');
-        const data = await response.json();
-        
-        console.log('🔌 Integration Engine widget templates fetched:', data);
-        
-        // Return the widgets array from the response
-        return data.widgets || [];
-      } catch (error) {
-        console.error('Failed to fetch Integration Engine widget templates:', error);
-        return [];
-      }
-    }
-  });
+  // Integration Engine functionality has been removed - deprecated
 
   // Available fields for each data source (dynamic based on selection)
   const getFieldsForDataSource = (dataSource: string) => {
@@ -367,72 +326,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     });
   };
 
-  const handleImportWidget = (widget: any) => {
-    // Convert Integration Engine widget to Dashboard Customizer card
-    // Use ALL the existing configuration from Integration Engine widget
-    const visualConfig = widget.visualConfig || {};
-    const queryConfig = widget.queryConfig || {};
-    
-    const importedCard: EnhancedDashboardCard = {
-      id: `imported-${widget.id}-${Date.now()}`,
-      title: widget.name,
-      // Use the EXACT type and configuration from Integration Engine
-      type: widget.type, // chart, table, metric, etc.
-      category: 'integration-engine',
-      dataSource: 'integration-engine',
-      size: visualConfig.height > 400 ? 'large' : visualConfig.height > 250 ? 'medium' : 'small',
-      visible: true,
-      position: cards.length,
-      config: {
-        // Use Integration Engine configuration directly
-        icon: widget.type === 'chart' ? 'BarChart3' : widget.type === 'table' ? 'Table' : widget.type === 'metric' ? 'TrendingUp' : 'ExternalLink',
-        
-        // Chart configuration from Integration Engine
-        chartType: visualConfig.chartType || 'bar', // bar, line, pie, doughnut
-        colors: visualConfig.colors || ['#3b82f6', '#1e40af', '#60a5fa', '#93c5fd'],
-        showLegend: visualConfig.showLegend !== undefined ? visualConfig.showLegend : true,
-        showGrid: visualConfig.showGrid !== undefined ? visualConfig.showGrid : true,
-        height: visualConfig.height || 300,
-        
-        // Data configuration from Integration Engine  
-        systemId: widget.systemId,
-        endpoint: queryConfig.endpoint,
-        method: queryConfig.method || 'GET',
-        params: queryConfig.params || {},
-        refreshInterval: queryConfig.refreshInterval || 60,
-        
-        // Dashboard display settings
-        format: 'number',
-        aggregation: 'count',
-        color: 'blue', // For metric cards
-        showDataLabels: false,
-        enableDrillDown: true,
-        
-        // Store original Integration Engine widget metadata - IMPORTANT for rendering
-        integrationEngineId: widget.id,
-        integrationEngineSystemId: widget.systemId,
-        integrationEngineData: {
-          originalWidget: widget,
-          name: widget.name,
-          description: widget.description,
-          type: widget.type,
-          visualConfig: visualConfig,
-          queryConfig: queryConfig,
-          isActive: widget.isActive
-        }
-      },
-      isBuiltIn: false,
-      isRemovable: true
-    };
-
-    onCardsChange([...cards, importedCard]);
-    setShowImportDialog(false);
-    
-    toast({
-      title: "✅ Pre-configured Widget Imported",
-      description: `"${widget.name}" imported with ${widget.type} type, ${visualConfig.chartType || 'default'} chart, and ${visualConfig.colors?.length || 4} colors - ready to use!`
-    });
-  };
+      // Integration Engine import functionality has been removed - deprecated
 
   return (
     <div className="space-y-6">
@@ -448,10 +342,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
           </Button>
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Import from Integration Engine
-          </Button>
+
           <Button onClick={() => setShowAddCard(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Card
@@ -511,15 +402,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                             <span>{DATABASE_SOURCES.find(s => s.value === card.config.compareWith)?.label || card.config.compareWith}</span>
                           </>
                         )}
-                        {card.config.externalSystemId && (
-                          <>
-                            <span>•</span>
-                            <Badge variant="secondary" className="text-xs">
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              External
-                            </Badge>
-                          </>
-                        )}
+                                {/* External system references removed - deprecated */}
                       </div>
                     </div>
                   </div>
@@ -585,7 +468,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             onCardChange={setNewCard}
             onSave={handleAddCard}
             onCancel={() => setShowAddCard(false)}
-            externalSystems={externalSystems}
             getFieldsForDataSource={getFieldsForDataSource}
           />
         </DialogContent>
@@ -653,7 +535,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                 setEditingCard(null);
                 setPendingUpdates(null);
               }}
-              externalSystems={externalSystems}
               getFieldsForDataSource={getFieldsForDataSource}
               isEditing
             />
@@ -661,116 +542,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
         </DialogContent>
       </Dialog>
 
-      {/* Import from Integration Engine Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Import Widgets from Integration Engine</DialogTitle>
-            <DialogDescription>
-              Select widgets from your Integration Engine to add to the main dashboard
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {integrationEngineWidgets.length === 0 ? (
-              <div className="text-center py-8">
-                <ExternalLink className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No widgets found</h3>
-                <p className="text-gray-600 mb-4">
-                  You haven't created any widgets in the Integration Engine yet.
-                </p>
-                <Button variant="outline" onClick={() => setShowImportDialog(false)}>
-                  Go to Integration Engine
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {integrationEngineWidgets.map((widget: any) => (
-                  <Card key={widget.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium">{widget.name}</CardTitle>
-                        <Badge variant="secondary">{widget.type}</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-2 text-sm text-gray-600 mb-3">
-                        <p className="text-xs">{widget.description}</p>
-                        
-                        {/* Show pre-configured settings */}
-                        <div className="bg-green-50 rounded-lg p-3 space-y-2">
-                          <h4 className="text-sm font-medium text-green-900 flex items-center gap-1">
-                            <span className="text-green-600">✅</span> Pre-configured Settings:
-                          </h4>
-                          <div className="grid grid-cols-1 gap-1 text-xs">
-                            {widget.visualConfig?.chartType && (
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span>Chart: {widget.visualConfig.chartType}</span>
-                              </div>
-                            )}
-                            {widget.visualConfig?.colors && (
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span>Colors: {widget.visualConfig.colors.length} preset themes</span>
-                              </div>
-                            )}
-                            {widget.queryConfig?.endpoint && (
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                                <span>API: {widget.queryConfig.endpoint}</span>
-                              </div>
-                            )}
-                            {widget.queryConfig?.refreshInterval && (
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                                <span>Refresh: {widget.queryConfig.refreshInterval}s</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                              <span>Type: {widget.type}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-green-700 font-medium">
-                            🎯 Import ready - no additional setup required!
-                          </p>
-                        </div>
-                        
-                        {widget.dataSource && (
-                          <div className="flex items-center gap-2">
-                            <Database className="h-4 w-4" />
-                            <span>Data Source: {widget.dataSource}</span>
-                          </div>
-                        )}
-                        {widget.metadata && (
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline">
-                              {widget.metadata.category}
-                          </Badge>
-                            {widget.metadata.featured && (
-                              <Badge variant="default">
-                                Featured
-                              </Badge>
-                            )}
-                        </div>
-                        )}
-                      </div>
-                      <Button 
-                        className="w-full" 
-                        onClick={() => handleImportWidget(widget)}
-                        disabled={cards.some(card => card.config?.integrationEngineId === widget.id)}
-                      >
-                        {cards.some(card => card.config?.integrationEngineId === widget.id) ? "✅ Already Imported" : "🚀 Import Pre-configured Widget"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }
@@ -781,7 +553,6 @@ interface CardCreatorFormProps {
   onCardChange: (card: Partial<EnhancedDashboardCard>) => void;
   onSave: () => void;
   onCancel: () => void;
-  externalSystems: any[];
   getFieldsForDataSource: (dataSource: string) => string[];
   isEditing?: boolean;
 }
@@ -791,7 +562,6 @@ function CardCreatorForm({
   onCardChange, 
   onSave, 
   onCancel, 
-  externalSystems, 
   getFieldsForDataSource,
   isEditing = false 
 }: CardCreatorFormProps) {

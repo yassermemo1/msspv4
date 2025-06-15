@@ -37,8 +37,8 @@ import FieldVisibilityManagerPage from "@/pages/field-visibility-manager";
 
 import ServiceScopesPage from "@/pages/service-scopes-page";
 import ProposalsPage from "@/pages/proposals-page";
-import IntegrationEnginePage from "@/pages/integration-engine-page";
-import EnhancedIntegrationEngine from "@/pages/enhanced-integration-engine";
+
+
 import TestDashboardPage from "@/pages/test-dashboard-page";
 import RbacManagementPage from "@/pages/rbac-management-page";
 import UserManagementPage from "@/pages/admin/user-management-page";
@@ -198,20 +198,8 @@ function App() {
                   )} />
 
 
-                  <Route path="/integration-engine" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/integration-engine">
-                        <IntegrationEnginePage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/enhanced-integration-engine" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/enhanced-integration-engine">
-                        <EnhancedIntegrationEngine />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+
+
 
                   <Route path="/comprehensive-bulk-import" component={() => (
                     <AuthGuard>

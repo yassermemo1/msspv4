@@ -714,6 +714,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get hardware asset by ID
+  app.get("/api/hardware-assets/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const asset = await storage.getHardwareAsset(id);
+      
+      if (!asset) {
+        return res.status(404).json({ message: "Hardware asset not found" });
+      }
+      
+      res.json(asset);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create hardware asset
+  app.post("/api/hardware-assets", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const result = insertHardwareAssetSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid hardware asset data", 
+          errors: result.error.issues 
+        });
+      }
+
+      const newAsset = await storage.createHardwareAsset(result.data);
+      res.status(201).json(newAsset);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update hardware asset
+  app.put("/api/hardware-assets/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = insertHardwareAssetSchema.partial().safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid hardware asset data", 
+          errors: result.error.issues 
+        });
+      }
+
+      const updatedAsset = await storage.updateHardwareAsset(id, result.data);
+      
+      if (!updatedAsset) {
+        return res.status(404).json({ message: "Hardware asset not found" });
+      }
+
+      res.json(updatedAsset);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete hardware asset
+  app.delete("/api/hardware-assets/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteHardwareAsset(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Hardware asset not found" });
+      }
+
+      res.json({ message: "Hardware asset deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
 
 
 // Get client by ID
@@ -3001,10 +3076,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...filters
       } = req.query;
 
-      // Build dynamic filter query
+      // Build dynamic filter query with proper parameter indexing
       const filterConditions: string[] = [];
       const queryParams: any[] = [];
-      let paramIndex = 1;
 
       // Process each filter
       for (const [key, value] of Object.entries(filters)) {
@@ -3013,58 +3087,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Handle range filters (key_min, key_max)
         if (key.endsWith('_min')) {
           const variableName = key.replace('_min', '');
+          const paramIndex = queryParams.length + 1;
           filterConditions.push(`
             EXISTS (
               SELECT 1 FROM scope_variable_values svv 
               WHERE svv.service_scope_id = service_scopes.id 
-              AND svv.variable_name = $${paramIndex++}
-              AND (svv.value_integer >= $${paramIndex} OR svv.value_decimal >= $${paramIndex})
+              AND svv.variable_name = $${paramIndex}
+              AND (svv.value_integer >= $${paramIndex + 1} OR svv.value_decimal >= $${paramIndex + 2})
             )
           `);
           queryParams.push(variableName, Number(value), Number(value));
-          paramIndex++;
         } else if (key.endsWith('_max')) {
           const variableName = key.replace('_max', '');
+          const paramIndex = queryParams.length + 1;
           filterConditions.push(`
             EXISTS (
               SELECT 1 FROM scope_variable_values svv 
               WHERE svv.service_scope_id = service_scopes.id 
-              AND svv.variable_name = $${paramIndex++}
-              AND (svv.value_integer <= $${paramIndex} OR svv.value_decimal <= $${paramIndex})
+              AND svv.variable_name = $${paramIndex}
+              AND (svv.value_integer <= $${paramIndex + 1} OR svv.value_decimal <= $${paramIndex + 2})
             )
           `);
           queryParams.push(variableName, Number(value), Number(value));
-          paramIndex++;
         } else {
           // Exact match or text search
           if (typeof value === 'string' && value.includes('*')) {
             // Wildcard search
             const searchPattern = value.replace(/\*/g, '%');
+            const paramIndex = queryParams.length + 1;
             filterConditions.push(`
               EXISTS (
                 SELECT 1 FROM scope_variable_values svv 
                 WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex++}
-                AND svv.value_text ILIKE $${paramIndex++}
+                AND svv.variable_name = $${paramIndex}
+                AND svv.value_text ILIKE $${paramIndex + 1}
               )
             `);
             queryParams.push(key, searchPattern);
           } else {
             // Exact match
+            const paramIndex = queryParams.length + 1;
             filterConditions.push(`
               EXISTS (
                 SELECT 1 FROM scope_variable_values svv 
                 WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex++}
+                AND svv.variable_name = $${paramIndex}
                 AND (
-                  svv.value_text = $${paramIndex} OR
-                  svv.value_integer = $${paramIndex} OR
-                  svv.value_decimal = $${paramIndex}
+                  svv.value_text = $${paramIndex + 1} OR
+                  svv.value_integer = $${paramIndex + 2} OR
+                  svv.value_decimal = $${paramIndex + 3}
                 )
               )
             `);
             queryParams.push(key, String(value), Number(value), Number(value));
-            paramIndex += 3;
           }
         }
       }
@@ -3075,13 +3150,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Build the main query
       let query = `
         SELECT 
-          ss.id,
-          ss.contract_id as "contractId",
-          ss.service_id as "serviceId",
-          ss.scope_definition as "scopeDefinition",
-          ss.created_at as "createdAt",
-          ss.updated_at as "updatedAt"
-        FROM service_scopes ss
+          service_scopes.id,
+          service_scopes.contract_id as "contractId",
+          service_scopes.service_id as "serviceId",
+          service_scopes.scope_definition as "scopeDefinition",
+          service_scopes.created_at as "createdAt",
+          service_scopes.updated_at as "updatedAt"
+        FROM service_scopes
       `;
 
       // Apply filters
@@ -3094,8 +3169,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy as string : 'created_at';
       const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
       
-      query += ` ORDER BY ${sortColumn} ${order} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-      queryParams.push(Number(limit), offset);
+      // Add limit and offset parameters
+      const limitParamIndex = queryParams.length + 1;
+      const offsetParamIndex = queryParams.length + 2;
+      query += ` ORDER BY ${sortColumn} ${order} LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
+      queryParams.push(Number(limit), Number(offset));
+
+      console.log('🔍 Dynamic query:', query);
+      console.log('🔍 Query params:', queryParams);
 
       const results = await db.execute(sql.raw(query, queryParams));
 
@@ -3136,13 +3217,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
         variables: variablesByScope[scope.id] || {}
       }));
 
-      // Get total count for pagination
-      let countQuery = `SELECT count(*) FROM service_scopes ss`;
-      let countParams = queryParams.slice(0, -2); // Remove limit and offset params
+      // Get total count for pagination - build separate count query to avoid parameter conflicts
+      let countQuery = `SELECT count(*) FROM service_scopes`;
+      let countParams: any[] = [];
 
       if (filterConditions.length > 0) {
-        countQuery += ` WHERE ${filterConditions.join(' AND ')}`;
+        // Rebuild filter conditions for count query with fresh parameter indexes
+        const countFilterConditions: string[] = [];
+        
+        for (const [key, value] of Object.entries(filters)) {
+          if (!value || value === '') continue;
+
+          if (key.endsWith('_min')) {
+            const variableName = key.replace('_min', '');
+            const paramIndex = countParams.length + 1;
+            countFilterConditions.push(`
+              EXISTS (
+                SELECT 1 FROM scope_variable_values svv 
+                WHERE svv.service_scope_id = service_scopes.id 
+                AND svv.variable_name = $${paramIndex}
+                AND (svv.value_integer >= $${paramIndex + 1} OR svv.value_decimal >= $${paramIndex + 2})
+              )
+            `);
+            countParams.push(variableName, Number(value), Number(value));
+          } else if (key.endsWith('_max')) {
+            const variableName = key.replace('_max', '');
+            const paramIndex = countParams.length + 1;
+            countFilterConditions.push(`
+              EXISTS (
+                SELECT 1 FROM scope_variable_values svv 
+                WHERE svv.service_scope_id = service_scopes.id 
+                AND svv.variable_name = $${paramIndex}
+                AND (svv.value_integer <= $${paramIndex + 1} OR svv.value_decimal <= $${paramIndex + 2})
+              )
+            `);
+            countParams.push(variableName, Number(value), Number(value));
+          } else {
+            if (typeof value === 'string' && value.includes('*')) {
+              const searchPattern = value.replace(/\*/g, '%');
+              const paramIndex = countParams.length + 1;
+              countFilterConditions.push(`
+                EXISTS (
+                  SELECT 1 FROM scope_variable_values svv 
+                  WHERE svv.service_scope_id = service_scopes.id 
+                  AND svv.variable_name = $${paramIndex}
+                  AND svv.value_text ILIKE $${paramIndex + 1}
+                )
+              `);
+              countParams.push(key, searchPattern);
+            } else {
+              const paramIndex = countParams.length + 1;
+              countFilterConditions.push(`
+                EXISTS (
+                  SELECT 1 FROM scope_variable_values svv 
+                  WHERE svv.service_scope_id = service_scopes.id 
+                  AND svv.variable_name = $${paramIndex}
+                  AND (
+                    svv.value_text = $${paramIndex + 1} OR
+                    svv.value_integer = $${paramIndex + 2} OR
+                    svv.value_decimal = $${paramIndex + 3}
+                  )
+                )
+              `);
+              countParams.push(key, String(value), Number(value), Number(value));
+            }
+          }
+        }
+
+        countQuery += ` WHERE ${countFilterConditions.join(' AND ')}`;
       }
+
+      console.log('🔢 Count query:', countQuery);
+      console.log('🔢 Count params:', countParams);
 
       const [{ count }] = (await db.execute(sql.raw(countQuery, countParams))).rows;
       const totalCount = Number(count);
@@ -3159,6 +3305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
     } catch (error) {
+      console.error('❌ Dynamic service scopes error:', error);
       next(error);
     }
   });
@@ -3550,6 +3697,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(serviceScopes.id, id),
           eq(serviceScopes.contractId, contractId)
         ))
+        .limit(1);
+
+      if (!existingScope) {
+        return res.status(404).json({ message: "Service scope not found" });
+      }
+
+      const [deleted] = await db
+        .delete(serviceScopes)
+        .where(eq(serviceScopes.id, id))
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ message: "Service scope not found" });
+      }
+
+      // Add audit logging for service scope deletion
+      try {
+        const { AuditLogger } = await import('./lib/audit');
+        const auditLogger = new AuditLogger(req, req.user?.id);
+        await auditLogger.logDelete(
+          'service_scope',
+          id,
+          `Service Scope #${id}`,
+          existingScope
+        );
+        console.log('✅ Audit logging completed for service scope deletion');
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for service scope deletion:', auditError.message);
+      }
+
+      res.json({ message: "Service scope deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete service scope (direct endpoint without contract ID)
+  app.delete("/api/service-scopes/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Get scope for audit logging before deletion
+      const [existingScope] = await db
+        .select()
+        .from(serviceScopes)
+        .where(eq(serviceScopes.id, id))
         .limit(1);
 
       if (!existingScope) {
@@ -4079,11 +4272,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all services
   app.get("/api/services", requireAuth, async (req, res, next) => {
     try {
-      const servicesList = await db
-        .select()
-        .from(services)
-        .orderBy(services.name);
+      const servicesList = await storage.getAllServices();
       res.json(servicesList);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get service by ID
+  app.get("/api/services/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const service = await storage.getService(id);
+      
+      if (!service) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create service
+  app.post("/api/services", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const result = insertServiceSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid service data", 
+          errors: result.error.issues 
+        });
+      }
+      
+      const newService = await storage.createService(result.data);
+      res.status(201).json(newService);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update service
+  app.put("/api/services/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const serviceData = req.body;
+      const updatedService = await storage.updateService(id, serviceData);
+      
+      if (!updatedService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      res.json(updatedService);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete service
+  app.delete("/api/services/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteService(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      res.json({ message: "Service deleted successfully" });
     } catch (error) {
       next(error);
     }
@@ -4483,6 +4741,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AUDIT MANAGEMENT ENDPOINTS
   // ========================================
   
+  // New audit endpoints matching frontend expectations
+  app.get("/api/audit/logs", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId, dateRange = '7d' } = req.query;
+      
+      // Mock audit logs data filtered by entity if provided
+      const mockAuditLogs = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          action: 'VIEW',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          resource: `${entityType}:${entityId}`,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          details: { success: true }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          action: 'UPDATE',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          resource: `${entityType}:${entityId}`,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          details: { fields: ['name', 'email'] }
+        }
+      ];
+      
+      res.json(mockAuditLogs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/audit/change-history", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId, dateRange = '7d' } = req.query;
+      
+      // Mock change history data
+      const mockChangeHistory = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          action: 'UPDATE',
+          field: 'name',
+          oldValue: 'Old Client Name',
+          newValue: 'New Client Name',
+          reason: 'Client name updated'
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          action: 'UPDATE',
+          field: 'status',
+          oldValue: 'INACTIVE',
+          newValue: 'ACTIVE',
+          reason: 'Client activated'
+        }
+      ];
+      
+      res.json(mockChangeHistory);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/audit/security-events", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId, dateRange = '7d' } = req.query;
+      
+      // Mock security events data
+      const mockSecurityEvents = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          eventType: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+          severity: 'MEDIUM',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          source: req.ip,
+          description: 'Unauthorized access attempt to client data',
+          details: { attempts: 1, blocked: true }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 7200000).toISOString(),
+          eventType: 'DATA_EXPORT',
+          severity: 'LOW',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          source: req.ip,
+          description: 'Client data exported',
+          details: { format: 'PDF', user: req.user?.username }
+        }
+      ];
+      
+      res.json(mockSecurityEvents);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/audit/data-access", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId, dateRange = '7d' } = req.query;
+      
+      // Mock data access logs
+      const mockDataAccessLogs = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          dataType: 'CLIENT_DATA',
+          operation: 'READ',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          ipAddress: req.ip,
+          details: { fields: ['name', 'email', 'contracts'], sensitive: false }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 1800000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          dataType: 'CLIENT_DATA',
+          operation: 'UPDATE',
+          entityType: entityType || 'client',
+          entityId: entityId ? parseInt(entityId as string) : 28,
+          ipAddress: req.ip,
+          details: { fields: ['status'], sensitive: false }
+        }
+      ];
+      
+      res.json(mockDataAccessLogs);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
   // Audit logs endpoint
   app.get("/api/audit-logs", requireAuth, async (req, res, next) => {
     try {
@@ -4758,6 +5171,335 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Profile updated successfully",
         user: responseUser
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // CLIENT-SPECIFIC ENDPOINTS
+  // ========================================
+
+  // Get client financial transactions
+  app.get("/api/clients/:id/financial-transactions", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      
+      // Mock financial transactions data
+      const mockTransactions = [
+        {
+          id: 1,
+          clientId,
+          type: 'payment',
+          amount: 15000.00,
+          currency: 'USD',
+          description: 'Monthly service payment',
+          date: new Date('2024-01-15').toISOString(),
+          status: 'completed',
+          invoiceId: 'INV-2024-001',
+          paymentMethod: 'bank_transfer'
+        },
+        {
+          id: 2,
+          clientId,
+          type: 'refund',
+          amount: -500.00,
+          currency: 'USD',
+          description: 'Service credit adjustment',
+          date: new Date('2024-01-20').toISOString(),
+          status: 'completed',
+          invoiceId: 'INV-2024-002',
+          paymentMethod: 'credit'
+        }
+      ];
+
+      res.json(mockTransactions);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get client team assignments
+  app.get("/api/clients/:id/team-assignments", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      
+      // Mock team assignments data
+      const mockAssignments = [
+        {
+          id: 1,
+          clientId,
+          userId: 2,
+          userName: 'John Smith',
+          userEmail: 'john.smith@mssp.local',
+          role: 'Security Analyst',
+          assignedDate: new Date('2024-01-01').toISOString(),
+          isActive: true,
+          responsibilities: ['Monitoring', 'Incident Response', 'Reporting']
+        },
+        {
+          id: 2,
+          clientId,
+          userId: 3,
+          userName: 'Sarah Johnson',
+          userEmail: 'sarah.johnson@mssp.local',
+          role: 'Senior Engineer',
+          assignedDate: new Date('2024-01-01').toISOString(),
+          isActive: true,
+          responsibilities: ['Architecture', 'Implementation', 'Support']
+        }
+      ];
+
+      res.json(mockAssignments);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get client licenses
+  app.get("/api/clients/:id/licenses", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      
+      // Get licenses from license pools for this client
+      const licenses = await db
+        .select({
+          id: licensePools.id,
+          name: licensePools.name,
+          vendor: licensePools.vendor,
+          productName: licensePools.productName,
+          licenseType: licensePools.licenseType,
+          totalLicenses: licensePools.totalLicenses,
+          usedLicenses: licensePools.usedLicenses,
+          availableLicenses: licensePools.availableLicenses,
+          expirationDate: licensePools.expirationDate,
+          renewalDate: licensePools.renewalDate,
+          cost: licensePools.cost,
+          currency: licensePools.currency,
+          status: licensePools.status
+        })
+        .from(licensePools)
+        .where(eq(licensePools.clientId, clientId));
+
+      res.json(licenses);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get client hardware
+  app.get("/api/clients/:id/hardware", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      
+      // Mock hardware data
+      const mockHardware = [
+        {
+          id: 1,
+          clientId,
+          name: 'Firewall-01',
+          type: 'Firewall',
+          vendor: 'Fortinet',
+          model: 'FortiGate 100F',
+          serialNumber: 'FG100F-12345',
+          ipAddress: '192.168.1.1',
+          location: 'Main Office',
+          status: 'active',
+          installDate: new Date('2023-06-01').toISOString(),
+          warrantyExpiry: new Date('2026-06-01').toISOString(),
+          lastMaintenance: new Date('2024-01-15').toISOString()
+        },
+        {
+          id: 2,
+          clientId,
+          name: 'Switch-Core-01',
+          type: 'Network Switch',
+          vendor: 'Cisco',
+          model: 'Catalyst 9300',
+          serialNumber: 'CAT9300-67890',
+          ipAddress: '192.168.1.10',
+          location: 'Server Room',
+          status: 'active',
+          installDate: new Date('2023-06-01').toISOString(),
+          warrantyExpiry: new Date('2026-06-01').toISOString(),
+          lastMaintenance: new Date('2024-01-10').toISOString()
+        }
+      ];
+
+      res.json(mockHardware);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // ENTITY RELATIONSHIPS ENDPOINTS
+  // ========================================
+
+  // Get entity relationships
+  app.get("/api/entities/:entityType/:entityId/relationships", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId } = req.params;
+      const { includeTypes, excludeTypes, limit } = req.query;
+      
+      const options: any = {};
+      if (includeTypes) options.includeTypes = (includeTypes as string).split(',');
+      if (excludeTypes) options.excludeTypes = (excludeTypes as string).split(',');
+      if (limit) options.limit = parseInt(limit as string);
+
+      const relationships = await entityRelationsService.getEntityRelationships(
+        entityType as any, 
+        parseInt(entityId), 
+        options
+      );
+
+      res.json(relationships);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get entity relationship stats
+  app.get("/api/entities/:entityType/:entityId/relationships/stats", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId } = req.params;
+      
+      const stats = await entityRelationsService.getRelationshipStats(
+        entityType as any, 
+        parseInt(entityId)
+      );
+
+      res.json(stats);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Search entities
+  app.get("/api/entities/search", requireAuth, async (req, res, next) => {
+    try {
+      const { query, types, limit, offset } = req.query;
+      
+      const searchParams: any = {
+        query: query as string,
+        limit: limit ? parseInt(limit as string) : 20,
+        offset: offset ? parseInt(offset as string) : 0
+      };
+      
+      if (types) {
+        searchParams.types = (types as string).split(',');
+      }
+
+      const results = await entityRelationsService.searchEntities(searchParams);
+      res.json(results);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get related entities
+  app.get("/api/entities/:entityType/:entityId/related/:relatedType", requireAuth, async (req, res, next) => {
+    try {
+      const { entityType, entityId, relatedType } = req.params;
+      const { relationshipType } = req.query;
+      
+      const relatedEntities = await entityRelationsService.getRelatedEntities(
+        entityType as any,
+        parseInt(entityId),
+        relatedType as any,
+        relationshipType as any
+      );
+
+      res.json(relatedEntities);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // PLUGINS ENDPOINTS
+  // ========================================
+
+  // Get plugin types
+  app.get("/api/plugins/types", requireAuth, async (req, res, next) => {
+    try {
+      const pluginTypes = [
+        {
+          id: 'security',
+          name: 'Security Tools',
+          description: 'Security monitoring and analysis plugins',
+          category: 'security',
+          icon: 'shield'
+        },
+        {
+          id: 'monitoring',
+          name: 'Monitoring Tools',
+          description: 'Infrastructure and application monitoring',
+          category: 'monitoring',
+          icon: 'activity'
+        },
+        {
+          id: 'backup',
+          name: 'Backup Solutions',
+          description: 'Data backup and recovery tools',
+          category: 'backup',
+          icon: 'database'
+        },
+        {
+          id: 'collaboration',
+          name: 'Collaboration Tools',
+          description: 'Team collaboration and communication',
+          category: 'collaboration',
+          icon: 'users'
+        },
+        {
+          id: 'analytics',
+          name: 'Analytics Tools',
+          description: 'Data analysis and reporting tools',
+          category: 'analytics',
+          icon: 'bar-chart'
+        }
+      ];
+
+      res.json(pluginTypes);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get plugin configurations
+  app.get("/api/plugins/configurations", requireAuth, async (req, res, next) => {
+    try {
+      const configurations = [
+        {
+          id: 1,
+          pluginId: 'fortigate',
+          name: 'FortiGate Firewall',
+          type: 'security',
+          status: 'active',
+          lastSync: new Date().toISOString(),
+          config: {
+            host: 'fortigate.example.com',
+            port: 443,
+            enabled: true
+          }
+        },
+        {
+          id: 2,
+          pluginId: 'splunk',
+          name: 'Splunk SIEM',
+          type: 'security',
+          status: 'active',
+          lastSync: new Date().toISOString(),
+          config: {
+            host: 'splunk.example.com',
+            port: 8089,
+            enabled: true
+          }
+        }
+      ];
+
+      res.json(configurations);
     } catch (error) {
       next(error);
     }

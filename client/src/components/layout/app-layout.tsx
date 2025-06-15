@@ -109,15 +109,31 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
         {/* User Profile Section */}
         <div className="border-t border-gray-200 p-4">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="h-4 w-4 text-gray-600" />
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-sm font-medium">
+                {user ? `${user.firstName[0]}${user.lastName[0]}` : "U"}
+              </span>
             </div>
             {isSidebarOpen && (
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">Admin User</p>
-                <p className="text-xs text-gray-600 truncate">System Administrator</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user ? `${user.firstName} ${user.lastName}` : "User"}
+                </p>
+                <p className="text-xs text-gray-600 truncate capitalize">
+                  {user?.role || "User"}
+                </p>
               </div>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              disabled={logoutMutation.isPending}
+              className="flex-shrink-0"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>

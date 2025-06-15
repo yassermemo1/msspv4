@@ -8,6 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { useEffect } from "react";
+import { z } from "zod";
+
+// Create a form schema that includes availableLicenses for display purposes
+const licensePoolFormSchema = insertLicensePoolSchema.extend({
+  availableLicenses: z.number().optional(),
+});
+
+type LicensePoolFormData = z.infer<typeof licensePoolFormSchema>;
 
 interface LicensePoolFormProps {
   licensePool?: LicensePool;
@@ -17,8 +25,8 @@ interface LicensePoolFormProps {
 }
 
 export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = false }: LicensePoolFormProps) {
-  const form = useForm<InsertLicensePool>({
-    resolver: zodResolver(insertLicensePoolSchema),
+  const form = useForm<LicensePoolFormData>({
+    resolver: zodResolver(licensePoolFormSchema),
     defaultValues: {
       name: licensePool?.name || "",
       vendor: licensePool?.vendor || "",
@@ -52,7 +60,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
     }
   }, [watchedOrderedLicenses, licensePool, form]);
 
-  const handleSubmit = (data: InsertLicensePool) => {
+  const handleSubmit = (data: LicensePoolFormData) => {
     // Remove availableLicenses from submission - it will be calculated on backend
     const { availableLicenses, ...submitData } = data;
     onSubmit(submitData as InsertLicensePool);
@@ -165,6 +173,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                         type="number"
                         placeholder="0"
                         {...field}
+                        value={field.value || 0}
                         readOnly
                         disabled
                         className="bg-gray-50 text-gray-600"
@@ -188,6 +197,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                         type="number"
                         placeholder="0"
                         {...field}
+                        value={field.value || 0}
                         readOnly
                         disabled
                         className="bg-gray-50 text-gray-600"
@@ -207,9 +217,9 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                 name="purchaseRequestNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Purchase Request (PR) Number</FormLabel>
+                    <FormLabel>Purchase Request Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., PR-2024-001" {...field} />
+                      <Input placeholder="e.g., PR-2024-001" {...field} value={field.value || ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -221,9 +231,9 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                 name="purchaseOrderNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Purchase Order (PO) Number</FormLabel>
+                    <FormLabel>Purchase Order Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., PO-2024-001" {...field} />
+                      <Input placeholder="e.g., PO-2024-001" {...field} value={field.value || ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -237,10 +247,10 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                 name="costPerLicense"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cost Per License ($)</FormLabel>
+                    <FormLabel>Cost Per License</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="0.00"
+                        placeholder="e.g., 15.00"
                         {...field}
                         value={field.value || ""}
                       />
@@ -257,12 +267,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                   <FormItem>
                     <FormLabel>Renewal Date</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="date" 
-                        {...field} 
-                        value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
-                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
-                      />
+                      <Input type="date" {...field} value={field.value || ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -279,8 +284,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                   <FormControl>
                     <Textarea
                       placeholder="Additional notes about this license pool..."
-                      className="resize-none"
-                      rows={3}
+                      className="min-h-[100px]"
                       {...field}
                       value={field.value || ""}
                     />
@@ -293,7 +297,7 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
         </DialogBody>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
           <Button type="submit" disabled={isLoading}>

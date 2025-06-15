@@ -15,8 +15,7 @@ export const users = pgTable("users", {
   authProvider: text("auth_provider").notNull().default("local"), // local, ldap
   ldapId: text("ldap_id").unique(), // LDAP unique identifier (DN or uid)
   isActive: boolean("is_active").notNull().default(true),
-  twoFactorSecret: text("two_factor_secret"), // Base32 encoded TOTP secret
-  twoFactorBackupCodes: text("two_factor_backup_codes"), // JSON stringified array of backup codes
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -30,7 +29,7 @@ export const userSettings = pgTable("user_settings", {
   contractReminders: boolean("contract_reminders").notNull().default(true),
   financialAlerts: boolean("financial_alerts").notNull().default(true),
   // Security settings
-  twoFactorAuth: boolean("two_factor_auth").notNull().default(false),
+
   sessionTimeout: boolean("session_timeout").notNull().default(true),
   // System preferences
   darkMode: boolean("dark_mode").notNull().default(false),
@@ -74,7 +73,7 @@ export const companySettings = pgTable("company_settings", {
   webhookRetryAttempts: integer("webhook_retry_attempts").notNull().default(3),
   advancedSearchEnabled: boolean("advanced_search_enabled").notNull().default(true),
   auditLoggingEnabled: boolean("audit_logging_enabled").notNull().default(true),
-  twoFactorRequired: boolean("two_factor_required").notNull().default(false),
+
   dataExportEnabled: boolean("data_export_enabled").notNull().default(true),
   
   // LDAP Configuration
@@ -868,86 +867,6 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Integration Engine Tables
-
-// Data sources for external API connections
-export const dataSources = pgTable("data_sources", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  type: text("type").notNull(), // 'database', 'api', 'file', 'stream', etc.
-  apiEndpoint: text("api_endpoint"), // API endpoint URL
-  authType: text("auth_type"), // 'api_key', 'bearer_token', 'basic_auth', 'oauth2', 'none'
-  authConfig: jsonb("auth_config"), // authentication configuration
-  connectionString: text("connection_string"), // encrypted connection string for databases
-  config: jsonb("config"), // additional configuration
-  syncFrequency: text("sync_frequency").default("manual"), // 'manual', 'hourly', 'daily', 'weekly'
-  status: text("status").notNull().default("active"), // 'active', 'inactive', 'error'
-  isActive: boolean("is_active").notNull().default(true),
-  lastConnected: timestamp("last_connected"),
-  lastSyncAt: timestamp("last_sync_at"), // when data was last synced
-  defaultPageSize: integer("default_page_size").default(100),
-  maxPageSize: integer("max_page_size").default(1000),
-  supportsPagination: boolean("supports_pagination").default(true),
-  paginationType: text("pagination_type").default("offset"), // 'offset', 'cursor'
-  paginationConfig: jsonb("pagination_config"), // pagination-specific config
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-});
-
-// Field mappings for data transformation
-export const dataSourceMappings = pgTable("data_source_mappings", {
-  id: serial("id").primaryKey(),
-  dataSourceId: integer("data_source_id").notNull().references(() => dataSources.id),
-  sourceField: text("source_field").notNull(), // JSON path to the source field
-  targetField: text("target_field").notNull(), // Target column name
-  fieldType: text("field_type").notNull(), // string, number, boolean, date, json
-  isRequired: boolean("is_required").notNull().default(false),
-  defaultValue: text("default_value"),
-  transformation: text("transformation"), // Optional transformation function
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// Stored data from external sources
-export const integratedData = pgTable("integrated_data", {
-  id: serial("id").primaryKey(),
-  dataSourceId: integer("data_source_id").notNull().references(() => dataSources.id),
-  rawData: jsonb("raw_data").notNull(), // Original JSON response
-  mappedData: jsonb("mapped_data").notNull(), // Transformed data based on mappings
-  syncedAt: timestamp("synced_at").notNull().defaultNow(),
-  recordIdentifier: text("record_identifier"), // Unique identifier from source system
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// Dashboard widgets configuration
-export const dashboardWidgets = pgTable("dashboard_widgets", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  widgetType: text("widget_type").notNull(), // 'chart', 'table', 'kpi', 'custom'
-  config: jsonb("config").notNull(), // Widget-specific configuration
-  dataSourceId: integer("data_source_id").references(() => dataSources.id),
-  refreshInterval: integer("refresh_interval"), // in seconds
-  isActive: boolean("is_active").notNull().default(true),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// User dashboards
-export const userDashboards = pgTable("user_dashboards", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  name: text("name").notNull(),
-  description: text("description"),
-  layout: jsonb("layout").notNull(), // Grid layout configuration
-  isDefault: boolean("is_default").notNull().default(false),
-  isPublic: boolean("is_public").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
 // User dashboard card settings - stores personalized dashboard configuration
 export const userDashboardSettings = pgTable("user_dashboard_settings", {
   id: serial("id").primaryKey(),
@@ -969,110 +888,6 @@ export const userDashboardSettings = pgTable("user_dashboard_settings", {
   // Ensure each user has unique card configurations
   userCardUnique: unique().on(table.userId, table.cardId),
 }));
-
-// Dashboard widget assignments
-export const dashboardWidgetAssignments = pgTable("dashboard_widget_assignments", {
-  id: serial("id").primaryKey(),
-  dashboardId: integer("dashboard_id").notNull().references(() => userDashboards.id),
-  widgetId: integer("widget_id").notNull().references(() => dashboardWidgets.id),
-  position: jsonb("position").notNull(), // x, y, width, height
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// Integration Engine Relations
-export const dataSourcesRelations = relations(dataSources, ({ one, many }) => ({
-  createdByUser: one(users, { fields: [dataSources.createdBy], references: [users.id] }),
-  mappings: many(dataSourceMappings),
-  integratedData: many(integratedData),
-  widgets: many(dashboardWidgets),
-}));
-
-export const dataSourceMappingsRelations = relations(dataSourceMappings, ({ one }) => ({
-  dataSource: one(dataSources, { fields: [dataSourceMappings.dataSourceId], references: [dataSources.id] }),
-}));
-
-export const integratedDataRelations = relations(integratedData, ({ one }) => ({
-  dataSource: one(dataSources, { fields: [integratedData.dataSourceId], references: [dataSources.id] }),
-}));
-
-export const dashboardWidgetsRelations = relations(dashboardWidgets, ({ one, many }) => ({
-  dataSource: one(dataSources, { fields: [dashboardWidgets.dataSourceId], references: [dataSources.id] }),
-  createdByUser: one(users, { fields: [dashboardWidgets.createdBy], references: [users.id] }),
-  assignments: many(dashboardWidgetAssignments),
-}));
-
-export const userDashboardsRelations = relations(userDashboards, ({ one, many }) => ({
-  user: one(users, { fields: [userDashboards.userId], references: [users.id] }),
-  widgetAssignments: many(dashboardWidgetAssignments),
-}));
-
-export const dashboardWidgetAssignmentsRelations = relations(dashboardWidgetAssignments, ({ one }) => ({
-  dashboard: one(userDashboards, { fields: [dashboardWidgetAssignments.dashboardId], references: [userDashboards.id] }),
-  widget: one(dashboardWidgets, { fields: [dashboardWidgetAssignments.widgetId], references: [dashboardWidgets.id] }),
-}));
-
-// Integration Engine Schemas
-export const insertDataSourceSchema = createInsertSchema(dataSources).omit({
-  id: true,
-  lastConnected: true,
-  lastSyncAt: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertDataSourceMappingSchema = createInsertSchema(dataSourceMappings).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertIntegratedDataSchema = createInsertSchema(integratedData).omit({
-  id: true,
-  syncedAt: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertDashboardWidgetSchema = createInsertSchema(dashboardWidgets).omit({
-  id: true,
-  isActive: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertUserDashboardSchema = createInsertSchema(userDashboards).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertDashboardWidgetAssignmentSchema = createInsertSchema(dashboardWidgetAssignments).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Integration Engine Types
-export type InsertDataSource = z.infer<typeof insertDataSourceSchema>;
-export type DataSource = typeof dataSources.$inferSelect;
-
-export type InsertDataSourceMapping = z.infer<typeof insertDataSourceMappingSchema>;
-export type DataSourceMapping = typeof dataSourceMappings.$inferSelect;
-
-export type InsertIntegratedData = z.infer<typeof insertIntegratedDataSchema>;
-export type IntegratedData = typeof integratedData.$inferSelect;
-
-export type InsertDashboardWidget = z.infer<typeof insertDashboardWidgetSchema>;
-export type DashboardWidget = typeof dashboardWidgets.$inferSelect;
-
-export type InsertUserDashboard = z.infer<typeof insertUserDashboardSchema>;
-export type UserDashboard = typeof userDashboards.$inferSelect;
-
-export type InsertDashboardWidgetAssignment = z.infer<typeof insertDashboardWidgetAssignmentSchema>;
-export type DashboardWidgetAssignment = typeof dashboardWidgetAssignments.$inferSelect;
-
-// Enhanced dashboard widgets with external system support
-// Uses existing userDashboards for dashboard containers
-
-// Using existing dashboard infrastructure (userDashboards, dashboardWidgets)
 
 // API Aggregator for Dynamic Client Data
 

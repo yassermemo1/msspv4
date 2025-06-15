@@ -3,7 +3,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plug, Plus, Trash2, Edit3, AlertCircle, Activity, PlayCircle, TestTube, Settings, Power, PowerOff, Edit, Save, X, CheckCircle, Eye, EyeOff } from "lucide-react";
@@ -293,10 +293,23 @@ export default function PluginsPage() {
     },
   });
 
+  // Fetch available plugin types for creating new instances
+  const { data: pluginTypes = [] } = useQuery({
+    queryKey: ["plugin-types"],
+    queryFn: async () => {
+      const res = await fetch("/api/plugins/types", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch plugin types");
+      const data = await res.json();
+      return data.pluginTypes || [];
+    },
+  });
+
   const [configuring, setConfiguring] = useState<{plugin: string, instance: string} | null>(null);
   const [testing, setTesting] = useState<{plugin: string, instance: string} | null>(null);
   const [testResults, setTestResults] = useState<Record<string, any>>({});
   const [editingInstance, setEditingInstance] = useState<PluginInstance | null>(null);
+  const [showAddInstanceDialog, setShowAddInstanceDialog] = useState(false);
+  const [selectedPluginType, setSelectedPluginType] = useState<string>('');
 
   const { toast } = useToast();
 
@@ -411,6 +424,71 @@ export default function PluginsPage() {
     }
   };
 
+  const handleCreateInstance = async (instanceData: any) => {
+    try {
+      const response = await fetch(`/api/plugins/instances/${selectedPluginType}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(instanceData)
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await loadPlugins();
+        setShowAddInstanceDialog(false);
+        setSelectedPluginType('');
+        toast({
+          title: "Instance Created",
+          description: result.message,
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Creation Failed",
+        description: error.message || "Failed to create instance",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteInstance = async (pluginName: string, instanceId: string, instanceName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the instance "${instanceName}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/plugins/instances/${pluginName}/${instanceId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await loadPlugins();
+        toast({
+          title: "Instance Deleted",
+          description: result.message,
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      toast({
+        title: "Deletion Failed",
+        description: error.message || "Failed to delete instance",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getInstanceStatusIcon = (instance: PluginInstance) => {
     const testKey = `${plugins.find(p => p.config.instances.includes(instance))?.systemName}-${instance.id}`;
     const testResult = testResults[testKey];
@@ -446,6 +524,9 @@ export default function PluginsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Configure {instance.name}</DialogTitle>
+            <DialogDescription>
+              Update the configuration settings for this plugin instance.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -630,18 +711,49 @@ export default function PluginsPage() {
               Manage external system connectors and test connections
             </p>
           </div>
-          <div className="flex gap-4 md:gap-6 text-sm">
-            <div className="text-center">
-              <div className="text-xl md:text-2xl font-bold text-blue-600">{plugins.length}</div>
-              <div className="text-gray-500 text-xs md:text-sm">Plugins</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl md:text-2xl font-bold text-green-600">{activeInstances}</div>
-              <div className="text-gray-500 text-xs md:text-sm">Active</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl md:text-2xl font-bold text-gray-600">{totalInstances}</div>
-              <div className="text-gray-500 text-xs md:text-sm">Total</div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* Add Instance Button */}
+            <Dialog open={showAddInstanceDialog} onOpenChange={setShowAddInstanceDialog}>
+              <DialogTrigger asChild>
+                <Button className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Instance
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Add New Plugin Instance</DialogTitle>
+                  <DialogDescription>
+                    Create a new instance of a plugin to connect to an external system.
+                  </DialogDescription>
+                </DialogHeader>
+                <AddInstanceForm 
+                  pluginTypes={pluginTypes}
+                  selectedPluginType={selectedPluginType}
+                  setSelectedPluginType={setSelectedPluginType}
+                  onSubmit={handleCreateInstance}
+                  onCancel={() => {
+                    setShowAddInstanceDialog(false);
+                    setSelectedPluginType('');
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+            
+            {/* Stats */}
+            <div className="flex gap-4 md:gap-6 text-sm">
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-blue-600">{plugins.length}</div>
+                <div className="text-gray-500 text-xs md:text-sm">Plugins</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-green-600">{activeInstances}</div>
+                <div className="text-gray-500 text-xs md:text-sm">Active</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-gray-600">{totalInstances}</div>
+                <div className="text-gray-500 text-xs md:text-sm">Total</div>
+              </div>
             </div>
           </div>
         </div>
@@ -725,6 +837,16 @@ export default function PluginsPage() {
                                 <Settings className="h-4 w-4" />
                                 <span className="ml-1 hidden sm:inline">Config</span>
                               </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteInstance(plugin.systemName, instance.id, instance.name)}
+                                className="flex-1 sm:flex-none text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span className="ml-1 hidden sm:inline">Delete</span>
+                              </Button>
                             </div>
                             
                             <Button
@@ -765,5 +887,214 @@ export default function PluginsPage() {
         />
       )}
     </AppLayout>
+  );
+}
+
+// Add Instance Form Component
+function AddInstanceForm({ 
+  pluginTypes, 
+  selectedPluginType, 
+  setSelectedPluginType, 
+  onSubmit, 
+  onCancel 
+}: {
+  pluginTypes: any[];
+  selectedPluginType: string;
+  setSelectedPluginType: (type: string) => void;
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    name: '',
+    baseUrl: '',
+    authType: 'none',
+    authConfig: {},
+    tags: '',
+    isActive: true
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedPluginType || !formData.name || !formData.baseUrl) {
+      return;
+    }
+
+    const submitData = {
+      ...formData,
+      tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+    };
+
+    onSubmit(submitData);
+  };
+
+  const selectedPlugin = pluginTypes.find(p => p.systemName === selectedPluginType);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="plugin-type">Plugin Type *</Label>
+        <select
+          id="plugin-type"
+          value={selectedPluginType}
+          onChange={(e) => setSelectedPluginType(e.target.value)}
+          className="w-full p-2 border rounded"
+          required
+        >
+          <option value="">Select a plugin type</option>
+          {pluginTypes.map((type) => (
+            <option key={type.systemName} value={type.systemName}>
+              {type.displayName} ({type.currentInstances} instances)
+            </option>
+          ))}
+        </select>
+        {selectedPlugin && (
+          <p className="text-sm text-gray-600 mt-1">
+            {selectedPlugin.description} • {selectedPlugin.defaultQueries} default queries available
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="instance-name">Instance Name *</Label>
+          <Input
+            id="instance-name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="My Production Instance"
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="base-url">Base URL *</Label>
+          <Input
+            id="base-url"
+            value={formData.baseUrl}
+            onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+            placeholder="https://api.example.com"
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="auth-type">Authentication Type</Label>
+        <select
+          id="auth-type"
+          value={formData.authType}
+          onChange={(e) => setFormData({ ...formData, authType: e.target.value })}
+          className="w-full p-2 border rounded"
+        >
+          <option value="none">None</option>
+          <option value="basic">Basic Auth</option>
+          <option value="bearer">Bearer Token</option>
+          <option value="api_key">API Key</option>
+        </select>
+      </div>
+
+      {formData.authType === 'basic' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={formData.authConfig.username || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                authConfig: { ...formData.authConfig, username: e.target.value }
+              })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.authConfig.password || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                authConfig: { ...formData.authConfig, password: e.target.value }
+              })}
+            />
+          </div>
+        </div>
+      )}
+
+      {formData.authType === 'bearer' && (
+        <div>
+          <Label htmlFor="token">Bearer Token</Label>
+          <Input
+            id="token"
+            type="password"
+            value={formData.authConfig.token || ''}
+            onChange={(e) => setFormData({
+              ...formData,
+              authConfig: { ...formData.authConfig, token: e.target.value }
+            })}
+          />
+        </div>
+      )}
+
+      {formData.authType === 'api_key' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="api-key">API Key</Label>
+            <Input
+              id="api-key"
+              type="password"
+              value={formData.authConfig.key || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                authConfig: { ...formData.authConfig, key: e.target.value }
+              })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="header-name">Header Name</Label>
+            <Input
+              id="header-name"
+              value={formData.authConfig.header || 'Authorization'}
+              onChange={(e) => setFormData({
+                ...formData,
+                authConfig: { ...formData.authConfig, header: e.target.value }
+              })}
+            />
+          </div>
+        </div>
+      )}
+
+      <div>
+        <Label htmlFor="tags">Tags (comma-separated)</Label>
+        <Input
+          id="tags"
+          value={formData.tags}
+          onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+          placeholder="production, firewall, security"
+        />
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          checked={formData.isActive}
+          onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+        />
+        <Label>Start as Active</Label>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          className="w-full sm:w-auto"
+          disabled={!selectedPluginType || !formData.name || !formData.baseUrl}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create Instance
+        </Button>
+      </div>
+    </form>
   );
 } 

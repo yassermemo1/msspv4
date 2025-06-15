@@ -40,7 +40,7 @@ export interface DashboardCard {
     dataSource?: string;
     name?: string;
     // External system integration
-    externalSystemId?: number;
+    // externalSystemId removed - deprecated
     customApiEndpoint?: string;
     refreshInterval?: number; // In seconds
     // Advanced options
@@ -49,21 +49,6 @@ export interface DashboardCard {
     enableDrillDown?: boolean;
     customColors?: string[];
     colors?: string[];
-    // Integration Engine specific properties
-    integrationEngineId?: string;
-    integrationEngineData?: {
-      originalWidget: any;
-      apiEndpoint?: string;
-      dataSource?: string;
-      component?: string;
-      metadata?: any;
-      name?: string;
-      description?: string;
-      type?: string;
-      visualConfig?: any;
-      queryConfig?: any;
-      isActive?: boolean;
-    };
   };
   isBuiltIn: boolean;
   isRemovable: boolean;

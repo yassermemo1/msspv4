@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Proposal, Contract, Client } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
@@ -64,6 +65,7 @@ const proposalFormSchema = z.object({
 type ProposalFormData = z.infer<typeof proposalFormSchema>;
 
 export default function ProposalsPage() {
+  const { user } = useAuth();
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{
     name: string;
@@ -77,18 +79,35 @@ export default function ProposalsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Fetch proposals - now properly fetching proposals instead of contracts
-  const { data: proposals = [] } = useQuery<Proposal[]>({
+  // Fetch proposals - only when user is authenticated
+  const { data: proposals = [], isLoading: proposalsLoading } = useQuery<Proposal[]>({
     queryKey: ["/api/proposals"],
+    enabled: !!user, // Only run when user is authenticated
   });
   
-  const { data: contracts = [] } = useQuery<Contract[]>({
+  const { data: contracts = [], isLoading: contractsLoading } = useQuery<Contract[]>({
     queryKey: ["/api/contracts"],
+    enabled: !!user, // Only run when user is authenticated
   });
 
-  const { data: clients = [] } = useQuery<Client[]>({
+  const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
+    enabled: !!user, // Only run when user is authenticated
   });
+
+  // Show loading state if user is not authenticated or data is loading
+  if (!user || proposalsLoading || contractsLoading || clientsLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+            <p className="mt-4 text-muted-foreground">Loading proposals...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const form = useForm<ProposalFormData>({
     resolver: zodResolver(proposalFormSchema),

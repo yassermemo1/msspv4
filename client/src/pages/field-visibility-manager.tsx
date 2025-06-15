@@ -273,8 +273,7 @@ const tableConfigurations: TableConfig[] = [
       { fieldName: 'authProvider', label: 'Auth Provider', isVisible: true },
       { fieldName: 'ldapId', label: 'LDAP ID', isVisible: true },
       { fieldName: 'isActive', label: 'Active', isVisible: true },
-      { fieldName: 'twoFactorSecret', label: 'Two Factor Secret', isVisible: false },
-      { fieldName: 'twoFactorBackupCodes', label: 'Two Factor Backup Codes', isVisible: false },
+
     ],
   },
   {
@@ -286,7 +285,7 @@ const tableConfigurations: TableConfig[] = [
       { fieldName: 'pushNotifications', label: 'Push Notifications', isVisible: true },
       { fieldName: 'contractReminders', label: 'Contract Reminders', isVisible: true },
       { fieldName: 'financialAlerts', label: 'Financial Alerts', isVisible: true },
-      { fieldName: 'twoFactorAuth', label: 'Two Factor Authentication', isVisible: true },
+
       { fieldName: 'sessionTimeout', label: 'Session Timeout', isVisible: true },
       { fieldName: 'darkMode', label: 'Dark Mode', isVisible: true },
       { fieldName: 'timezone', label: 'Timezone', isVisible: true },
@@ -390,32 +389,7 @@ const tableConfigurations: TableConfig[] = [
     ],
   },
 
-  // Dashboard & Widgets
-  {
-    tableName: 'dashboardWidgets',
-    displayName: 'Dashboard Widgets',
-    category: 'dashboard',
-    fields: [
-      { fieldName: 'name', label: 'Widget Name', isVisible: true, isRequired: true },
-      { fieldName: 'widgetType', label: 'Widget Type', isVisible: true, isRequired: true },
-      { fieldName: 'config', label: 'Configuration', isVisible: true },
-      { fieldName: 'dataSourceId', label: 'Data Source ID', isVisible: true },
-      { fieldName: 'refreshInterval', label: 'Refresh Interval', isVisible: true },
-      { fieldName: 'isActive', label: 'Active', isVisible: true },
-    ],
-  },
-  {
-    tableName: 'userDashboards',
-    displayName: 'User Dashboards',
-    category: 'dashboard',
-    fields: [
-      { fieldName: 'name', label: 'Dashboard Name', isVisible: true, isRequired: true },
-      { fieldName: 'description', label: 'Description', isVisible: true },
-      { fieldName: 'layout', label: 'Layout', isVisible: true },
-      { fieldName: 'isDefault', label: 'Default', isVisible: true },
-      { fieldName: 'isPublic', label: 'Public', isVisible: true },
-    ],
-  },
+  // Dashboard & Widgets - Removed (deprecated)
 ];
 
 export default function FieldVisibilityManager() {

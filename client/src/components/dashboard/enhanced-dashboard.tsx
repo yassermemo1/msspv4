@@ -65,7 +65,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDashboardSettings, DashboardCard } from "@/hooks/use-dashboard-settings";
 import { formatClientName } from "@/lib/utils";
 import { EnhancedDashboardCustomizer, EnhancedDashboardCard } from "./enhanced-dashboard-customizer";
-import { ExternalWidgetCard } from "./external-widget-card";
+// External widget card removed - deprecated
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#a4de6c', '#d084d0', '#8dd1e1', '#ffb347'];
 
@@ -248,15 +248,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
   const [showCustomizer, setShowCustomizer] = useState(false);
   const { toast } = useToast();
 
-  // Query for external widgets
-  const { data: externalWidgets = [], isLoading: externalWidgetsLoading } = useQuery({
-    queryKey: ['/api/global-widgets'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', '/api/global-widgets');
-      return res.json();
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
+  // External widgets removed - deprecated
 
   const timeRangeOptions = getTimeRangeOptions();
 
@@ -663,28 +655,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
           {visibleCards.length > 0 && (
             <div className={getGridColsClass(visibleCards.length)}>
               {visibleCards.map((card) => {
-                if (card.type === 'custom' && card.category === 'custom' && card.config?.integrationEngineId) {
-                  const widgetTemplate = Array.isArray(externalWidgets)
-                    ? externalWidgets.find(w => w.id === card.config.integrationEngineId)
-                    : undefined;
-                  if (!widgetTemplate) {
-                    return (
-                      <Card key={card.id} className="flex flex-col items-center justify-center p-4 border-dashed">
-                        <AlertTriangle className="w-8 h-8 text-yellow-500" />
-                        <p className="mt-2 text-sm font-semibold">Widget template not found</p>
-                        <p className="text-xs text-muted-foreground">ID: {card.config.integrationEngineId}</p>
-                      </Card>
-                    );
-                  }
-                  return (
-                    <ExternalWidgetCard
-                      key={card.id}
-                      template={widgetTemplate}
-                      onEdit={() => handleEditCard(card.id)}
-                      onDelete={() => handleRemoveCard(card.id)}
-                    />
-                  );
-                }
+                // External widget functionality removed - deprecated
                 if (card.type === 'chart') {
                   const chartData = getChartData(card.config.dataSource, card.config.chartType);
                   // ... existing code ...
@@ -843,62 +814,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
         )}
       </div>
 
-      {/* External Widgets Section */}
-      {externalWidgets.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">External System Widgets</h3>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="text-xs">
-                {externalWidgets.length} Widget{externalWidgets.length !== 1 ? 's' : ''} Active
-              </Badge>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setLocation('/plugins')}
-              >
-                <Settings className="h-4 w-4 mr-1" />
-                Manage Widgets
-              </Button>
-            </div>
-          </div>
-          
-          {/* External Widgets Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {externalWidgets
-              .filter((widget: any) => widget.isActive)
-              .map((widget: any) => (
-                <ExternalWidgetCard
-                  key={widget.id}
-                  template={widget}
-                  compact={true}
-                  className="bg-blue-50 border-blue-200 hover:bg-blue-100 transition-colors duration-200"
-                  onEdit={(template) => {
-                    toast({
-                      title: "Edit Widget",
-                      description: `Navigate to plugins to edit ${template.name}`,
-                    });
-                    setLocation('/plugins');
-                  }}
-                  onDelete={(templateId) => {
-                    toast({
-                      title: "Delete Widget",
-                      description: "Navigate to plugins to manage widgets",
-                    });
-                    setLocation('/plugins');
-                  }}
-                  onConfigure={(template) => {
-                    toast({
-                      title: "Configure Widget",
-                      description: `Navigate to plugins to configure ${template.name}`,
-                    });
-                    setLocation('/plugins');
-                  }}
-                />
-              ))}
-          </div>
-        </div>
-      )}
+      {/* External Widgets Section - Removed (deprecated) */}
 
       {/* Enhanced Dashboard Customizer Modal */}
       {showCustomizer && (
@@ -935,7 +851,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
                     const converted = {
                       id: card.id,
                       title: card.title,
-                      type: (card.type === 'comparison' || card.type === 'external' || card.type === 'pool-comparison' || card.type === 'integration-engine')
+                      type: (card.type === 'comparison' || card.type === 'external' || card.type === 'pool-comparison')
                         ? ('custom' as DashboardCard['type'])
                         : (card.type as DashboardCard['type']),
                       category: card.category === 'comparison' || card.category === 'external' ? 'custom' : card.category,
