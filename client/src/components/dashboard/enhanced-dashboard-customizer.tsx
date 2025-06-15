@@ -38,7 +38,7 @@ export interface EnhancedDashboardCard {
   id: string;
   title: string;
   type: 'metric' | 'chart' | 'comparison' | 'external' | 'pool-comparison';
-  category: 'dashboard' | 'kpi' | 'comparison' | 'external';
+  category: 'dashboard' | 'kpi' | 'comparison' | 'external' | 'integration-engine';
   dataSource: string;
   size: 'small' | 'medium' | 'large' | 'xlarge';
   visible: boolean;
@@ -47,7 +47,16 @@ export interface EnhancedDashboardCard {
     icon?: string;
     color?: string;
     format?: 'number' | 'currency' | 'percentage';
-    aggregation?: 'count' | 'sum' | 'average' | 'max' | 'min';
+    aggregation?:
+      | 'count'
+      | 'sum'
+      | 'average'
+      | 'max'
+      | 'min'
+      | {
+          function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+          field?: string;
+        };
     chartType?: 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter';
     filters?: Record<string, any>;
     trend?: boolean;
@@ -57,6 +66,10 @@ export interface EnhancedDashboardCard {
     comparisonField?: string; // Field to compare
     timeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
     groupBy?: string; // Field to group data by
+    // Optional data source override specific to widget
+    dataSource?: string;
+    // Name / label helpful for external widgets
+    name?: string;
     // External system integration
     externalSystemId?: number;
     externalDataSourceId?: number;
@@ -67,6 +80,7 @@ export interface EnhancedDashboardCard {
     showDataLabels?: boolean;
     enableDrillDown?: boolean;
     customColors?: string[];
+    colors?: string[]; // alias for custom colors array
     // Integration Engine specific properties
     integrationEngineId?: string;
     integrationEngineData?: {
@@ -75,6 +89,12 @@ export interface EnhancedDashboardCard {
       dataSource?: string;
       component?: string;
       metadata?: any;
+      name?: string;
+      description?: string;
+      type?: string;
+      visualConfig?: any;
+      queryConfig?: any;
+      isActive?: boolean;
     };
   };
   isBuiltIn: boolean;
@@ -904,7 +924,7 @@ function CardCreatorForm({
               <Label htmlFor="aggregation">Aggregation</Label>
               <Select 
                 value={card.config?.aggregation || 'count'} 
-                onValueChange={(value) => updateConfig({ aggregation: value as 'count' | 'sum' | 'average' | 'max' | 'min' })}
+                onValueChange={(value) => updateConfig({ aggregation: value as 'count' | 'sum' | 'average' | 'max' | 'min' | { function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX'; field?: string; } })}
               >
                 <SelectTrigger id="aggregation">
                   <SelectValue />

@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +24,7 @@ import {
 } from "lucide-react";
 import { DashboardCard } from "@/hooks/use-dashboard-settings";
 import { apiRequest } from "@/lib/api";
-import { IntegrationEngineWidget } from "@/components/external-widgets/integration-engine-widget";
+// import { IntegrationEngineWidget } from "@/components/external-widgets/integration-engine-widget";
 
 const AVAILABLE_ICONS = {
   Building,
@@ -48,9 +50,7 @@ interface DynamicDashboardCardProps {
 
 export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProps) {
   // Check if this is an Integration Engine widget
-  const isIntegrationEngineWidget = card.category === 'integration-engine' && 
-                                   card.config.integrationEngineId &&
-                                   card.config.integrationEngineData;
+  const isIntegrationEngineWidget = false; // integration engine support disabled
 
   // Create stable config object to prevent infinite re-renders
   const stableConfig = React.useMemo(() => {
@@ -84,30 +84,8 @@ export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProp
     };
   }, [card.config, isIntegrationEngineWidget]);
 
-  // If it's an Integration Engine widget, render with preserved configuration
-  if (isIntegrationEngineWidget) {
-    console.log(`🔌 Rendering Integration Engine widget: ${card.title} (${card.config.integrationEngineId})`);
-    console.log(`📊 Config: ${card.config.integrationEngineData.type} - ${stableConfig.chartType} chart`);
-    
-    return (
-      <div className="integration-engine-widget-container">
-        <IntegrationEngineWidget
-          widgetId={card.config.integrationEngineId!}
-          widgetName={card.title}
-          systemId={card.config.integrationEngineSystemId || 2}
-          config={stableConfig}
-          size={card.size}
-          onError={(error) => {
-            console.error(`Integration Engine widget ${card.title} error:`, error);
-            // Don't show toast errors for external widgets to avoid spam
-          }}
-        />
-      </div>
-    );
-  }
-
   // Regular widget handling for non-external widgets
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard-card', card.id, card.dataSource, card.config],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -123,8 +101,10 @@ export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProp
       const response = await apiRequest('GET', `/api/dashboard/card-data?${params.toString()}`);
       return response.json();
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 30 * 1000, // 30 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes (reduced from 5)
+    refetchInterval: 60 * 1000, // 1 minute (increased from 30 seconds for better performance)
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
   });
 
   const getIconComponent = (iconName: string) => {

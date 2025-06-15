@@ -1,0 +1,52 @@
+{
+  "systemName": "jira",
+  "displayName": "Production Jira (SITCO)",
+  "originalSystemId": 51,
+  "migratedAt": "2025-06-14T15:49:00.761Z",
+  "config": {
+    "instances": [],
+    "defaultRefreshInterval": 60,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "burstSize": 10
+    }
+  },
+  "originalData": {
+    "system": {
+      "id": 51,
+      "systemName": "jira",
+      "displayName": "Production Jira (SITCO)",
+      "systemType": "ticketing",
+      "baseUrl": "https://sd.sic.sitco.sa",
+      "authType": "basic",
+      "authConfig": {
+        "apiKey": "",
+        "password": "",
+        "username": "",
+        "sslConfig": {
+          "verifyHostname": false,
+          "allowSelfSigned": true,
+          "rejectUnauthorized": false
+        }
+      },
+      "connectionConfig": null,
+      "queryMethods": null,
+      "dataTransforms": null,
+      "apiEndpoints": {
+        "search": "/rest/api/2/search",
+        "webUrl": "/browse/{identifier}",
+        "projects": "/rest/api/2/project",
+        "serverInfo": "/rest/api/2/serverInfo"
+      },
+      "healthCheckConfig": null,
+      "rateLimitConfig": null,
+      "defaultMapping": null,
+      "errorHandling": null,
+      "isActive": true,
+      "createdBy": 1,
+      "createdAt": "2025-06-09T15:54:21.779Z",
+      "updatedAt": "2025-06-14T15:46:32.242Z"
+    },
+    "instances": []
+  }
+}

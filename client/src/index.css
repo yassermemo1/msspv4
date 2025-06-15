@@ -74,7 +74,9 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
@@ -102,5 +104,13 @@
   
   .status-terminated {
     @apply bg-gray-100 text-gray-800;
+  }
+}
+
+@layer utilities {
+  /* Ensure readability: any solid blue or primary background gets white text automatically */
+  .bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-blue-800, .bg-blue-900,
+  .bg-primary {
+    @apply text-white;
   }
 }

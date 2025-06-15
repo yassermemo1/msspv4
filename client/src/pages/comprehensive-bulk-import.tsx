@@ -592,7 +592,15 @@ export default function ComprehensiveBulkImportPage() {
           targetField = 'notes';
         }
       }
-      // Match hardware fields
+      // Match Serial Number columns that are not prefixed with "Hardware" keywords
+      else if (lowerHeader.includes('serial')) {
+        // Treat any column containing the word "serial" as hardware serial number
+        entityType = 'hardware';
+        targetField = 'serialNumber';
+        required = true;
+        dataType = 'text';
+      }
+      // Match hardware fields (explicit "Hardware …" / "Device …" etc.)
       else if (lowerHeader.includes('hardware') || lowerHeader.includes('asset') || lowerHeader.includes('device')) {
         entityType = 'hardware';
         if (lowerHeader.includes('name')) {
@@ -617,35 +625,52 @@ export default function ComprehensiveBulkImportPage() {
           dataType = 'date';
         } else if (lowerHeader.includes('status')) {
           targetField = 'status';
-        } else if (lowerHeader.includes('location') || lowerHeader.includes('install')) {
-          targetField = 'installationLocation';
-        } else if (lowerHeader.includes('note')) {
-          targetField = 'notes';
         }
       }
-      // Direct field matching (fallback)
-      else {
-        // Try to match common field names directly
-        if (lowerHeader === 'name') {
-          entityType = 'clients';
-          targetField = 'name';
+      // Match SAF (Service Authorization Form) fields
+      else if (lowerHeader.includes('saf')) {
+        entityType = 'saf';
+        if (lowerHeader.includes('number') || lowerHeader.includes('no')) {
+          targetField = 'safNumber';
           required = true;
-        } else if (lowerHeader === 'email') {
-          entityType = 'contacts';
-          targetField = 'email';
+        } else if (lowerHeader.includes('title') || lowerHeader.includes('name')) {
+          targetField = 'title';
           required = true;
-          dataType = 'email';
-        } else if (lowerHeader.includes('start') && lowerHeader.includes('date')) {
-          entityType = 'contracts';
+        } else if (lowerHeader.includes('start')) {
           targetField = 'startDate';
-          required = true;
           dataType = 'date';
-        } else if (lowerHeader.includes('end') && lowerHeader.includes('date')) {
-          entityType = 'contracts';
+        } else if (lowerHeader.includes('end')) {
           targetField = 'endDate';
-          required = true;
           dataType = 'date';
+        } else if (lowerHeader.includes('signed') || lowerHeader.includes('status') || lowerHeader.includes('approved')) {
+          targetField = 'signed';
+          dataType = 'boolean';
         }
+      }
+      // Match COC (Certificate of Completion/Compliance) fields
+      else if (lowerHeader.includes('coc')) {
+        entityType = 'coc';
+        if (lowerHeader.includes('number') || lowerHeader.includes('no')) {
+          targetField = 'cocNumber';
+          required = true;
+        } else if (lowerHeader.includes('title') || lowerHeader.includes('name')) {
+          targetField = 'title';
+          required = true;
+        } else if (lowerHeader.includes('issue') || lowerHeader.includes('issued')) {
+          targetField = 'issueDate';
+          dataType = 'date';
+        } else if (lowerHeader.includes('expiry') || lowerHeader.includes('end')) {
+          targetField = 'expiryDate';
+          dataType = 'date';
+        } else if (lowerHeader.includes('signed') || lowerHeader.includes('status') || lowerHeader.includes('approved')) {
+          targetField = 'signed';
+          dataType = 'boolean';
+        }
+      }
+      // Default unmapped
+      else {
+        entityType = '';
+        targetField = '';
       }
 
       return {
@@ -770,10 +795,10 @@ export default function ComprehensiveBulkImportPage() {
   };
 
   const generateSampleData = () => {
-    const sampleData = `Client Name	Short Name	Domain	Industry	Company Size	Status	Source	Website	Contact Name	Contact Email	Contact Phone	Contact Title	Contract Name	Contract Start Date	Contract End Date	Contract Value	Service Name	Service Category	Service Description	Service Delivery Model	Hardware Name	Hardware Category	Hardware Model	Hardware Manufacturer	License Name	License Vendor	License Type	License Quantity	SAF Number	SAF Title	SAF Start Date	SAF End Date	COC Number	COC Title	COC Issued Date	COC Expiry Date
-Customer Apps	Customer Apps	C003	Technology	Large	active	nca	King Fahd Road, Riyadh 12345, Saudi Arabia	https://customerapps.com	John Smith	john.smith@customerapps.com	+966-11-234-5678	Chief Information Security Officer	Annual SIEM Monitoring Contract 2024	2024-01-01	2024-12-31	180000	SIEM Monitoring	Security Operations	Real-time security event monitoring and analysis	Serverless	5000	per endpoint	{"service_level": "Standard", "monitoring_hours": "24/7", "response_time": "30 minutes", "escalation_levels": 2}	2024-01-01	2024-12-31	active	15000	Critical alert escalation to C-level within 15 minutes	SIEM EPS Pool	5000	Firewall Primary - Customer Apps	Network Security	Fortinet	FortiGate 600E	FG600E-C003-001	15000	Primary Data Center
-Saudi Information Technology Company	SITE	C004	Technology	Large	active	direct	King Abdul Aziz Road, Riyadh 11564, Saudi Arabia	https://site.sa	Ahmed Ali	ahmed.ali@site.sa	+966-11-345-6789	Director of Cybersecurity	Comprehensive IT Security Services 2024	2024-01-01	2024-12-31	250000	Vulnerability Assessment	Network Security	Comprehensive vulnerability scanning and reporting	On-Prem Engineer	8000	per assessment	{"service_level": "Premium", "monitoring_hours": "Business Hours", "response_time": "15 minutes", "escalation_levels": 3}	2024-01-01	2024-12-31	active	20000	Monthly executive reports required	SIEM EPS Pool	10000	SOC Server - SITE	Server Hardware	Dell	PowerEdge R740	DELL-R740-C004-001	25000	SOC Operations Center
-Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red Sea Project, NEOM 49643, Saudi Arabia	https://theredsea.sa	Sarah Ahmed	sarah.ahmed@theredsea.sa	+966-12-456-7890	Chief Technology Officer	Smart Infrastructure Security Services 2024	2024-01-01	2024-12-31	320000	Incident Response	Security Operations	24/7 incident response and forensics	Hybrid	12000	per incident	{"service_level": "Enterprise", "monitoring_hours": "24/7", "response_time": "15 minutes", "escalation_levels": 4}	2024-01-01	2024-12-31	active	26000	On-site response capability required for critical incidents	SIEM EPS Pool	7500	Security Gateway - Red Sea	Network Security	Cisco	ASA 5585-X	CISCO-ASA-R001-001	35000	Red Sea Data Center`;
+    const sampleData = `Client Name	Short Name	Domain	Industry	Company Size	Status	Source	Website	Contact Name	Contact Email	Contact Phone	Contact Title	Contract Name	Contract Start Date	Contract End Date	Contract Value	Service Name	Service Category	Service Description	Service Delivery Model	Hardware Name	Hardware Category	Hardware Model	Hardware Manufacturer	Hardware Serial Number	License Name	License Vendor	License Type	License Quantity	SAF Number	SAF Title	SAF Start Date	SAF End Date	SAF Signed	COC Number	COC Title	COC Issued Date	COC Signed
+Customer Apps	Customer Apps	C003	Technology	Large	active	nca	King Fahd Road, Riyadh 12345, Saudi Arabia	https://customerapps.com	John Smith	john.smith@customerapps.com	+966-11-234-5678	Chief Information Security Officer	Annual SIEM Monitoring Contract 2024	2024-01-01	2024-12-31	180000	SIEM Monitoring	Security Operations	Real-time security event monitoring and analysis	Serverless	Firewall Primary - Customer Apps	Network Security	Fortinet	FortiGate 600E	FG600E-C003-001	SIEM EPS Pool	IBM	EPS-based	5000	SAF-2024-001	Primary SIEM Monitoring SAF	2024-01-01	2024-12-31	true	COC-2024-001	Customer Apps SIEM Monitoring COC	2024-12-31	true
+Saudi Information Technology Company	SITE	C004	Technology	Large	active	direct	King Abdul Aziz Road, Riyadh 11564, Saudi Arabia	https://site.sa	Ahmed Ali	ahmed.ali@site.sa	+966-11-345-6789	Director of Cybersecurity	Comprehensive IT Security Services 2024	2024-01-01	2024-12-31	250000	Vulnerability Assessment	Network Security	Comprehensive vulnerability scanning and reporting	On-Prem Engineer	SOC Server - SITE	Server Hardware	Dell	PowerEdge R740	DELL-R740-C004-001	SIEM EPS Pool	IBM	EPS-based	10000	SAF-2024-002	SITE Vulnerability Assessment SAF	2024-01-15	2024-12-31	false	COC-2024-002	SITE Vulnerability Assessment COC	2024-12-31	true
+Red Sea Development Company	Red Sea Dev	R001	Real Estate	Large	active	both	Red Sea Project, NEOM 49643, Saudi Arabia	https://theredsea.sa	Sarah Ahmed	sarah.ahmed@theredsea.sa	+966-12-456-7890	Chief Technology Officer	Smart Infrastructure Security Services 2024	2024-01-01	2024-12-31	320000	Incident Response	Security Operations	24/7 incident response and forensics	Hybrid	Security Gateway - Red Sea	Network Security	Cisco	ASA 5585-X	CISCO-ASA-R001-001	SIEM EPS Pool	IBM	EPS-based	7500	SAF-2024-003	Red Sea Incident Response SAF	2024-02-01	2024-12-31	true	COC-2024-003	Red Sea Incident Response COC	2024-12-31	true`;
     
     setPastedData(sampleData);
     toast({

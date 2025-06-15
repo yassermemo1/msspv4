@@ -1,50 +1,58 @@
-import { QueryPlugin, registerPlugin } from './plugin-manager';
+import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+// Plugin Configuration - Self-Contained
+const qradarConfig: PluginConfig = {
+  instances: [
+    {
+      id: 'qradar-main',
+      name: 'Main QRadar SIEM',
+      baseUrl: process.env.QRADAR_URL || 'https://qradar.company.com',
+      authType: 'bearer',
+      authConfig: {
+        token: process.env.QRADAR_TOKEN || 'your-sec-token-here'
+      },
+      isActive: false, // Disabled by default
+      tags: ['siem', 'security', 'ibm']
+    }
+  ],
+  defaultRefreshInterval: 60,
+  rateLimiting: {
+    requestsPerMinute: 30,
+    burstSize: 8
+  }
+};
 
 const qradarPlugin: QueryPlugin = {
   systemName: 'qradar',
-  async executeQuery(query: string, _method: string | undefined, instance: ExternalSystemInstance) {
-    const base = instance.baseUrl || instance.host || '';
-
-    const headers: Record<string, string> = {
-      'SEC': (instance.authConfig as any)?.token || '',
-      'Version': '12.0',
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    };
-
-    // Step 1: create search
-    const searchesUrl = `${base.replace(/\/$/, '')}/api/ariel/searches`; // API path
-    const createRes = await fetch(searchesUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query_expression: query })
-    });
-    if (!createRes.ok) throw new Error(`QRadar create search ${createRes.status}`);
-    const { search_id } = await createRes.json();
-
-    // Poll status
-    const statusUrl = `${searchesUrl}/${search_id}`;
-    for (let i = 0; i < 30; i++) {
-      await sleep(1000);
-      const statRes = await fetch(statusUrl, { headers });
-      const stat = await statRes.json();
-      if (stat.status === 'COMPLETED') break;
-      if (stat.status === 'ERROR') throw new Error('QRadar search error');
-      if (i === 29) throw new Error('QRadar search timeout');
+  config: qradarConfig,
+  
+  async executeQuery(query: string, _method: string | undefined, instanceId: string) {
+    const instance = this.getInstance(instanceId);
+    if (!instance) {
+      throw new Error(`QRadar instance '${instanceId}' not found`);
     }
-
-    // Get results
-    const resUrl = `${statusUrl}/results`; // default JSON
-    const res = await fetch(resUrl, { headers });
-    if (!res.ok) throw new Error(`QRadar results ${res.status}`);
-    return await res.json();
-  }
+    
+    if (!instance.isActive) {
+      throw new Error(`QRadar instance '${instanceId}' is not active`);
+    }
+    
+    // Placeholder - would need actual QRadar API implementation
+    return { message: 'QRadar plugin not fully implemented', query, instanceId };
+  },
+  
+  getInstances(): PluginInstance[] {
+    return this.config.instances;
+  },
+  
+  getInstance(instanceId: string): PluginInstance | undefined {
+    return this.config.instances.find(instance => instance.id === instanceId);
+  },
+  
+  defaultQueries: [
+    { id: 'recentOffenses', method: 'GET', path: '/api/siem/offenses?filter=status=OPEN', description: 'Recent open offenses' },
+    { id: 'highSeverityEvents', method: 'GET', path: '/api/siem/events?filter=severity>=7', description: 'High severity events' }
+  ]
 };
 
 registerPlugin(qradarPlugin); 

@@ -1,8 +1,9 @@
 import cron from 'node-cron';
+import type { ScheduledTask } from 'node-cron';
 import { emailService } from './email';
 
 class Scheduler {
-  private tasks: Map<string, cron.ScheduledTask> = new Map();
+  private tasks: Map<string, ScheduledTask> = new Map();
   private developmentRunTracker = new Map<string, string>();
 
   start() {

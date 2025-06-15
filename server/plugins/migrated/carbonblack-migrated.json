@@ -1,0 +1,118 @@
+{
+  "systemName": "carbonblack",
+  "displayName": "Carbon Black EDR",
+  "originalSystemId": 54,
+  "migratedAt": "2025-06-14T15:49:00.763Z",
+  "config": {
+    "instances": [
+      {
+        "id": "carbonblack-1",
+        "name": "test2",
+        "baseUrl": "https://cb.local",
+        "authType": "none",
+        "authConfig": {},
+        "isActive": true,
+        "tags": [
+          "carbonblack",
+          "migrated"
+        ]
+      },
+      {
+        "id": "carbonblack-2",
+        "name": "test3",
+        "baseUrl": "https://cb.local",
+        "authType": "none",
+        "authConfig": {},
+        "isActive": true,
+        "tags": [
+          "carbonblack",
+          "migrated"
+        ]
+      },
+      {
+        "id": "carbonblack-3",
+        "name": "MAD",
+        "baseUrl": "https://cb.local",
+        "authType": "none",
+        "authConfig": {},
+        "isActive": true,
+        "tags": [
+          "carbonblack",
+          "migrated"
+        ]
+      }
+    ],
+    "defaultRefreshInterval": 60,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "burstSize": 10
+    }
+  },
+  "originalData": {
+    "system": {
+      "id": 54,
+      "systemName": "carbonblack",
+      "displayName": "Carbon Black EDR",
+      "systemType": "endpoint_security",
+      "baseUrl": "https://cb.local",
+      "authType": "none",
+      "authConfig": {},
+      "connectionConfig": null,
+      "queryMethods": null,
+      "dataTransforms": null,
+      "apiEndpoints": null,
+      "healthCheckConfig": null,
+      "rateLimitConfig": null,
+      "defaultMapping": null,
+      "errorHandling": null,
+      "isActive": true,
+      "createdBy": 1,
+      "createdAt": "2025-06-12T23:30:23.229Z",
+      "updatedAt": "2025-06-12T23:30:23.229Z"
+    },
+    "instances": [
+      {
+        "id": 1,
+        "systemId": 54,
+        "instanceName": "test2",
+        "baseUrl": "https://cb.local",
+        "host": null,
+        "port": null,
+        "authType": "none",
+        "authConfig": {},
+        "connectionConfig": null,
+        "isActive": true,
+        "createdAt": "2025-06-12T23:39:24.579Z",
+        "updatedAt": "2025-06-12T23:39:24.579Z"
+      },
+      {
+        "id": 2,
+        "systemId": 54,
+        "instanceName": "test3",
+        "baseUrl": "https://cb.local",
+        "host": null,
+        "port": null,
+        "authType": "none",
+        "authConfig": {},
+        "connectionConfig": null,
+        "isActive": true,
+        "createdAt": "2025-06-12T23:39:44.203Z",
+        "updatedAt": "2025-06-12T23:39:44.203Z"
+      },
+      {
+        "id": 3,
+        "systemId": 54,
+        "instanceName": "MAD",
+        "baseUrl": "https://cb.local",
+        "host": null,
+        "port": null,
+        "authType": "none",
+        "authConfig": {},
+        "connectionConfig": null,
+        "isActive": true,
+        "createdAt": "2025-06-12T23:39:48.610Z",
+        "updatedAt": "2025-06-12T23:39:48.610Z"
+      }
+    ]
+  }
+}

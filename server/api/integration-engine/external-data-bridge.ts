@@ -1104,8 +1104,7 @@ async function performBatchSync(req: Request, res: Response) {
 }
 
 async function performDataTransformation(req: Request, res: Response) {
-  // Implementation for data transformation
-  res.status(501).json({ error: 'Not implemented yet' });
+  res.status(501).json({ error: 'Data transformation not implemented' });
 }
 
-export default router; 
+export default router;

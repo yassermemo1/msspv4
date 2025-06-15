@@ -1,45 +1,59 @@
-import { QueryPlugin, registerPlugin } from './plugin-manager';
+import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
+
+// Plugin Configuration - Self-Contained
+const grafanaConfig: PluginConfig = {
+  instances: [
+    {
+      id: 'grafana-main',
+      name: 'Main Grafana Instance',
+      baseUrl: process.env.GRAFANA_URL || 'https://grafana.company.com',
+      authType: 'bearer',
+      authConfig: {
+        token: process.env.GRAFANA_TOKEN || 'your-service-account-token'
+      },
+      isActive: false, // Disabled by default
+      tags: ['monitoring', 'dashboards', 'metrics']
+    }
+  ],
+  defaultRefreshInterval: 30,
+  rateLimiting: {
+    requestsPerMinute: 60,
+    burstSize: 10
+  }
+};
 
 const grafanaPlugin: QueryPlugin = {
   systemName: 'grafana',
-  async executeQuery(query: string, method: string | undefined, instance: ExternalSystemInstance, opts) {
-    // In Grafana, queries go to /api/ds/query with datasource id or UID
-    const base = instance.baseUrl || instance.host || '';
-    const url = `${base.replace(/\/$/, '')}/api/ds/query`;
-
-    const cfg: any = instance.authConfig || {};
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (cfg.token) headers['Authorization'] = `Bearer ${cfg.token}`;
-
-    const datasourceUid = opts?.datasourceUid || cfg.datasourceUid;
-    if (!datasourceUid) throw new Error('Missing datasourceUid for Grafana query');
-
-    const body = {
-      queries: [
-        {
-          refId: 'A',
-          datasource: { uid: datasourceUid },
-          expr: query,
-          // Additional method (eg, instant or range)
-          ...(method ? { queryType: method } : {})
-        }
-      ],
-      from: opts?.from || 'now-1h',
-      to: opts?.to || 'now'
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error(`Grafana API ${res.status}`);
-    return await res.json();
-  }
+  config: grafanaConfig,
+  
+  async executeQuery(query: string, _method: string | undefined, instanceId: string) {
+    const instance = this.getInstance(instanceId);
+    if (!instance) {
+      throw new Error(`Grafana instance '${instanceId}' not found`);
+    }
+    
+    if (!instance.isActive) {
+      throw new Error(`Grafana instance '${instanceId}' is not active`);
+    }
+    
+    // Placeholder - would need actual Grafana API implementation
+    return { message: 'Grafana plugin not fully implemented', query, instanceId };
+  },
+  
+  getInstances(): PluginInstance[] {
+    return this.config.instances;
+  },
+  
+  getInstance(instanceId: string): PluginInstance | undefined {
+    return this.config.instances.find(instance => instance.id === instanceId);
+  },
+  
+  defaultQueries: [
+    { id: 'dashboards', method: 'GET', path: '/api/search?type=dash-db', description: 'List all dashboards' },
+    { id: 'datasources', method: 'GET', path: '/api/datasources', description: 'List all data sources' },
+    { id: 'health', method: 'GET', path: '/api/health', description: 'Health check' }
+  ]
 };
 
 registerPlugin(grafanaPlugin); 

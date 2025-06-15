@@ -156,7 +156,7 @@ export const services = pgTable("services", {
 // New table for service scope field definitions (replaces JSONB approach)
 export const serviceScopeFields = pgTable("service_scope_fields", {
   id: serial("id").primaryKey(),
-  serviceId: integer("service_id").notNull().references(() => services.id),
+  serviceId: integer("service_id").references(() => services.id),
   name: text("name").notNull(), // Field name/key
   label: text("label").notNull(), // Display label
   fieldType: text("field_type").notNull(), // TEXT_SINGLE_LINE, TEXT_MULTI_LINE, NUMBER_INTEGER, etc.
@@ -193,7 +193,7 @@ export const contracts = pgTable("contracts", {
 export const serviceScopes = pgTable("service_scopes", {
   id: serial("id").primaryKey(),
   contractId: integer("contract_id").notNull().references(() => contracts.id),
-  serviceId: integer("service_id").notNull().references(() => services.id),
+  serviceId: integer("service_id").references(() => services.id),
   scopeDefinition: jsonb("scope_definition"), // Actual scope parameters
   safDocumentUrl: text("saf_document_url"),
   safStartDate: timestamp("saf_start_date"),
@@ -203,6 +203,8 @@ export const serviceScopes = pgTable("service_scopes", {
   endDate: timestamp("end_date"), // General end date for service scope
   status: text("status").default("active"), // active, pending, completed, cancelled
   monthlyValue: decimal("monthly_value", { precision: 10, scale: 2 }),
+  // Human-readable description/title for the particular scope (used in searches)
+  description: text("description"),
   notes: text("notes"),
   // Indexed scope variables for efficient filtering
   eps: integer("eps"), // Events Per Second
@@ -214,7 +216,10 @@ export const serviceScopes = pgTable("service_scopes", {
   responseTimeMinutes: integer("response_time_minutes"), // Response time in minutes
   coverageHours: text("coverage_hours"), // Coverage hours (8x5, 16x5, 24x7)
   serviceTier: text("service_tier"), // Enterprise, Professional, Standard
+  // Link back to SAF that authorized this service scope (nullable)
+  safId: integer("saf_id").references(() => serviceAuthorizationForms.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Dynamic scope variable definitions table
@@ -579,6 +584,7 @@ export const insertServiceScopeSchema = createInsertSchema(serviceScopes, {
 }).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertProposalSchema = createInsertSchema(proposals).omit({
@@ -911,6 +917,8 @@ export const integratedData = pgTable("integrated_data", {
   mappedData: jsonb("mapped_data").notNull(), // Transformed data based on mappings
   syncedAt: timestamp("synced_at").notNull().defaultNow(),
   recordIdentifier: text("record_identifier"), // Unique identifier from source system
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 // Dashboard widgets configuration
@@ -1020,6 +1028,8 @@ export const insertDataSourceMappingSchema = createInsertSchema(dataSourceMappin
 export const insertIntegratedDataSchema = createInsertSchema(integratedData).omit({
   id: true,
   syncedAt: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertDashboardWidgetSchema = createInsertSchema(dashboardWidgets).omit({
@@ -1067,6 +1077,7 @@ export type DashboardWidgetAssignment = typeof dashboardWidgetAssignments.$infer
 // API Aggregator for Dynamic Client Data
 
 // Client external mappings for API aggregation
+// ⚠️ DEPRECATED: Client external mappings - Use Plugin-based client associations instead
 export const clientExternalMappings = pgTable("client_external_mappings", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: 'cascade' }),
@@ -1078,7 +1089,9 @@ export const clientExternalMappings = pgTable("client_external_mappings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// External system configurations - Fully Dynamic System Support
+// ⚠️ DEPRECATED: External system configurations - Use Plugin Architecture Instead
+// This table is kept for backward compatibility during migration to plugins
+// New development should use the plugin system in server/plugins/
 export const externalSystems = pgTable("external_systems", {
   id: serial("id").primaryKey(),
   systemName: text("system_name").notNull().unique(), // Unique identifier for the system
@@ -1220,6 +1233,8 @@ export const securityEvents = pgTable("security_events", {
   failureReason: text("failure_reason"), // Why the event failed
   riskScore: integer("risk_score"), // 0-100 risk assessment
   blocked: boolean("blocked").notNull().default(false), // Was this event blocked
+  entityType: text("entity_type"), // Optional entity context for this event
+  entityId: integer("entity_id"),
   metadata: jsonb("metadata"), // Additional security context
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
@@ -1523,3 +1538,60 @@ export const widgetExecutionCache = pgTable("widget_execution_cache", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// External system instances (multiple connections under one system)
+export const externalSystemInstances = pgTable("external_system_instances", {
+  id: serial("id").primaryKey(),
+  systemId: integer("system_id").notNull().references(() => externalSystems.id, { onDelete: 'cascade' }),
+  instanceName: text("instance_name").notNull(),
+  baseUrl: text("base_url"), // Override if different
+  host: text("host"),
+  port: integer("port"),
+  authType: text("auth_type"),
+  authConfig: jsonb("auth_config"),
+  connectionConfig: jsonb("connection_config"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertExternalSystemInstanceSchema = createInsertSchema(externalSystemInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertExternalSystemInstance = z.infer<typeof insertExternalSystemInstanceSchema>;
+export type ExternalSystemInstance = typeof externalSystemInstances.$inferSelect;
+
+// Saved Queries table for user-defined plugin queries
+export const savedQueries = pgTable("saved_queries", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  pluginName: text("plugin_name").notNull(),
+  instanceId: text("instance_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  query: text("query").notNull(),
+  method: text("method").notNull().default("GET"),
+  tags: jsonb("tags"), // For categorization
+  isPublic: boolean("is_public").notNull().default(false), // Allow sharing with other users
+  executionCount: integer("execution_count").notNull().default(0),
+  lastExecutedAt: timestamp("last_executed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_saved_queries_user_plugin").on(table.userId, table.pluginName),
+  index("idx_saved_queries_public").on(table.isPublic).where(sql`${table.isPublic} = true`),
+]);
+
+export const insertSavedQuerySchema = createInsertSchema(savedQueries).omit({
+  id: true,
+  executionCount: true,
+  lastExecutedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSavedQuery = z.infer<typeof insertSavedQuerySchema>;
+export type SavedQuery = typeof savedQueries.$inferSelect;

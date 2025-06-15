@@ -24,7 +24,8 @@ import {
   Activity,
   FileText,
   Calendar,
-  MoreHorizontal
+  MoreHorizontal,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
@@ -111,7 +112,7 @@ export default function AuditManagementPage() {
     );
   }
 
-  const { data: auditLogs = [], isLoading: loadingAuditLogs } = useQuery<AuditLog[]>({
+  const { data: auditLogs = [], isLoading: loadingAuditLogs, refetch: refetchAuditLogs } = useQuery<AuditLog[]>({
     queryKey: ['/api/audit-logs', { dateRange, actionFilter, searchTerm }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -125,10 +126,12 @@ export default function AuditManagementPage() {
       if (!res.ok) throw new Error('Failed to fetch audit logs');
       return res.json();
     },
-    enabled: isAdmin && activeTab === 'audit-logs',
+    enabled: isAdmin,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
   });
 
-  const { data: securityEvents = [], isLoading: loadingSecurityEvents } = useQuery<SecurityEvent[]>({
+  const { data: securityEvents = [], isLoading: loadingSecurityEvents, refetch: refetchSecurityEvents } = useQuery<SecurityEvent[]>({
     queryKey: ['/api/security-events', { dateRange, severityFilter, searchTerm }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -142,10 +145,12 @@ export default function AuditManagementPage() {
       if (!res.ok) throw new Error('Failed to fetch security events');
       return res.json();
     },
-    enabled: isAdmin && activeTab === 'security-events',
+    enabled: isAdmin,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
   });
 
-  const { data: dataAccessLogs = [], isLoading: loadingDataAccess } = useQuery<DataAccessLog[]>({
+  const { data: dataAccessLogs = [], isLoading: loadingDataAccess, refetch: refetchDataAccess } = useQuery<DataAccessLog[]>({
     queryKey: ['/api/data-access-logs', { dateRange, searchTerm }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -158,10 +163,12 @@ export default function AuditManagementPage() {
       if (!res.ok) throw new Error('Failed to fetch data access logs');
       return res.json();
     },
-    enabled: isAdmin && activeTab === 'data-access',
+    enabled: isAdmin,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
   });
 
-  const { data: changeHistory = [], isLoading: loadingChangeHistory } = useQuery<ChangeHistoryEntry[]>({
+  const { data: changeHistory = [], isLoading: loadingChangeHistory, refetch: refetchChangeHistory } = useQuery<ChangeHistoryEntry[]>({
     queryKey: ['/api/change-history', { dateRange, searchTerm }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -174,7 +181,9 @@ export default function AuditManagementPage() {
       if (!res.ok) throw new Error('Failed to fetch change history');
       return res.json();
     },
-    enabled: isAdmin && activeTab === 'change-history',
+    enabled: isAdmin,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
   });
 
   const getActionBadgeColor = (action: string) => {
@@ -248,6 +257,15 @@ export default function AuditManagementPage() {
     window.URL.revokeObjectURL(url);
 
     toast({ title: 'Success', description: 'Logs exported successfully' });
+  };
+
+  // Add refresh all function
+  const refreshAllData = () => {
+    refetchAuditLogs();
+    refetchSecurityEvents();
+    refetchDataAccess();
+    refetchChangeHistory();
+    toast({ title: 'Success', description: 'All audit data refreshed successfully' });
   };
 
   return (
@@ -337,6 +355,15 @@ export default function AuditManagementPage() {
                   </SelectContent>
                 </Select>
 
+                <Button 
+                  variant="outline" 
+                  onClick={refreshAllData}
+                  className="whitespace-nowrap"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                
                 <Button 
                   variant="outline" 
                   onClick={() => exportLogs(activeTab)}

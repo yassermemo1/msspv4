@@ -1,35 +1,60 @@
-import { QueryPlugin, registerPlugin } from './plugin-manager';
+import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plugin-manager';
 import fetch from 'node-fetch';
-import { ExternalSystemInstance } from '@shared/schema';
+
+// Plugin Configuration - Self-Contained
+const elasticConfig: PluginConfig = {
+  instances: [
+    {
+      id: 'elastic-main',
+      name: 'Main Elasticsearch Cluster',
+      baseUrl: process.env.ELASTICSEARCH_URL || 'https://elasticsearch.company.com:9200',
+      authType: 'basic',
+      authConfig: {
+        username: process.env.ELASTICSEARCH_USERNAME || 'elastic',
+        password: process.env.ELASTICSEARCH_PASSWORD || 'changeme'
+      },
+      isActive: false, // Disabled by default
+      tags: ['search', 'logs', 'analytics']
+    }
+  ],
+  defaultRefreshInterval: 30,
+  rateLimiting: {
+    requestsPerMinute: 60,
+    burstSize: 10
+  }
+};
 
 const elasticPlugin: QueryPlugin = {
-  systemName: 'elastic',
-  async executeQuery(query: string, _method: string | undefined, instance: ExternalSystemInstance) {
-    const base = instance.baseUrl || instance.host || '';
-    const url = `${base.replace(/\/$/, '')}/_search`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    const cfg: any = instance.authConfig || {};
-    if (instance.authType === 'basic' && cfg.username && cfg.password) {
-      headers['Authorization'] = 'Basic ' + Buffer.from(`${cfg.username}:${cfg.password}`).toString('base64');
+  systemName: 'elasticsearch',
+  config: elasticConfig,
+  
+  async executeQuery(query: string, _method: string | undefined, instanceId: string) {
+    const instance = this.getInstance(instanceId);
+    if (!instance) {
+      throw new Error(`Elasticsearch instance '${instanceId}' not found`);
     }
-
-    // If user passed raw text assume JSON string, else wrap as query_string
-    let body: any;
-    try {
-      body = JSON.parse(query);
-    } catch {
-      body = {
-        query: { query_string: { query } }
-      };
+    
+    if (!instance.isActive) {
+      throw new Error(`Elasticsearch instance '${instanceId}' is not active`);
     }
-
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(`Elastic API ${res.status}`);
-    return await res.json();
-  }
+    
+    // Placeholder - would need actual Elasticsearch API implementation
+    return { message: 'Elasticsearch plugin not fully implemented', query, instanceId };
+  },
+  
+  getInstances(): PluginInstance[] {
+    return this.config.instances;
+  },
+  
+  getInstance(instanceId: string): PluginInstance | undefined {
+    return this.config.instances.find(instance => instance.id === instanceId);
+  },
+  
+  defaultQueries: [
+    { id: 'clusterHealth', method: 'GET', path: '_cluster/health', description: 'Cluster health status' },
+    { id: 'indexStats', method: 'GET', path: '_stats', description: 'Index statistics' },
+    { id: 'recentLogs', method: 'GET', path: 'logs-*/_search?size=100', description: 'Recent log entries' }
+  ]
 };
 
 registerPlugin(elasticPlugin); 

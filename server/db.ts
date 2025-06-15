@@ -34,7 +34,7 @@ let db: DatabaseType;
 if (isNeon) {
   // Use Neon serverless
   pool = new NeonPool({ connectionString: process.env.DATABASE_URL });
-  db = drizzle({ client: pool, schema });
+  db = drizzle(pool as NeonPool, { schema });
 } else {
   // Use local PostgreSQL with optional SSL
   const dbConfig = {

@@ -5,6 +5,39 @@ import { eq } from 'drizzle-orm';
 // Disable SSL certificate verification for internal systems during startup
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 
+/**
+ * Makes sure the DB has the columns / tables required by the Plugins feature.
+ * We run this early at boot so later queries don't explode even when the
+ * `drizzle-kit push` diff misses them (common in dev when schema.ts changes
+ * but migrations are not checked in).
+ */
+async function ensureExternalSystemSchema(sql: any) {
+  try {
+    // Add default_mapping column if missing
+    await sql`ALTER TABLE external_systems ADD COLUMN IF NOT EXISTS default_mapping jsonb`;
+
+    // Create external_system_instances table if it doesn't exist
+    await sql`CREATE TABLE IF NOT EXISTS external_system_instances (
+      id SERIAL PRIMARY KEY,
+      system_id INTEGER NOT NULL REFERENCES external_systems(id) ON DELETE CASCADE,
+      instance_name TEXT NOT NULL,
+      base_url TEXT,
+      host TEXT,
+      port INTEGER,
+      auth_type TEXT,
+      auth_config JSONB,
+      connection_config JSONB,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+    console.log('✅ Verified external_systems / external_system_instances schema');
+  } catch (schemaErr) {
+    console.error('❌ Failed ensuring external system schema:', (schemaErr as Error).message);
+  }
+}
+
 export async function initializeDefaultIntegrations() {
   console.log('🚀 Initializing default integrations...');
   console.log('🔓 SSL Certificate verification disabled for internal systems');
@@ -29,6 +62,9 @@ export async function initializeDefaultIntegrations() {
     
     const sql = postgres(databaseUrl);
     const db = drizzle(sql);
+
+    // Ensure critical schema (external_system_instances table and default_mapping column)
+    await ensureExternalSystemSchema(sql);
 
     await setupDefaultJiraSystem(db);
     await setupDefaultClientMappings(db);

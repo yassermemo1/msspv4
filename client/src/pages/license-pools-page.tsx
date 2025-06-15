@@ -26,6 +26,8 @@ import {
   XCircle,
   Clock
 } from 'lucide-react';
+import { ColumnVisibility, ColumnDefinition } from '@/components/ui/column-visibility';
+import { useColumnPreferences } from '@/hooks/use-column-preferences';
 
 interface LicensePool {
   id: number;
@@ -45,8 +47,10 @@ interface LicensePool {
 
 interface CreateLicensePoolData {
   name: string;
+  productName: string;
   description?: string;
   totalLicenses: number;
+  availableLicenses: number;
   licenseType: string;
   vendor: string;
   version?: string;
@@ -60,8 +64,10 @@ export default function LicensePoolsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newPoolData, setNewPoolData] = useState<CreateLicensePoolData>({
     name: '',
+    productName: '',
     description: '',
     totalLicenses: 0,
+    availableLicenses: 0,
     licenseType: '',
     vendor: '',
     version: '',
@@ -69,6 +75,27 @@ export default function LicensePoolsPage() {
   });
 
   const queryClient = useQueryClient();
+
+  // Column visibility setup
+  const licenseColumns: ColumnDefinition[] = [
+    { key: 'name', label: 'Name', defaultVisible: true, mandatory: true },
+    { key: 'vendor', label: 'Vendor', defaultVisible: true },
+    { key: 'type', label: 'Type', defaultVisible: true },
+    { key: 'licenses', label: 'Licenses', defaultVisible: true },
+    { key: 'usage', label: 'Usage', defaultVisible: false },
+    { key: 'status', label: 'Status', defaultVisible: true },
+    { key: 'actions', label: 'Actions', defaultVisible: true, mandatory: true },
+  ];
+
+  const {
+    visibleColumns,
+    handleVisibilityChange,
+    resetToDefaults,
+    isColumnVisible,
+  } = useColumnPreferences({
+    storageKey: 'license-pools-table-columns',
+    columns: licenseColumns,
+  });
 
   // Fetch license pools
   const { data: licensePools = [], isLoading, error } = useQuery<LicensePool[]>({
@@ -90,8 +117,10 @@ export default function LicensePoolsPage() {
       setIsCreateDialogOpen(false);
       setNewPoolData({
         name: '',
+        productName: '',
         description: '',
         totalLicenses: 0,
+        availableLicenses: 0,
         licenseType: '',
         vendor: '',
         version: '',
@@ -172,7 +201,7 @@ export default function LicensePoolsPage() {
   };
 
   const handleCreatePool = () => {
-    if (!newPoolData.name || !newPoolData.licenseType || !newPoolData.vendor) {
+    if (!newPoolData.name || !newPoolData.productName || !newPoolData.licenseType || !newPoolData.vendor) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -240,6 +269,12 @@ export default function LicensePoolsPage() {
                 <SelectItem value="expiring_soon">Expiring Soon</SelectItem>
               </SelectContent>
             </Select>
+            <ColumnVisibility
+              columns={licenseColumns}
+              visibleColumns={visibleColumns}
+              onVisibilityChange={handleVisibilityChange}
+              onReset={resetToDefaults}
+            />
           </div>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -253,67 +288,73 @@ export default function LicensePoolsPage() {
               <DialogHeader>
                 <DialogTitle>Create New License Pool</DialogTitle>
                 <DialogDescription>
-                  Add a new software license pool to track license allocations
+                  Enter the details for the new license pool. Required fields are marked with an asterisk.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Pool Name *</Label>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="name" className="text-right">
+                    Name *
+                  </Label>
                   <Input
                     id="name"
                     value={newPoolData.name}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Microsoft Office 365"
+                    onChange={(e) => setNewPoolData({ ...newPoolData, name: e.target.value })}
+                    className="col-span-3"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="vendor">Vendor *</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="productName" className="text-right">
+                    Product Name *
+                  </Label>
+                  <Input
+                    id="productName"
+                    value={newPoolData.productName}
+                    onChange={(e) => setNewPoolData({ ...newPoolData, productName: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="vendor" className="text-right">
+                    Vendor *
+                  </Label>
                   <Input
                     id="vendor"
                     value={newPoolData.vendor}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, vendor: e.target.value }))}
-                    placeholder="e.g., Microsoft"
+                    onChange={(e) => setNewPoolData({ ...newPoolData, vendor: e.target.value })}
+                    className="col-span-3"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="licenseType">License Type *</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="licenseType" className="text-right">
+                    License Type *
+                  </Label>
                   <Input
                     id="licenseType"
                     value={newPoolData.licenseType}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, licenseType: e.target.value }))}
-                    placeholder="e.g., Subscription"
+                    onChange={(e) => setNewPoolData({ ...newPoolData, licenseType: e.target.value })}
+                    className="col-span-3"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="totalLicenses">Total Licenses</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="totalLicenses" className="text-right">
+                    Total Licenses *
+                  </Label>
                   <Input
                     id="totalLicenses"
                     type="number"
                     value={newPoolData.totalLicenses}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, totalLicenses: parseInt(e.target.value) || 0 }))}
-                    placeholder="100"
+                    onChange={(e) => {
+                      const total = parseInt(e.target.value, 10) || 0;
+                      setNewPoolData({ ...newPoolData, totalLicenses: total, availableLicenses: total });
+                    }}
+                    className="col-span-3"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="version">Version</Label>
-                  <Input
-                    id="version"
-                    value={newPoolData.version}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, version: e.target.value }))}
-                    placeholder="e.g., 2024"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="expirationDate">Expiration Date</Label>
-                  <Input
-                    id="expirationDate"
-                    type="date"
-                    value={newPoolData.expirationDate}
-                    onChange={(e) => setNewPoolData(prev => ({ ...prev, expirationDate: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="description" className="text-right">
+                    Description
+                  </Label>
                   <Textarea
                     id="description"
                     value={newPoolData.description}
@@ -404,78 +445,88 @@ export default function LicensePoolsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Licenses</TableHead>
-                    <TableHead>Usage</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    {isColumnVisible('name') && <TableHead>Name</TableHead>}
+                    {isColumnVisible('vendor') && <TableHead>Vendor</TableHead>}
+                    {isColumnVisible('type') && <TableHead>Type</TableHead>}
+                    {isColumnVisible('licenses') && <TableHead>Licenses</TableHead>}
+                    {isColumnVisible('usage') && <TableHead>Usage</TableHead>}
+                    {isColumnVisible('status') && <TableHead>Status</TableHead>}
+                    {isColumnVisible('actions') && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPools.map((pool) => (
                     <TableRow key={pool.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{pool.name}</div>
-                          {pool.version && (
-                            <div className="text-sm text-gray-500">v{pool.version}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{pool.vendor}</TableCell>
-                      <TableCell>{pool.licenseType}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>{pool.totalLicenses} total</div>
-                          <div className="text-gray-500">
-                            {pool.availableLicenses} available
+                      {isColumnVisible('name') && (
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{pool.name}</div>
+                            {pool.version && (
+                              <div className="text-sm text-gray-500">v{pool.version}</div>
+                            )}
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-16 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full" 
-                              style={{ 
-                                width: `${pool.totalLicenses > 0 ? (pool.usedLicenses / pool.totalLicenses) * 100 : 0}%` 
-                              }}
-                            ></div>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('vendor') && <TableCell>{pool.vendor}</TableCell>}
+                      {isColumnVisible('type') && <TableCell>{pool.licenseType}</TableCell>}
+                      {isColumnVisible('licenses') && (
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>{pool.totalLicenses} total</div>
+                            <div className="text-gray-500">
+                              {pool.availableLicenses} available
+                            </div>
                           </div>
-                          <span className="text-sm text-gray-600">
-                            {pool.usedLicenses}/{pool.totalLicenses}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(pool.status)}>
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(pool.status)}
-                            <span className="capitalize">{pool.status ? pool.status.replace('_', ' ') : 'Unknown'}</span>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('usage') && (
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full" 
+                                style={{ 
+                                  width: `${pool.totalLicenses > 0 ? (pool.usedLicenses / pool.totalLicenses) * 100 : 0}%` 
+                                }}
+                              ></div>
+                            </div>
+                            <span className="text-sm text-gray-600">
+                              {pool.usedLicenses}/{pool.totalLicenses}
+                            </span>
                           </div>
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/license-pools/${pool.id}`)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeletePool(pool.id)}
-                            disabled={deletePoolMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('status') && (
+                        <TableCell>
+                          <Badge className={getStatusColor(pool.status)}>
+                            <div className="flex items-center space-x-1">
+                              {getStatusIcon(pool.status)}
+                              <span className="capitalize">{pool.status ? pool.status.replace('_', ' ') : 'Unknown'}</span>
+                            </div>
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('actions') && (
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/license-pools/${pool.id}`)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeletePool(pool.id)}
+                              disabled={deletePoolMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

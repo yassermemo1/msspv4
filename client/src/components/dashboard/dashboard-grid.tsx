@@ -67,24 +67,27 @@ export function DashboardGrid({
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
         {widgets.map((widget) => (
           <div key={widget.id} className="relative group">
-            <Card className="h-full">
-              <CardHeader className="pb-2">
+            <Card className="h-full hover:shadow-md transition-shadow duration-200">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getWidgetIcon(widget.widgetType)}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="flex-shrink-0">
+                      {getWidgetIcon(widget.widgetType)}
+                    </div>
                     <CardTitle className="text-sm font-medium truncate">
                       {widget.title}
                     </CardTitle>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => onEditWidget(widget)}
-                      className="h-6 w-6 p-0"
+                      className="h-7 w-7 p-0 hover:bg-blue-50 hover:text-blue-600"
+                      title="Edit widget"
                     >
                       <Edit className="h-3 w-3" />
                     </Button>
@@ -92,7 +95,8 @@ export function DashboardGrid({
                       variant="ghost"
                       size="sm"
                       onClick={() => onDeleteWidget(widget.id)}
-                      className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      title="Delete widget"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -100,7 +104,9 @@ export function DashboardGrid({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <WidgetWrapper widget={widget} />
+                <div className="min-h-[120px] flex items-center justify-center">
+                  <WidgetWrapper widget={widget} />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -110,7 +116,7 @@ export function DashboardGrid({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4 sm:p-6">
       {renderGrid()}
     </div>
   );

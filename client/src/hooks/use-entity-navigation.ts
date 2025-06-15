@@ -5,9 +5,9 @@
  * entity relationships throughout the application.
  */
 
+import React, { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useCallback, useMemo } from "react";
 import { 
   EntityType, 
   EntityReference, 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Contract, InsertContract, Client } from "@shared/schema";
+import { Contract, InsertContract, Client, ServiceScope } from "@shared/schema";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import { ContractForm } from "@/components/forms/contract-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
+import { ColumnVisibility, ColumnDefinition } from "@/components/ui/column-visibility";
+import { useColumnPreferences } from "@/hooks/use-column-preferences";
 
 // Define SelectedService interface since it's not in schema
 interface SelectedService {
@@ -30,11 +32,20 @@ export default function ContractsPage() {
   const [location, setLocation] = useLocation();
 
   // Query for service scopes
-  const { data: serviceScopes = [] } = useQuery({
+  const { data: serviceScopes = [] } = useQuery<ServiceScope[]>({
     queryKey: ["/api/service-scopes"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/service-scopes");
-      return await res.json();
+      const json = await res.json();
+      // The service returns an object { data: ServiceScope[], pagination: {...} }
+      // Extract the array if present; otherwise fall back to empty array.
+      if (Array.isArray(json)) {
+        return json as ServiceScope[];
+      }
+      if (json && Array.isArray(json.data)) {
+        return json.data as ServiceScope[];
+      }
+      return [] as ServiceScope[];
     },
   });
 
@@ -176,6 +187,28 @@ export default function ContractsPage() {
     setEditingContract(null);
   };
 
+  // Column visibility setup
+  const contractColumns: ColumnDefinition[] = [
+    { key: "name", label: "Contract", defaultVisible: true, mandatory: true },
+    { key: "client", label: "Client", defaultVisible: true, mandatory: true },
+    { key: "status", label: "Status", defaultVisible: true },
+    { key: "value", label: "Value", defaultVisible: false },
+    { key: "startDate", label: "Start Date", defaultVisible: true },
+    { key: "endDate", label: "End Date", defaultVisible: true },
+    { key: "scopes", label: "Service Scopes", defaultVisible: false },
+    { key: "actions", label: "Actions", defaultVisible: true, mandatory: true },
+  ];
+
+  const {
+    visibleColumns,
+    handleVisibilityChange,
+    resetToDefaults,
+    isColumnVisible,
+  } = useColumnPreferences({
+    storageKey: "contracts-table-columns",
+    columns: contractColumns,
+  });
+
   return (
     <AppLayout 
       title="Contract Management" 
@@ -216,8 +249,8 @@ export default function ContractsPage() {
             
             <CardContent>
               {/* Search */}
-              <div className="mb-6">
-                <div className="relative">
+              <div className="mb-6 flex items-center gap-2">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="Search contracts..."
@@ -226,6 +259,12 @@ export default function ContractsPage() {
                     className="pl-10"
                   />
                 </div>
+                <ColumnVisibility
+                  columns={contractColumns}
+                  visibleColumns={visibleColumns}
+                  onVisibilityChange={handleVisibilityChange}
+                  onReset={resetToDefaults}
+                />
               </div>
 
               {/* Contract Table */}
@@ -233,14 +272,14 @@ export default function ContractsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Contract</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Start Date</TableHead>
-                      <TableHead>End Date</TableHead>
-                      <TableHead>Service Scopes</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {isColumnVisible("name") && <TableHead>Contract</TableHead>}
+                      {isColumnVisible("client") && <TableHead>Client</TableHead>}
+                      {isColumnVisible("status") && <TableHead>Status</TableHead>}
+                      {isColumnVisible("value") && <TableHead>Value</TableHead>}
+                      {isColumnVisible("startDate") && <TableHead>Start Date</TableHead>}
+                      {isColumnVisible("endDate") && <TableHead>End Date</TableHead>}
+                      {isColumnVisible("scopes") && <TableHead>Service Scopes</TableHead>}
+                      {isColumnVisible("actions") && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -265,6 +304,7 @@ export default function ContractsPage() {
                     ) : (
                       filteredContracts.map((contract) => (
                         <TableRow key={contract.id}>
+                          {isColumnVisible("name") && (
                           <TableCell>
                             <div className="flex items-center space-x-3">
                               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -280,32 +320,44 @@ export default function ContractsPage() {
                               </div>
                             </div>
                           </TableCell>
+                          )}
+                          {isColumnVisible("client") && (
                           <TableCell>
                             <div className="flex items-center space-x-2">
                               <Building className="h-4 w-4 text-gray-400" />
                               <span className="text-sm">{getClientName(contract.clientId)}</span>
                             </div>
                           </TableCell>
+                          )}
+                          {isColumnVisible("status") && (
                           <TableCell>
                             <Badge variant={getStatusVariant(contract.status)}>
                               {contract.status}
                             </Badge>
                           </TableCell>
+                          )}
+                          {isColumnVisible("value") && (
                           <TableCell>
                             <span className="font-medium">
                               {contract.totalValue ? `$${parseFloat(contract.totalValue).toLocaleString()}` : "Not set"}
                             </span>
                           </TableCell>
+                          )}
+                          {isColumnVisible("startDate") && (
                           <TableCell>
                             <span className="text-sm">
                               {new Date(contract.startDate).toLocaleDateString()}
                             </span>
                           </TableCell>
+                          )}
+                          {isColumnVisible("endDate") && (
                           <TableCell>
                             <span className="text-sm">
                               {new Date(contract.endDate).toLocaleDateString()}
                             </span>
                           </TableCell>
+                          )}
+                          {isColumnVisible("scopes") && (
                           <TableCell>
                             <div className="space-y-1">
                               {contract.scopesCount > 0 ? (
@@ -326,6 +378,8 @@ export default function ContractsPage() {
                               )}
                             </div>
                           </TableCell>
+                          )}
+                          {isColumnVisible("actions") && (
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end space-x-2">
                               <Button
@@ -344,6 +398,7 @@ export default function ContractsPage() {
                               </Button>
                             </div>
                           </TableCell>
+                          )}
                         </TableRow>
                       ))
                     )}

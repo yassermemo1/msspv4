@@ -121,18 +121,18 @@ export default function CreateCocPage() {
     mutationFn: async (data: CocFormData) => {
       const cocData = {
         clientId: data.clientId,
-        contractId: data.contractId || null,
-        serviceScopeId: data.serviceScopeId || null,
-        safId: data.safId || null,
+        contractId: data.contractId,
+        serviceScopeId: data.serviceScopeId,
+        safId: data.safId,
         cocNumber: data.cocNumber,
         title: data.title,
         description: data.description || '',
         complianceType: data.complianceType,
         issueDate: data.issueDate,
-        expiryDate: data.expiryDate || null,
+        expiryDate: data.expiryDate,
         status: data.status || 'draft',
-        auditDate: data.auditDate || null,
-        nextAuditDate: data.nextAuditDate || null,
+        auditDate: data.auditDate,
+        nextAuditDate: data.nextAuditDate,
         notes: data.notes || '',
       };
 

@@ -1,4 +1,6 @@
 import { environmentConfig } from '../../../server/lib/environment-config';
+import { toast } from "sonner";
+import { getExchangeRates } from './currency-api';
 
 export interface CurrencyConfig {
   code: string;
@@ -128,7 +130,7 @@ export class CurrencyFormatter {
 
   constructor() {
     // Try to get user's locale from browser
-    this.userLocale = navigator.language || 'en-US';
+    this.userLocale = typeof window !== 'undefined' ? (navigator.language || 'en-US') : 'en-US';
     
     // Set default currency from environment or user preferences
     this.currentCurrency = this.getDefaultCurrency();
@@ -136,9 +138,11 @@ export class CurrencyFormatter {
 
   private getDefaultCurrency(): string {
     // Try to get from local storage first
-    const stored = localStorage.getItem('currency');
-    if (stored && SUPPORTED_CURRENCIES[stored]) {
-      return stored;
+    if(typeof window !== 'undefined') {
+      const stored = localStorage.getItem('currency');
+      if (stored && SUPPORTED_CURRENCIES[stored]) {
+        return stored;
+      }
     }
 
     // Try to detect from user locale
@@ -162,7 +166,9 @@ export class CurrencyFormatter {
   setCurrency(currencyCode: string): void {
     if (SUPPORTED_CURRENCIES[currencyCode]) {
       this.currentCurrency = currencyCode;
-      localStorage.setItem('currency', currencyCode);
+      if(typeof window !== 'undefined') {
+        localStorage.setItem('currency', currencyCode);
+      }
     } else {
       console.warn(`Unsupported currency: ${currencyCode}`);
     }
@@ -251,138 +257,139 @@ export class CurrencyFormatter {
 
     const config = this.getCurrencyConfig(currency);
 
-    // Use Intl.NumberFormat with compact notation
+    // Use Intl.NumberFormat for compact notation
     const formatter = new Intl.NumberFormat(config.locale || this.userLocale, {
-      style: 'decimal',
       notation: 'compact',
-      compactDisplay: 'short'
+      compactDisplay: 'short',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
     });
 
     const formatted = formatter.format(numAmount);
-
-    // Add currency symbol/code
+    
     let result = formatted;
     if (showSymbol) {
       result = config.symbolPosition === 'before' 
-        ? `${config.symbol}${formatted}`
+        ? `${config.symbol}${formatted}` 
         : `${formatted} ${config.symbol}`;
     }
 
-    if (showCode) {
-      result = showSymbol ? `${result} (${config.code})` : `${result} ${config.code}`;
+    if(showCode){
+      result = `${result} (${config.code})`;
     }
 
     return result;
   }
 
   /**
-   * Parse currency string back to number
+   * Parse a formatted currency string into a number
    */
   parse(value: string, currency?: string): number {
     const config = this.getCurrencyConfig(currency);
     
-    // Remove currency symbols and codes
-    let cleaned = value
-      .replace(new RegExp(config.symbol, 'g'), '')
-      .replace(new RegExp(config.code, 'g'), '')
-      .replace(/[()]/g, '')
+    // Remove symbols, separators, and non-numeric characters
+    const sanitized = value
+      .replace(config.symbol, '')
+      .replace(new RegExp(`\\${config.thousandsSeparator}`, 'g'), '')
+      .replace(config.decimalSeparator, '.')
       .trim();
-
-    // Handle different decimal separators
-    if (config.decimalSeparator === ',') {
-      // European style: 1.234,56
-      const lastComma = cleaned.lastIndexOf(',');
-      const lastDot = cleaned.lastIndexOf('.');
       
-      if (lastComma > lastDot) {
-        // Comma is decimal separator
-        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-      } else {
-        // Dot is decimal separator, remove commas
-        cleaned = cleaned.replace(/,/g, '');
-      }
-    } else {
-      // US style: 1,234.56 - remove commas
-      cleaned = cleaned.replace(/,/g, '');
-    }
-
-    return parseFloat(cleaned) || 0;
+    return parseFloat(sanitized) || 0;
   }
 
   /**
-   * Get currency symbol only
+   * Get currency symbol
    */
   getSymbol(currency?: string): string {
-    return this.getCurrencyConfig(currency).symbol;
+    const config = this.getCurrencyConfig(currency);
+    return config.symbol;
   }
 
   /**
-   * Get all supported currencies
+   * Get a list of supported currencies
    */
   getSupportedCurrencies(): CurrencyConfig[] {
     return Object.values(SUPPORTED_CURRENCIES);
   }
-
+  
   /**
-   * Create revenue range options for the current currency
+   * Get predefined revenue ranges for filtering/display
    */
   getRevenueRanges(): Array<{value: string, label: string}> {
-    const symbol = this.getSymbol();
-    return [
-      { value: '0-10000', label: `${symbol}0 - ${this.formatCompact(10000)}` },
-      { value: '10000-50000', label: `${this.formatCompact(10000)} - ${this.formatCompact(50000)}` },
-      { value: '50000-100000', label: `${this.formatCompact(50000)} - ${this.formatCompact(100000)}` },
-      { value: '100000-500000', label: `${this.formatCompact(100000)} - ${this.formatCompact(500000)}` },
-      { value: '500000-1000000', label: `${this.formatCompact(500000)} - ${this.formatCompact(1000000)}` },
-      { value: '1000000+', label: `${this.formatCompact(1000000)}+` }
+    const ranges = [
+      { value: '0-1000', label: this.format(0) + ' - ' + this.format(1000, { showSymbol: false }) },
+      { value: '1000-10000', label: this.format(1000) + ' - ' + this.format(10000, { showSymbol: false }) },
+      { value: '10000-50000', label: this.format(10000) + ' - ' + this.format(50000, { showSymbol: false }) },
+      { value: '50000-250000', label: this.format(50000) + ' - ' + this.format(250000, { showSymbol: false }) },
+      { value: '250000+', label: this.format(250000) + '+' }
     ];
+    return ranges;
+  }
+
+  private mockConversion(amount: number, fromCurrency: string, toCurrency: string): number {
+    // This is a placeholder. In a real scenario, you might have some default or stale rates.
+    console.warn(`Performing mock conversion from ${fromCurrency} to ${toCurrency}. This is not accurate.`);
+    const mockRates: { [key: string]: number } = {
+      'USD_EUR': 0.92,
+      'EUR_USD': 1.08,
+      'USD_GBP': 0.79,
+      'GBP_USD': 1.27,
+    };
+    const rate = mockRates[`${fromCurrency}_${toCurrency}`] || 1;
+    return amount * rate;
   }
 
   /**
-   * Convert between currencies (if rates are available)
+   * Convert between currencies using real-time exchange rates
    */
-  convert(amount: number, fromCurrency: string, toCurrency: string, exchangeRate?: number): number {
-    if (fromCurrency === toCurrency) return amount;
-    
-    // If exchange rate is provided, use it
+  async convert(amount: number, fromCurrency: string, toCurrency: string, exchangeRate?: number): Promise<number> {
+    if (fromCurrency === toCurrency) {
+      return amount;
+    }
+
+    // If an explicit exchange rate is provided, use it.
     if (exchangeRate) {
       return amount * exchangeRate;
     }
-
-    // TODO: Integrate with real-time exchange rate API
-    console.warn('Currency conversion requires exchange rate data');
-    return amount;
+    
+    try {
+      const rates = await getExchangeRates(fromCurrency);
+      const rate = rates[toCurrency];
+      
+      if (rate) {
+        return amount * rate;
+      } else {
+        toast.error(`Real-time exchange rate not available for ${fromCurrency} to ${toCurrency}.`);
+        return this.mockConversion(amount, fromCurrency, toCurrency);
+      }
+    } catch (error) {
+      console.error("Failed to fetch real-time exchange rates. Falling back to mock conversion.", error);
+      toast.error("Using mock conversion rate due to API failure.");
+      return this.mockConversion(amount, fromCurrency, toCurrency);
+    }
   }
 
   /**
-   * Format percentage
+   * Format a number as a percentage
    */
   formatPercentage(value: number, decimals: number = 1): string {
-    const formatter = new Intl.NumberFormat(this.userLocale, {
-      style: 'percent',
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    });
-    return formatter.format(value / 100);
+    return `${(value * 100).toFixed(decimals)}%`;
   }
 
   /**
-   * Format for input fields (without symbol)
+   * Format a number for an input field, ensuring it's a plain number string
    */
   formatForInput(amount: number | string, currency?: string): string {
-    return this.format(amount, { 
-      currency, 
-      showSymbol: false, 
-      showCode: false,
-      useGrouping: false 
-    });
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return '';
+    
+    const config = this.getCurrencyConfig(currency);
+    return numAmount.toFixed(config.decimals);
   }
 }
 
-// Global formatter instance
 export const currencyFormatter = CurrencyFormatter.getInstance();
 
-// Utility functions for easy use in components
 export const formatCurrency = (amount: number | string, options?: any) => 
   currencyFormatter.format(amount, options);
 
@@ -396,4 +403,19 @@ export const getCurrencySymbol = (currency?: string) =>
   currencyFormatter.getSymbol(currency);
 
 export const formatPercentage = (value: number, decimals?: number) =>
-  currencyFormatter.formatPercentage(value, decimals); 
+  currencyFormatter.formatPercentage(value, decimals);
+
+export const getRevenueRanges = () => 
+  currencyFormatter.getRevenueRanges();
+
+export const getSupportedCurrencies = () => 
+  currencyFormatter.getSupportedCurrencies();
+
+export const formatForInput = (amount: number | string, currency?: string) => 
+  currencyFormatter.formatForInput(amount, currency);
+
+export const convertCurrency = async (amount: number, fromCurrency: string, toCurrency: string, exchangeRate?: number) => 
+  currencyFormatter.convert(amount, fromCurrency, toCurrency, exchangeRate);
+
+export const mockConversion = (amount: number, fromCurrency: string, toCurrency: string) => 
+  currencyFormatter.mockConversion(amount, fromCurrency, toCurrency); 

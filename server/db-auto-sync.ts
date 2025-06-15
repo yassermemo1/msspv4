@@ -1,7 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "@shared/schema";
 import pg from "pg";
 import fs from "fs";
 import path from "path";
+import { eq } from "drizzle-orm";
 
 interface DbSyncOptions {
   databaseUrl: string;
@@ -19,7 +21,8 @@ export class DatabaseAutoSync {
     this.pool = new pg.Pool({
       connectionString: options.databaseUrl,
     });
-    this.db = drizzle(this.pool);
+    // Provide schema for typed queries
+    this.db = drizzle(this.pool, { schema });
   }
 
   async initialize(): Promise<void> {
@@ -42,6 +45,11 @@ export class DatabaseAutoSync {
       await this.updateSchemaVersion();
       
       console.log('✅ Database auto-sync completed successfully');
+
+      // Seed dev users if missing
+      if (this.options.environment === 'development') {
+        await this.seedDevUsers();
+      }
     } catch (error) {
       console.error('❌ Database auto-sync failed:', error);
       
@@ -225,6 +233,45 @@ export class DatabaseAutoSync {
       console.log(`✅ Schema version updated to ${appVersion}`);
     } catch (error) {
       console.warn('⚠️  Could not update schema version:', error);
+    }
+  }
+
+  private async seedDevUsers(): Promise<void> {
+    console.log('👥 Seeding development users (if missing)…');
+
+    const devUsers = [
+      { username: 'admin', email: 'admin@test.mssp.local', role: 'admin' },
+      { username: 'manager', email: 'manager@test.mssp.local', role: 'manager' },
+      { username: 'engineer', email: 'engineer@test.mssp.local', role: 'engineer' },
+      { username: 'user', email: 'user@test.mssp.local', role: 'user' },
+    ];
+
+    const bcrypt = await import('bcryptjs');
+    const saltRounds = 10;
+    const passwordPlain = process.env.TEST_PASSWORD || 'E38!1P0Y5rt$rAyA';
+
+    for (const u of devUsers) {
+      try {
+        const exists = await this.db
+          .select()
+          .from(schema.users)
+          .where(eq(schema.users.email, u.email));
+
+        if (exists.length === 0) {
+          const hash = await bcrypt.hash(passwordPlain, saltRounds);
+          await this.db.insert(schema.users).values({
+            username: u.username,
+            email: u.email,
+            password: hash,
+            firstName: u.username.charAt(0).toUpperCase() + u.username.slice(1),
+            lastName: 'User',
+            role: u.role,
+          });
+          console.log(`✅ Seeded ${u.role} (${u.email})`);
+        }
+      } catch (seedErr) {
+        console.warn(`⚠️  Could not seed ${u.email}:`, (seedErr as Error).message);
+      }
     }
   }
 

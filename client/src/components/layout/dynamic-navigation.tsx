@@ -70,8 +70,10 @@ export function DynamicNavigation({
   const { data: accessiblePages = [], isLoading } = useQuery<AccessiblePage[]>({
     queryKey: ["/api/user/accessible-pages", "field-visibility-added-2025-06-08"],
     enabled: !!user, // Only fetch if user is authenticated
-    staleTime: 0, // Don't use stale cache to ensure fresh data
-    gcTime: 0, // Don't cache results
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const handleNavigate = (href: string) => {
@@ -146,8 +148,6 @@ export function DynamicNavigation({
               const isActive = location === page.pageUrl;
               const Icon = getIcon(page.icon);
               
-              const isDynamicDashboards = page.displayName === "Dynamic Dashboards";
-              
               return (
                 <button
                   key={page.pageName}
@@ -155,18 +155,14 @@ export function DynamicNavigation({
                   className={cn(
                     "w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors text-left",
                     isActive
-                      ? isDynamicDashboards 
-                        ? "bg-red-100 text-red-700 border border-red-200"
-                        : "bg-primary/10 text-primary"
-                      : isDynamicDashboards
-                        ? "text-red-600 hover:bg-red-50 border border-red-200"
-                        : "text-gray-700 hover:bg-gray-50"
+                      ? "bg-primary/10 text-primary"
+                      : "text-gray-700 hover:bg-gray-50"
                   )}
                   title={compact ? page.displayName : page.description}
                 >
-                  <Icon className={cn("h-5 w-5 flex-shrink-0", isDynamicDashboards && "text-red-600")} />
+                  <Icon className="h-5 w-5 flex-shrink-0" />
                   {!compact && (
-                    <span className={cn("flex-1", isDynamicDashboards && "text-red-600")}>
+                    <span className="flex-1">
                       {page.displayName}
                     </span>
                   )}
@@ -191,8 +187,10 @@ export function useAccessiblePages() {
   return useQuery<AccessiblePage[]>({
     queryKey: ["/api/user/accessible-pages", "reorder-2025-06-07"],
     enabled: !!user,
-    staleTime: 0, // Don't use stale cache
-    gcTime: 0, // Don't cache results
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 

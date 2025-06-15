@@ -46,6 +46,7 @@ import {
   User,
   History
 } from "lucide-react";
+import { RelationshipDetailModal } from './relationship-detail-modal';
 
 // Icon mapping for group icons
 const getIconComponent = (iconName?: string) => {
@@ -281,6 +282,7 @@ export const EntityRelationshipsPanel: React.FC<EntityRelationshipsPanelProps> =
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(initiallyExpanded));
   const [globalSearch, setGlobalSearch] = useState("");
+  const [detailedViewGroup, setDetailedViewGroup] = useState<RelationshipGroup | null>(null);
 
   const { 
     data: relationshipGroups, 
@@ -374,12 +376,19 @@ export const EntityRelationshipsPanel: React.FC<EntityRelationshipsPanelProps> =
             onToggle={() => toggleGroup(group.type)}
             maxItems={maxItemsPerGroup}
             showViewAll={true}
-            onViewAll={() => {
-              // TODO: Open detailed relationship view
-              console.log(`View all for ${group.type}`);
-            }}
+            onViewAll={() => setDetailedViewGroup(group)}
           />
         ))}
+        
+        <RelationshipDetailModal 
+          group={detailedViewGroup}
+          isOpen={!!detailedViewGroup}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setDetailedViewGroup(null);
+            }
+          }}
+        />
       </div>
     );
   };

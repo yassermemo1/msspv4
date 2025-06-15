@@ -1,84 +1,68 @@
-import { Router } from 'express';
-import { storage } from '../storage.ts';
-import { integrationEngineAdapter } from '../services/integration-engine-adapter.ts';
-
-// Authentication middleware
-function requireAuth(req: any, res: any, next: any) {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
-  next();
-}
+import { Router } from "express";
+import { IntegrationEngineAdapter } from "../services/integration-engine-adapter";
+import { getPlugin, getAllInstances } from "../plugins/plugin-manager";
+import { pluginCache } from "../services/plugin-cache";
+import { requireAuth } from "../routes";
 
 const router = Router();
 
 /**
- * Test connection to integration engine for a specific system
+ * Test connection to integration engine for a specific plugin instance
  */
-router.get("/:systemId/test", requireAuth, async (req, res) => {
+router.get("/:pluginName/:instanceId/test", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    // Configure the adapter for this system
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    // Create adapter for this plugin instance
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const result = await adapter.testConnection();
+    
     res.json(result);
   } catch (error) {
     console.error("Integration engine test error:", error);
     res.status(500).json({ 
       success: false, 
       message: "Failed to test integration engine connection",
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
 /**
- * Get all widgets from integration engine
+ * Get all widgets from integration engine for a specific plugin
  */
-router.get("/:systemId/widgets", requireAuth, async (req, res) => {
+router.get("/:pluginName/:instanceId/widgets", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    // Configure the adapter for this system
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    // Create adapter for this plugin instance
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const widgets = await adapter.getAvailableWidgets();
     
     res.json({
-      systemId,
-      systemName: system.displayName,
+      pluginName,
+      instanceId,
+      instanceName: instance.name,
       widgets,
       count: widgets.length,
       timestamp: new Date().toISOString()
@@ -92,28 +76,21 @@ router.get("/:systemId/widgets", requireAuth, async (req, res) => {
 /**
  * Get specific widget from integration engine
  */
-router.get("/:systemId/widgets/:widgetId", requireAuth, async (req, res) => {
+router.get("/:pluginName/:instanceId/widgets/:widgetId", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const widgetId = req.params.widgetId;
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId, widgetId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const widget = await adapter.getWidget(widgetId);
     
     if (!widget) {
@@ -130,28 +107,21 @@ router.get("/:systemId/widgets/:widgetId", requireAuth, async (req, res) => {
 /**
  * Get widget data from integration engine
  */
-router.get("/:systemId/widgets/:widgetId/data", requireAuth, async (req, res) => {
+router.get("/:pluginName/:instanceId/widgets/:widgetId/data", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const widgetId = req.params.widgetId;
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId, widgetId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const widget = await adapter.getWidget(widgetId);
     
     if (!widget) {
@@ -170,29 +140,22 @@ router.get("/:systemId/widgets/:widgetId/data", requireAuth, async (req, res) =>
 /**
  * Render widget HTML from integration engine
  */
-router.post("/:systemId/widgets/:widgetId/render", requireAuth, async (req, res) => {
+router.post("/:pluginName/:instanceId/widgets/:widgetId/render", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const widgetId = req.params.widgetId;
+    const { pluginName, instanceId, widgetId } = req.params;
     const { config = {}, data } = req.body;
-    const system = await storage.getExternalSystem(systemId);
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const widget = await adapter.getWidget(widgetId);
     
     if (!widget) {
@@ -213,34 +176,29 @@ router.post("/:systemId/widgets/:widgetId/render", requireAuth, async (req, res)
 });
 
 /**
- * Get all dashboards from integration engine
+ * Get all dashboards from integration engine for a specific plugin
  */
-router.get("/:systemId/dashboards", requireAuth, async (req, res) => {
+router.get("/:pluginName/:instanceId/dashboards", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const dashboards = await adapter.getDashboards();
     
     res.json({
-      systemId,
-      systemName: system.displayName,
+      pluginName,
+      instanceId,
+      instanceName: instance.name,
       dashboards,
       count: dashboards.length,
       timestamp: new Date().toISOString()
@@ -254,28 +212,21 @@ router.get("/:systemId/dashboards", requireAuth, async (req, res) => {
 /**
  * Import widgets from integration engine dashboard
  */
-router.post("/:systemId/dashboards/:dashboardId/import", requireAuth, async (req, res) => {
+router.post("/:pluginName/:instanceId/dashboards/:dashboardId/import", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const dashboardId = req.params.dashboardId;
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId, dashboardId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
 
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
     const dashboards = await adapter.getDashboards();
     const dashboard = dashboards.find(d => d.id === dashboardId);
     
@@ -284,8 +235,8 @@ router.post("/:systemId/dashboards/:dashboardId/import", requireAuth, async (req
     }
 
     // Convert widgets to external widget definitions
-    const externalWidgets = dashboard.widgets.map(widget => 
-      adapter.convertToExternalWidgetDefinition(widget, system)
+    const externalWidgets = dashboard.widgets.map((widget: any) => 
+      adapter.convertToExternalWidgetDefinition(widget, instance)
     );
 
     res.json({
@@ -307,26 +258,21 @@ router.post("/:systemId/dashboards/:dashboardId/import", requireAuth, async (req
 /**
  * Discover and register all widgets from integration engine
  */
-router.post("/:systemId/discover", requireAuth, async (req, res) => {
+router.post("/:pluginName/:instanceId/discover", requireAuth, async (req, res) => {
   try {
-    const systemId = parseInt(req.params.systemId);
-    const system = await storage.getExternalSystem(systemId);
+    const { pluginName, instanceId } = req.params;
     
-    if (!system) {
-      return res.status(404).json({ message: "External system not found" });
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: "Plugin not found" });
     }
 
-    const adapter = new (await import('../services/integration-engine-adapter.js')).IntegrationEngineAdapter(system.baseUrl);
-    
-    if (system.authType !== 'none' && system.authConfig) {
-      adapter.setAuth({
-        type: system.authType as any,
-        token: system.authConfig.token,
-        key: system.authConfig.key,
-        username: system.authConfig.username,
-        password: system.authConfig.password
-      });
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: "Plugin instance not found" });
     }
+
+    const adapter = new IntegrationEngineAdapter(pluginName, instanceId);
 
     // Get widgets and dashboards
     const [widgets, dashboards] = await Promise.all([
@@ -336,8 +282,8 @@ router.post("/:systemId/discover", requireAuth, async (req, res) => {
 
     // Extract widgets from dashboards if needed
     const allWidgets = [...widgets];
-    dashboards.forEach(dashboard => {
-      dashboard.widgets.forEach(widget => {
+    dashboards.forEach((dashboard: any) => {
+      dashboard.widgets.forEach((widget: any) => {
         if (!allWidgets.find(w => w.id === widget.id)) {
           allWidgets.push(widget);
         }
@@ -346,7 +292,7 @@ router.post("/:systemId/discover", requireAuth, async (req, res) => {
 
     // Convert to external widget definitions
     const externalWidgets = allWidgets.map(widget => 
-      adapter.convertToExternalWidgetDefinition(widget, system)
+      adapter.convertToExternalWidgetDefinition(widget, instance)
     );
 
     // Register with the external widget registry
@@ -356,8 +302,9 @@ router.post("/:systemId/discover", requireAuth, async (req, res) => {
     });
 
     res.json({
-      systemId,
-      systemName: system.displayName,
+      pluginName,
+      instanceId,
+      instanceName: instance.name,
       discovered: {
         widgets: widgets.length,
         dashboards: dashboards.length,
@@ -367,8 +314,129 @@ router.post("/:systemId/discover", requireAuth, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("Discover integration engine widgets error:", error);
-    res.status(500).json({ message: "Failed to discover widgets from integration engine" });
+    console.error("Discover widgets error:", error);
+    res.status(500).json({ message: "Failed to discover widgets" });
+  }
+});
+
+/**
+ * Get all available plugin instances for integration engine
+ */
+router.get("/instances", requireAuth, async (req, res) => {
+  try {
+    const instances = getAllInstances();
+    
+    const integrationInstances = instances.map(({ pluginName, instance }) => ({
+      pluginName,
+      instanceId: instance.id,
+      instanceName: instance.name,
+      baseUrl: instance.baseUrl,
+      isActive: instance.isActive,
+      tags: instance.tags || []
+    }));
+
+    res.json({
+      instances: integrationInstances,
+      count: integrationInstances.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Get integration instances error:", error);
+    res.status(500).json({ message: "Failed to fetch integration instances" });
+  }
+});
+
+/**
+ * Cache management endpoints
+ */
+
+/**
+ * Get cache statistics
+ */
+router.get("/cache/stats", requireAuth, async (req, res) => {
+  try {
+    const stats = pluginCache.getStats();
+    res.json({
+      cache: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Get cache stats error:", error);
+    res.status(500).json({ message: "Failed to get cache statistics" });
+  }
+});
+
+/**
+ * Clear cache for specific plugin instance
+ */
+router.delete("/:pluginName/:instanceId/cache", requireAuth, async (req, res) => {
+  try {
+    const { pluginName, instanceId } = req.params;
+    
+    pluginCache.invalidatePlugin(pluginName, instanceId);
+    
+    res.json({
+      message: `Cache cleared for plugin ${pluginName}:${instanceId}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Clear plugin cache error:", error);
+    res.status(500).json({ message: "Failed to clear plugin cache" });
+  }
+});
+
+/**
+ * Clear cache for entire plugin
+ */
+router.delete("/:pluginName/cache", requireAuth, async (req, res) => {
+  try {
+    const { pluginName } = req.params;
+    
+    pluginCache.invalidatePlugin(pluginName);
+    
+    res.json({
+      message: `Cache cleared for plugin ${pluginName}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Clear plugin cache error:", error);
+    res.status(500).json({ message: "Failed to clear plugin cache" });
+  }
+});
+
+/**
+ * Clear all caches
+ */
+router.delete("/cache/all", requireAuth, async (req, res) => {
+  try {
+    pluginCache.clearAll();
+    
+    res.json({
+      message: "All plugin caches cleared",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Clear all cache error:", error);
+    res.status(500).json({ message: "Failed to clear all caches" });
+  }
+});
+
+/**
+ * Warm up cache for plugin instance
+ */
+router.post("/:pluginName/:instanceId/cache/warmup", requireAuth, async (req, res) => {
+  try {
+    const { pluginName, instanceId } = req.params;
+    
+    await pluginCache.warmUpPlugin(pluginName, instanceId);
+    
+    res.json({
+      message: `Cache warmed up for plugin ${pluginName}:${instanceId}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Warm up cache error:", error);
+    res.status(500).json({ message: "Failed to warm up cache" });
   }
 });
 

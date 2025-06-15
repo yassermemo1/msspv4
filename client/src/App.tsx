@@ -17,7 +17,7 @@ import { GlobalErrorProvider, useGlobalError } from "@/hooks/use-global-error";
 // Page imports
 import LoginPage from "@/pages/login-page";
 import RegisterPage from "@/pages/register-page";
-import DashboardPage from "@/pages/dashboard-page";
+import MainDashboardPage from "@/pages/main-dashboard-page";
 import ClientsPage from "@/pages/clients-page";
 import ClientDetailPage from "@/pages/client-detail-page";
 import ContractsPage from "@/pages/contracts-page";
@@ -34,8 +34,7 @@ import ReportsPage from "@/pages/reports-page";
 import ComprehensiveBulkImportPage from "@/pages/comprehensive-bulk-import";
 
 import FieldVisibilityManagerPage from "@/pages/field-visibility-manager";
-import ExternalSystemsPage from "@/pages/external-systems-page";
-import DashboardsPage from "@/pages/dashboards-page";
+
 import ServiceScopesPage from "@/pages/service-scopes-page";
 import ProposalsPage from "@/pages/proposals-page";
 import IntegrationEnginePage from "@/pages/integration-engine-page";
@@ -57,6 +56,8 @@ import NotFound from "@/pages/not-found";
 import ClientOnboardingPage from "@/pages/client-onboarding-page";
 import TestingPage from "@/pages/testing-page";
 import PluginsPage from "@/pages/plugins-page";
+import GlobalWidgetsPage from "@/pages/global-widgets-page";
+import WidgetManagerPage from "@/pages/widget-manager-page";
 
 // Component that provides the query client with error handling
 function QueryClientWrapper({ children }: { children: React.ReactNode }) {
@@ -86,7 +87,7 @@ function App() {
                   <Route path="/" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/">
-                        <DashboardPage />
+                        <MainDashboardPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />
@@ -195,27 +196,8 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/dashboards" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/dashboards">
-                        <DashboardsPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/dashboards/:dashboardId" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/dashboards">
-                        <DashboardPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/external-systems" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/external-systems">
-                        <ExternalSystemsPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+
+
                   <Route path="/integration-engine" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/integration-engine">
@@ -346,6 +328,20 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/plugins">
                         <PluginsPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/global-widgets" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/global-widgets">
+                        <GlobalWidgetsPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/widget-manager" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/widget-manager">
+                        <WidgetManagerPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />

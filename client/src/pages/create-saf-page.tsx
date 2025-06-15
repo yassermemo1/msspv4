@@ -25,9 +25,8 @@ const safFormSchema = z.object({
   safNumber: z.string().min(1, 'SAF number is required'),
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
-  value: z.string().optional(),
+  requestedDate: z.string().min(1, 'Requested date is required'),
+  expiryDate: z.string().optional(),
   status: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -58,9 +57,8 @@ export default function CreateSafPage() {
       safNumber: '',
       title: '',
       description: '',
-      startDate: '',
-      endDate: '',
-      value: '',
+      requestedDate: '',
+      expiryDate: '',
       status: 'pending',
       notes: '',
     },
@@ -102,13 +100,12 @@ export default function CreateSafPage() {
       const safData = {
         clientId: data.clientId,
         contractId: data.contractId,
-        serviceScopeId: data.serviceScopeId || null,
+        serviceScopeId: data.serviceScopeId,
         safNumber: data.safNumber,
         title: data.title,
         description: data.description || '',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        value: data.value ? parseFloat(data.value) : null,
+        requestedDate: data.requestedDate,
+        expiryDate: data.expiryDate || undefined,
         status: data.status || 'pending',
         notes: data.notes || '',
       };
@@ -353,7 +350,7 @@ export default function CreateSafPage() {
                     {/* Start Date */}
                     <FormField
                       control={form.control}
-                      name="startDate"
+                      name="requestedDate"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center gap-2">
@@ -371,7 +368,7 @@ export default function CreateSafPage() {
                     {/* End Date */}
                     <FormField
                       control={form.control}
-                      name="endDate"
+                      name="expiryDate"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center gap-2">
@@ -379,27 +376,7 @@ export default function CreateSafPage() {
                             End Date
                           </FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Value */}
-                    <FormField
-                      control={form.control}
-                      name="value"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Value ($)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              {...field}
-                            />
+                            <Input type="date" {...field} value={field.value || ''} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

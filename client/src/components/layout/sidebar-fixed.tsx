@@ -88,7 +88,10 @@ export function Sidebar() {
 
         {/* Navigation Menu */}
         <nav className="flex-1 p-4 space-y-1">
-          {primaryNavigation.map((item) => {
+          {primaryNavigation.filter(item => {
+            if(item.name === "Plugins" && !["admin","manager"].includes(user?.role || '')) return false;
+            return true;
+          }).map((item) => {
             const isActive = location === item.href;
             const isDynamicDashboards = item.name === "Dynamic Dashboards";
             return (

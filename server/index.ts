@@ -9,17 +9,27 @@ import { environmentConfig } from "./lib/environment-config";
 import { configureAuth } from "./auth";
 import { setupDatabaseAutoSync } from "./db-auto-sync";
 import { initializeDefaultIntegrations } from "./startup-integrations";
+import { initializeDefaultPagePermissions } from "./startup-page-permissions";
 import compression from "compression";
 import path from "path";
 import fs from "fs";
+// External system instance routes removed - using plugin system instead
 // Register all stub plugins (phase-1)
-import "./plugins/stub-plugins";
+// import "./plugins/stub-plugins"; // Skip stub plugins for now
 // Phase-2: real plugin implementations (override stubs)
 import "./plugins/jira-plugin";
 import "./plugins/qradar-plugin";
 import "./plugins/splunk-plugin";
 import "./plugins/elastic-plugin";
 import "./plugins/grafana-plugin";
+import "./plugins/fortigate-plugin";
+// Skip problematic plugins for now
+// import "./plugins/paloalto-plugin";
+// import "./plugins/carbonblack-plugin";
+// import "./plugins/sysdig-plugin";
+// import "./plugins/vmware-plugin";
+// import "./plugins/veeam-plugin";
+// import "./plugins/confluence-plugin";
 
 const app = express();
 
@@ -71,10 +81,15 @@ type WithError = {
   // Initialize default integrations (Jira system, etc.)
   await initializeDefaultIntegrations();
 
+  // Ensure page permission records are up to date (e.g. /bulk-import -> /comprehensive-bulk-import)
+  await initializeDefaultPagePermissions(databaseUrl);
+
   // Setup authentication after body parsing and before registering routes
   await setupAuth(app);
 
   const server = await registerRoutes(app);
+
+  // External system instance routes removed - using plugin system instead
 
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err.status || err.statusCode || 500;

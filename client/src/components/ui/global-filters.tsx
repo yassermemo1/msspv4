@@ -21,7 +21,7 @@ export interface FilterOption {
 }
 
 export interface FilterValue {
-  [key: string]: any;
+  [key: string]: string | number | boolean | Date | { from?: Date; to?: Date } | string[];
 }
 
 interface GlobalFiltersProps {
@@ -50,6 +50,7 @@ export function GlobalFilters({
     if (Array.isArray(value)) return value.length > 0;
     if (typeof value === 'string') return value.trim() !== '';
     if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'boolean') return value === true;
     if (value instanceof Date) return true;
     return value !== null && value !== undefined && value !== '';
   }).length;
@@ -57,7 +58,7 @@ export function GlobalFilters({
   const handleFilterChange = (key: string, value: any) => {
     const newValues = { ...values };
     
-    if (value === '' || value === null || value === undefined || 
+    if (value === '' || value === null || value === undefined || value === false ||
         (Array.isArray(value) && value.length === 0)) {
       delete newValues[key];
     } else {
@@ -215,6 +216,7 @@ export function GlobalFilters({
       if (Array.isArray(value)) return value.length > 0;
       if (typeof value === 'string') return value.trim() !== '';
       if (typeof value === 'number') return value !== 0;
+      if (typeof value === 'boolean') return value === true;
       if (value instanceof Date) return true;
       return value !== null && value !== undefined && value !== '';
     });

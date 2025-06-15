@@ -86,6 +86,8 @@ export default function EnhancedIntegrationEngine() {
   const [showPlatformConnector, setShowPlatformConnector] = useState(false);
   const [editingWidget, setEditingWidget] = useState<Widget | null>(null);
   const [editingQuery, setEditingQuery] = useState<CustomQuery | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [widgetTemplates, setWidgetTemplates] = useState<Widget[]>([]);
 
   // Fetch external systems
   const { data: systems = [], isLoading: systemsLoading } = useQuery({
@@ -138,26 +140,34 @@ export default function EnhancedIntegrationEngine() {
     return stats;
   }, [systems, widgets, customQueries]);
 
+  // Load templates
+  const loadWidgets = async () => {
+    try {
+      setLoading(true);
+      const response = await apiRequest('GET', '/api/widgets/manage');
+      const templates = await response.json();
+      setWidgetTemplates(templates);
+    } catch (error) {
+      console.error('Failed to load widget templates:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle widget operations
-  const handleSaveWidget = async (widget: any) => {
+  const handleSaveWidget = async (widget: Widget) => {
     try {
       if (editingWidget) {
-        await apiRequest('PUT', `/api/external-widgets/${editingWidget.id}`, widget);
-        toast({ title: "Success", description: "Widget updated successfully" });
+        await apiRequest('PUT', `/api/widgets/manage/${editingWidget.id}`, widget);
       } else {
-        await apiRequest('POST', '/api/external-widgets', widget);
-        toast({ title: "Success", description: "Widget created successfully" });
+        await apiRequest('POST', '/api/widgets/manage', widget);
       }
-      
-      queryClient.invalidateQueries({ queryKey: ['enhanced-widgets'] });
+      await loadWidgets(); // Reload templates
       setShowWidgetBuilder(false);
       setEditingWidget(null);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save widget",
-        variant: "destructive"
-      });
+      console.error('Failed to save widget:', error);
+      alert('Failed to save widget. Please try again.');
     }
   };
 

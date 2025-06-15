@@ -26,7 +26,7 @@ const formSchema = z.object({
   type: z.enum(["revenue", "cost"]),
   amount: z.string().min(1, "Amount is required"),
   status: z.enum(["pending", "completed", "failed", "cancelled"]),
-  description: z.string().optional(),
+  description: z.string().min(1, "Description is required"),
   clientId: z.number().optional(),
   transactionDate: z.string().min(1, "Transaction date is required"),
 });
@@ -86,7 +86,7 @@ export default function FinancialPage() {
         type: data.type,
         amount: parseFloat(data.amount).toString(),
         description: data.description,
-        clientId: data.clientId || null,
+        clientId: data.clientId,
         status: data.status,
         transactionDate: new Date(data.transactionDate),
       };

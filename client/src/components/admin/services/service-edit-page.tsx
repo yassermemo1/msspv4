@@ -417,7 +417,7 @@ export function ServiceEditPage() {
         <TabsContent value="template" className="space-y-6">
           <SimpleScopeFieldManager
             serviceId={parseInt(serviceId!)}
-            serviceName={service.name}
+            serviceName={formData.name}
             readonly={false}
           />
         </TabsContent>

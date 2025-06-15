@@ -1,4 +1,19 @@
 /**
+ * ⚠️  WARNING: STATIC NAVIGATION CONFIG - NOT USED IN MAIN APP
+ * 
+ * This static navigation configuration is NOT used by the main AppLayout component.
+ * The main app uses DynamicNavigation which fetches from the database (page_permissions table).
+ * 
+ * TO UPDATE NAVIGATION:
+ * 1. Go to Settings > Navigation Manager (admin only)
+ * 2. Or directly edit the page_permissions database table
+ * 3. Or use the /api/page-permissions API endpoints
+ * 
+ * This file is only used by:
+ * - Mobile navigation fallback
+ * - Some legacy components
+ * - Testing/development purposes
+ * 
  * Navigation Configuration
  * 
  * CENTRALIZED navigation configuration for the MSSP Client Management Platform
@@ -32,6 +47,8 @@ import {
   Upload,
   Network,
   UserPlus,
+  Plug,
+  Grid3X3,
   type LucideIcon
 } from "lucide-react";
 
@@ -62,11 +79,19 @@ export const mainNavigation: NavigationItem[] = [
     description: "Guided client onboarding with pool validation",
     isNew: true
   },
+
   { 
-    name: "Dynamic Dashboards", 
-    href: "/dashboards", 
-    icon: BarChart3,
-    description: "Create and manage custom dashboards",
+    name: "Global Widgets", 
+    href: "/global-widgets", 
+    icon: Grid3X3,
+    description: "Manage global widgets for all client pages",
+    isNew: true
+  },
+  { 
+    name: "Widget Manager", 
+    href: "/widget-manager", 
+    icon: Grid3X3,
+    description: "Advanced widget configuration and management",
     isNew: true
   },
   { 
@@ -130,6 +155,13 @@ export const mainNavigation: NavigationItem[] = [
     description: "Document management system"
   },
   { 
+    name: "Plugins", 
+    href: "/plugins", 
+    icon: Plug, 
+    description: "Connector instances management",
+    isNew: true 
+  },
+  { 
     name: "Integration Engine", 
     href: "/integration-engine", 
     icon: Zap,
@@ -141,13 +173,6 @@ export const mainNavigation: NavigationItem[] = [
     href: "/entity-navigation-demo", 
     icon: Network,
     description: "Jira-style entity linking and relationships",
-    isNew: true
-  },
-  { 
-    name: "Bulk Import", 
-    href: "/bulk-import", 
-    icon: Upload,
-    description: "Import client data from CSV files",
     isNew: true
   },
   { 

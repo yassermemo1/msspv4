@@ -74,7 +74,7 @@ export default function AdminDashboardPage() {
       title: "External Systems",
       description: "Manage integrations and external connections",
       icon: Database,
-      href: "/external-systems",
+              href: "/plugins",
       color: "text-indigo-600",
       bgColor: "bg-indigo-50"
     }

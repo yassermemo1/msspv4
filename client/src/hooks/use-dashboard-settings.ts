@@ -17,7 +17,16 @@ export interface DashboardCard {
     icon?: string;
     color?: string;
     format?: 'number' | 'currency' | 'percentage';
-    aggregation?: 'count' | 'sum' | 'average' | 'max' | 'min';
+    aggregation?:
+      | 'count'
+      | 'sum'
+      | 'average'
+      | 'max'
+      | 'min'
+      | {
+          function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+          field?: string;
+        };
     chartType?: 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter';
     filters?: Record<string, any>;
     trend?: boolean;
@@ -27,6 +36,9 @@ export interface DashboardCard {
     comparisonField?: string; // Field to compare
     timeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
     groupBy?: string; // Field to group data by
+    // Optional data source override specific to widget
+    dataSource?: string;
+    name?: string;
     // External system integration
     externalSystemId?: number;
     externalDataSourceId?: number;
@@ -37,6 +49,7 @@ export interface DashboardCard {
     showDataLabels?: boolean;
     enableDrillDown?: boolean;
     customColors?: string[];
+    colors?: string[];
     // Integration Engine specific properties
     integrationEngineId?: string;
     integrationEngineData?: {
@@ -45,6 +58,12 @@ export interface DashboardCard {
       dataSource?: string;
       component?: string;
       metadata?: any;
+      name?: string;
+      description?: string;
+      type?: string;
+      visualConfig?: any;
+      queryConfig?: any;
+      isActive?: boolean;
     };
   };
   isBuiltIn: boolean;
@@ -264,7 +283,14 @@ export function useDashboardSettings() {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate dashboard settings and related queries
       queryClient.invalidateQueries({ queryKey: ['user-dashboard-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-card'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/global-widgets'] });
+      
+      // Force refetch to ensure immediate update
+      queryClient.refetchQueries({ queryKey: ['user-dashboard-settings', user?.id] });
+      
       toast({
         title: "Success",
         description: "Dashboard settings saved successfully!",

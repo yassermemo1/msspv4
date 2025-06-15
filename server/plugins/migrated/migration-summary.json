@@ -1,0 +1,24 @@
+{
+  "migratedAt": "2025-06-14T15:49:00.767Z",
+  "results": {
+    "systemsMigrated": 9,
+    "instancesMigrated": 4,
+    "pluginFilesCreated": 9,
+    "errors": []
+  },
+  "instructions": {
+    "nextSteps": [
+      "Review the migrated plugin configuration files in server/plugins/migrated/",
+      "Create proper plugin implementations based on the migrated data",
+      "Test the new plugin implementations",
+      "Update any client code to use the new plugin APIs",
+      "Remove external system routes and tables after verification"
+    ],
+    "notes": [
+      "Original external system data is preserved in the migration files",
+      "Plugin files are in JSON format for easy review and conversion",
+      "Authentication configurations have been preserved",
+      "Instance IDs have been prefixed with system name to avoid conflicts"
+    ]
+  }
+}

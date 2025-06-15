@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { 
@@ -42,7 +42,6 @@ import {
 } from "lucide-react";
 import { ClientForm } from "@/components/forms/client-form";
 import { ClientLicenseForm } from "@/components/forms/client-license-form";
-import { ClientExternalMappings } from "@/unused-scripts/external-systems/client-external-mappings";
 import { HistoryTimeline } from "@/components/ui/history-timeline";
 import { EntityRelationshipsPanel } from "@/components/ui/entity-relationships-panel";
 import { EntityRelationshipTree } from "@/components/ui/entity-relationship-tree";
@@ -55,12 +54,19 @@ import { formatCurrency } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
 import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
 import { JiraTicketsKpi } from '@/components/widgets/jira-tickets-kpi';
+import { WidgetManagementPanel } from '@/components/widgets/widget-management-panel';
+import { DynamicWidgetRenderer } from '@/components/widgets/dynamic-widget-renderer';
+import { ClientWidgetsManager } from '@/components/widgets/client-widgets-manager';
+import { GlobalClientWidgets } from '@/components/widgets/global-client-widgets';
+import { GlobalWidgetManager } from '@/components/widgets/global-widget-manager';
+import { BarChart3 } from 'lucide-react';
 
 export default function ClientDetailPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLicenseAssignOpen, setIsLicenseAssignOpen] = useState(false);
+  const [showWidgetManager, setShowWidgetManager] = useState(false);
   const { toast } = useToast();
 
   const clientId = id ? parseInt(id, 10) : null;
@@ -210,7 +216,7 @@ export default function ClientDetailPage() {
   });
 
   // Fetch all services for reference
-  const { data: allServices = [] } = useQuery<Service[]>({
+  const { data: allServices = [], isLoading: servicesLoading } = useQuery<Service[]>({
     queryKey: ["/api/services"],
     queryFn: async () => {
       const response = await fetch("/api/services", {
@@ -859,6 +865,16 @@ export default function ClientDetailPage() {
               </Card>
             </div>
 
+            {/* Global Widgets Section */}
+            <div className="mt-6">
+              <GlobalClientWidgets
+                clientShortName={client?.shortName || ''}
+                clientName={client?.name || ''}
+                clientDomain={client?.domain}
+                onManageWidgets={() => setShowWidgetManager(true)}
+              />
+            </div>
+
             {/* Entity Relationships Panel */}
             <div className="mt-6">
               <Card>
@@ -897,7 +913,6 @@ export default function ClientDetailPage() {
                 <TabsTrigger value="coc">COCs ({clientCOCs.length})</TabsTrigger>
                 <TabsTrigger value="documents">Documents ({clientDocuments.length})</TabsTrigger>
                 <TabsTrigger value="transactions">Transactions ({financialTransactions.length})</TabsTrigger>
-                <TabsTrigger value="external-systems">External Systems</TabsTrigger>
                 <TabsTrigger value="team">Team Assignments</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
@@ -1074,7 +1089,11 @@ export default function ClientDetailPage() {
                     <CardTitle>Client Services</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {(clientServiceScopes && Array.isArray(clientServiceScopes) && clientServiceScopes.length > 0) ? (
+                    {servicesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin w-6 h-6 border-4 border-primary border-t-transparent rounded-full" />
+                      </div>
+                    ) : (clientServiceScopes && Array.isArray(clientServiceScopes) && clientServiceScopes.length > 0) ? (
                       <div className="space-y-4">
                         {clientServiceScopes.map((scope) => {
                           // Parse scope definition to extract field values
@@ -1877,20 +1896,6 @@ export default function ClientDetailPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              
-              <TabsContent value="external-systems">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <ExternalLink className="h-5 w-5" />
-                      External Systems Integration
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ClientExternalMappings clientId={clientId!} />
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
               <TabsContent value="team">
                 <Card>
@@ -1948,6 +1953,19 @@ export default function ClientDetailPage() {
             </Tabs>
           </div>
         </main>
+
+        {/* Widget Manager Dialog */}
+        <Dialog open={showWidgetManager} onOpenChange={setShowWidgetManager}>
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Global Widget Management</DialogTitle>
+            </DialogHeader>
+            <GlobalWidgetManager onClose={() => setShowWidgetManager(false)} />
+          </DialogContent>
+        </Dialog>
     </AppLayout>
   );
 }
+
+// Global Client Widgets - automatically shows global widgets for this client
+// The GlobalClientWidgets component is imported and used in the main component above

@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 interface ServiceFormProps {
   service?: Service;
@@ -36,178 +37,175 @@ export function ServiceForm({ service, onSubmit, onCancel, isLoading = false }: 
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col h-full">
-        <DialogBody>
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Service Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., SOC Monitoring" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="monitoring">Monitoring</SelectItem>
-                        <SelectItem value="incident-response">Incident Response</SelectItem>
-                        <SelectItem value="vulnerability-management">Vulnerability Management</SelectItem>
-                        <SelectItem value="compliance">Compliance</SelectItem>
-                        <SelectItem value="consulting">Consulting</SelectItem>
-                        <SelectItem value="training">Training</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Service Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., SIEM Monitoring" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
+          <FormField
+            control={form.control}
+            name="category"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Category</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
                   <FormControl>
-                    <Textarea
-                      placeholder="Detailed description of the service..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                      value={field.value || ""}
-                    />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  <SelectContent>
+                    <SelectItem value="Security Operations">Security Operations</SelectItem>
+                    <SelectItem value="Network Security">Network Security</SelectItem>
+                    <SelectItem value="Compliance">Compliance</SelectItem>
+                    <SelectItem value="Consulting">Consulting</SelectItem>
+                    <SelectItem value="Support">Support</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="deliveryModel"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Delivery Model</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select delivery model" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="serverless">Serverless</SelectItem>
-                        <SelectItem value="on-prem">On-Premises Engineer</SelectItem>
-                        <SelectItem value="hybrid">Hybrid</SelectItem>
-                        <SelectItem value="cloud">Cloud-based</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Detailed description of the service..."
+                  className="resize-none min-h-[80px]"
+                  rows={3}
+                  {...field}
+                  value={field.value || ""}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-              <FormField
-                control={form.control}
-                name="pricingUnit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Pricing Unit</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select pricing unit" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="per-endpoint">Per Endpoint</SelectItem>
-                        <SelectItem value="per-month">Per Month</SelectItem>
-                        <SelectItem value="per-gb-day">Per GB/Day</SelectItem>
-                        <SelectItem value="per-user">Per User</SelectItem>
-                        <SelectItem value="fixed">Fixed Price</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="basePrice"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Base Price ($)</FormLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="deliveryModel"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Delivery Model</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
                   <FormControl>
-                    <Input
-                      placeholder="0.00"
-                      {...field}
-                      value={field.value || ""}
-                    />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select delivery model" />
+                    </SelectTrigger>
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  <SelectContent>
+                    <SelectItem value="serverless">Serverless</SelectItem>
+                    <SelectItem value="on-prem">On-Premises Engineer</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                    <SelectItem value="cloud">Cloud-based</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="scopeDefinitionTemplate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Scope Definition Template (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Default scope template for this service..."
-                      className="resize-none"
-                      rows={4}
-                      {...field}
-                      value={field.value ? JSON.stringify(field.value, null, 2) : ""}
-                      onChange={(e) => {
-                        try {
-                          const value = e.target.value ? JSON.parse(e.target.value) : null;
-                          field.onChange(value);
-                        } catch {
-                          field.onChange(e.target.value);
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </DialogBody>
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 sm:p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Active Service</FormLabel>
+                  <FormDescription className="text-sm">
+                    Enable this service for client assignments
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="basePrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Base Price ($)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    {...field}
+                    value={field.value || ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="pricingUnit"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Pricing Unit</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., per month, per user" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={onCancel}
+            className="w-full sm:w-auto order-2 sm:order-1"
+          >
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "Saving..." : service ? "Update Service" : "Create Service"}
+          <Button 
+            type="submit" 
+            disabled={isLoading}
+            className="w-full sm:w-auto order-1 sm:order-2"
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                {service ? 'Updating...' : 'Creating...'}
+              </>
+            ) : (
+              service ? 'Update Service' : 'Create Service'
+            )}
           </Button>
-        </DialogFooter>
+        </div>
       </form>
     </Form>
   );

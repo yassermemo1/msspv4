@@ -1,0 +1,38 @@
+{
+  "systemName": "paloalto",
+  "displayName": "Palo Alto Firewall",
+  "originalSystemId": 53,
+  "migratedAt": "2025-06-14T15:49:00.762Z",
+  "config": {
+    "instances": [],
+    "defaultRefreshInterval": 60,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "burstSize": 10
+    }
+  },
+  "originalData": {
+    "system": {
+      "id": 53,
+      "systemName": "paloalto",
+      "displayName": "Palo Alto Firewall",
+      "systemType": "firewall",
+      "baseUrl": "https://paloalto.local",
+      "authType": "none",
+      "authConfig": {},
+      "connectionConfig": null,
+      "queryMethods": null,
+      "dataTransforms": null,
+      "apiEndpoints": null,
+      "healthCheckConfig": null,
+      "rateLimitConfig": null,
+      "defaultMapping": null,
+      "errorHandling": null,
+      "isActive": true,
+      "createdBy": 1,
+      "createdAt": "2025-06-12T23:30:23.229Z",
+      "updatedAt": "2025-06-12T23:30:23.229Z"
+    },
+    "instances": []
+  }
+}

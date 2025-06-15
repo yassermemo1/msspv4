@@ -242,7 +242,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
   const [location, setLocation] = useLocation();
   const [selectedTimeRange, setSelectedTimeRange] = useState('this_month');
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<Record<string, FilterValue>>({});
+  const [filters, setFilters] = useState<Record<string, any>>({});
   const [showDrilldown, setShowDrilldown] = useState(false);
   const [drilldownData, setDrilldownData] = useState<any>(null);
   const [showCustomizer, setShowCustomizer] = useState(false);
@@ -250,9 +250,9 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
 
   // Query for external widgets
   const { data: externalWidgets = [], isLoading: externalWidgetsLoading } = useQuery({
-    queryKey: ['/api/external-widgets'],
+    queryKey: ['/api/global-widgets'],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/external-widgets');
+      const res = await apiRequest('GET', '/api/global-widgets');
       return res.json();
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -525,14 +525,46 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
   };
 
   const getGridColsClass = (cardCount: number) => {
-    // Make all cards more compact and consistent - always use 4-6 columns for better utilization
-    if (cardCount === 1) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-sm mx-auto";
-    if (cardCount === 2) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-md mx-auto";
-    if (cardCount === 3) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
-    if (cardCount === 4) return "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4";
-    if (cardCount <= 6) return "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4";
-    if (cardCount <= 8) return "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-4";
-    return "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-4";
+    // Responsive grid that works well on all screen sizes
+    if (cardCount === 1) return "grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 max-w-sm sm:max-w-md lg:max-w-none mx-auto lg:mx-0";
+    if (cardCount === 2) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 max-w-md sm:max-w-none mx-auto sm:mx-0";
+    if (cardCount === 3) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4";
+    if (cardCount === 4) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4";
+    if (cardCount <= 6) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4";
+    if (cardCount <= 8) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-4";
+    return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4";
+  };
+
+  const handleRemoveCard = (cardId: string) => {
+    removeCard(cardId);
+    toast({
+      title: "Card Removed",
+      description: "The widget has been removed from your dashboard.",
+    });
+  };
+
+  const handleEditCard = (cardId: string) => {
+    // For now, just open the customizer.
+    // A more specific edit modal could be implemented later.
+    setShowCustomizer(true);
+    toast({
+      title: "Edit Card",
+      description: "Use the customizer to modify your cards.",
+    });
+  };
+
+  const getChartData = (dataSource: string, chartType: string) => {
+    // This is a mock implementation. Replace with actual data fetching or processing.
+    if (dataSource === 'revenueByMonth') {
+      return stats?.revenueByMonth || [];
+    }
+    if (dataSource === 'clientsByIndustry') {
+      return stats?.clientsByIndustry || [];
+    }
+    if (dataSource === 'contractStatusDistribution') {
+      return stats?.contractStatusDistribution || [];
+    }
+    return [];
   };
 
   if (statsLoading) {
@@ -630,26 +662,54 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
         <div className="mb-6">
           {visibleCards.length > 0 && (
             <div className={getGridColsClass(visibleCards.length)}>
-              {visibleCards.map((card) => (
-                <DynamicDashboardCard
-                  key={card.id}
-                  card={card}
-                  onClick={() => {
-                    // Navigate to relevant page based on data source
-                    const navigationMap: Record<string, string> = {
-                      'clients': '/clients',
-                      'contracts': '/contracts',
-                      'services': '/services',
-                      'license_pools': '/license-pools',
-                      'hardware_assets': '/hardware-assets',
-                    };
-                    const route = navigationMap[card.dataSource];
-                    if (route) {
-                      setLocation(route);
-                    }
-                  }}
-                />
-              ))}
+              {visibleCards.map((card) => {
+                if (card.type === 'custom' && card.category === 'custom' && card.config?.integrationEngineId) {
+                  const widgetTemplate = Array.isArray(externalWidgets)
+                    ? externalWidgets.find(w => w.id === card.config.integrationEngineId)
+                    : undefined;
+                  if (!widgetTemplate) {
+                    return (
+                      <Card key={card.id} className="flex flex-col items-center justify-center p-4 border-dashed">
+                        <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                        <p className="mt-2 text-sm font-semibold">Widget template not found</p>
+                        <p className="text-xs text-muted-foreground">ID: {card.config.integrationEngineId}</p>
+                      </Card>
+                    );
+                  }
+                  return (
+                    <ExternalWidgetCard
+                      key={card.id}
+                      template={widgetTemplate}
+                      onEdit={() => handleEditCard(card.id)}
+                      onDelete={() => handleRemoveCard(card.id)}
+                    />
+                  );
+                }
+                if (card.type === 'chart') {
+                  const chartData = getChartData(card.config.dataSource, card.config.chartType);
+                  // ... existing code ...
+                }
+                return (
+                  <DynamicDashboardCard
+                    key={card.id}
+                    card={card}
+                    onClick={() => {
+                      // Navigate to relevant page based on data source
+                      const navigationMap: Record<string, string> = {
+                        'clients': '/clients',
+                        'contracts': '/contracts',
+                        'services': '/services',
+                        'license_pools': '/license-pools',
+                        'hardware_assets': '/hardware-assets',
+                      };
+                      const route = navigationMap[card.dataSource];
+                      if (route) {
+                        setLocation(route);
+                      }
+                    }}
+                  />
+                );
+              })}
             </div>
           )}
           
@@ -795,7 +855,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => setLocation('/external-systems')}
+                onClick={() => setLocation('/plugins')}
               >
                 <Settings className="h-4 w-4 mr-1" />
                 Manage Widgets
@@ -816,23 +876,23 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
                   onEdit={(template) => {
                     toast({
                       title: "Edit Widget",
-                      description: `Navigate to external systems to edit ${template.name}`,
+                      description: `Navigate to plugins to edit ${template.name}`,
                     });
-                    setLocation('/external-systems');
+                    setLocation('/plugins');
                   }}
                   onDelete={(templateId) => {
                     toast({
                       title: "Delete Widget",
-                      description: "Navigate to external systems to manage widgets",
+                      description: "Navigate to plugins to manage widgets",
                     });
-                    setLocation('/external-systems');
+                    setLocation('/plugins');
                   }}
                   onConfigure={(template) => {
                     toast({
                       title: "Configure Widget",
-                      description: `Navigate to external systems to configure ${template.name}`,
+                      description: `Navigate to plugins to configure ${template.name}`,
                     });
-                    setLocation('/external-systems');
+                    setLocation('/plugins');
                   }}
                 />
               ))}
@@ -875,7 +935,9 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
                     const converted = {
                       id: card.id,
                       title: card.title,
-                      type: card.type === 'comparison' || card.type === 'external' || card.type === 'pool-comparison' ? 'custom' : card.type,
+                      type: (card.type === 'comparison' || card.type === 'external' || card.type === 'pool-comparison' || card.type === 'integration-engine')
+                        ? ('custom' as DashboardCard['type'])
+                        : (card.type as DashboardCard['type']),
                       category: card.category === 'comparison' || card.category === 'external' ? 'custom' : card.category,
                       dataSource: card.dataSource,
                       size: card.size,

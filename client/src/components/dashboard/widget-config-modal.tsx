@@ -38,6 +38,16 @@ interface DataSource {
   columns?: string[];
 }
 
+interface WidgetConfig {
+  aggregation?: {
+    function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+    field?: string;
+  };
+  groupBy?: string;
+  label?: string;
+  [key: string]: any;
+}
+
 interface WidgetConfigModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,7 +65,12 @@ export function WidgetConfigModal({
   onSave,
   onCancel
 }: WidgetConfigModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    widgetType: string;
+    dataSource: string;
+    config: WidgetConfig;
+  }>({
     title: '',
     widgetType: 'kpi',
     dataSource: '',

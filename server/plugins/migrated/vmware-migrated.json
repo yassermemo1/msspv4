@@ -1,0 +1,66 @@
+{
+  "systemName": "vmware",
+  "displayName": "VMware vCenter",
+  "originalSystemId": 56,
+  "migratedAt": "2025-06-14T15:49:00.765Z",
+  "config": {
+    "instances": [
+      {
+        "id": "vmware-4",
+        "name": "tet",
+        "baseUrl": "https://vcenter.local",
+        "authType": "basic",
+        "authConfig": {},
+        "isActive": true,
+        "tags": [
+          "vmware",
+          "migrated"
+        ]
+      }
+    ],
+    "defaultRefreshInterval": 60,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "burstSize": 10
+    }
+  },
+  "originalData": {
+    "system": {
+      "id": 56,
+      "systemName": "vmware",
+      "displayName": "VMware vCenter",
+      "systemType": "virtualization",
+      "baseUrl": "https://vcenter.local",
+      "authType": "none",
+      "authConfig": {},
+      "connectionConfig": null,
+      "queryMethods": null,
+      "dataTransforms": null,
+      "apiEndpoints": null,
+      "healthCheckConfig": null,
+      "rateLimitConfig": null,
+      "defaultMapping": null,
+      "errorHandling": null,
+      "isActive": true,
+      "createdBy": 1,
+      "createdAt": "2025-06-12T23:30:23.229Z",
+      "updatedAt": "2025-06-12T23:30:23.229Z"
+    },
+    "instances": [
+      {
+        "id": 4,
+        "systemId": 56,
+        "instanceName": "tet",
+        "baseUrl": "https://vcenter.local",
+        "host": null,
+        "port": null,
+        "authType": "basic",
+        "authConfig": {},
+        "connectionConfig": null,
+        "isActive": true,
+        "createdAt": "2025-06-13T03:04:54.345Z",
+        "updatedAt": "2025-06-13T03:04:54.345Z"
+      }
+    ]
+  }
+}

@@ -25,6 +25,7 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from '@/lib/utils';
+import { ClientWidgetsManager } from "@/components/dashboard/client-widgets-manager";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -32,6 +33,7 @@ export default function HomePage() {
   const [, setLocation] = useLocation();
   const { widgetsWithData, refetch } = useDashboardWidgets();
   const [showCustomizer, setShowCustomizer] = useState(false);
+  const [showWidgetManager, setShowWidgetManager] = useState(false);
   const { toast } = useToast();
   
   // Dashboard settings hook for customizable cards
@@ -76,7 +78,8 @@ export default function HomePage() {
     const client = (clients || []).find(c => c.id === clientId);
     return client ? client.name : "Unknown Client";
   };
-const handleSaveDashboard = () => {
+
+  const handleSaveDashboard = () => {
     saveSettings();
     toast({
       title: "Success",
@@ -118,72 +121,21 @@ const handleSaveDashboard = () => {
 
   // Get grid class based on number of visible cards
   const getGridColsClass = (cardCount: number) => {
-    if (cardCount === 1) return "grid-cols-1";
-    if (cardCount === 2) return "grid-cols-1 md:grid-cols-2";
-    if (cardCount === 3) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
-    if (cardCount === 4) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
-    if (cardCount === 5) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5";
-    if (cardCount >= 6) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6";
-    return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+    // Responsive grid that adapts to screen size and card count
+    if (cardCount === 1) return "grid grid-cols-1 max-w-sm mx-auto";
+    if (cardCount === 2) return "grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto";
+    if (cardCount === 3) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+    if (cardCount === 4) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4";
+    if (cardCount <= 6) return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4";
+    return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
   };
 
   return (
-    <AppLayout 
-      title={`Welcome back, ${user?.firstName || 'User'}!`} 
-      subtitle="Here's what's happening with your clients today"
-    >
-      <main className="flex-1 overflow-auto p-6 pt-16 md:pt-6">
-        {/* Dashboard Header with Customize Button */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-            <p className="text-gray-600">Monitor your business metrics and performance</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResetDashboard}
-            >
-              Reset to Default
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCustomizer(!showCustomizer)}
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              {showCustomizer ? 'Hide Customizer' : 'Customize Dashboard'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Dashboard Customizer */}
-        {showCustomizer && (
-          <Card className="mb-6 border-blue-200 bg-blue-50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Dashboard Customizer</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCustomizer(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <DashboardCustomizer
-                cards={cards}
-                onCardsChange={updateCards}
-                onSave={handleSaveDashboard}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Dynamic Dashboard Cards */}
+    <AppLayout title="Dashboard" subtitle="Welcome to your MSSP management platform">
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
+        {/* Dashboard Cards */}
         {visibleCards.length > 0 && (
-          <div className={`grid ${getGridColsClass(visibleCards.length)} gap-4 mb-8`}>
+          <div className={`${getGridColsClass(visibleCards.length)} mb-6 sm:mb-8`}>
             {visibleCards.map((card) => (
               <DynamicDashboardCard
                 key={card.id}
@@ -196,14 +148,14 @@ const handleSaveDashboard = () => {
 
         {/* No Cards State */}
         {visibleCards.length === 0 && (
-          <Card className="border-dashed border-2 border-gray-300 mb-8">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <TrendingUp className="w-12 h-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Dashboard Cards</h3>
-              <p className="text-gray-600 text-center mb-6 max-w-md">
+          <Card className="border-dashed border-2 border-gray-300 mb-6 sm:mb-8">
+            <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 px-4">
+              <TrendingUp className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">No Dashboard Cards</h3>
+              <p className="text-gray-600 text-center mb-6 max-w-md text-sm sm:text-base">
                 Your dashboard is empty. Click "Customize Dashboard" to add cards and metrics to track your business performance.
               </p>
-              <Button onClick={() => setShowCustomizer(true)}>
+              <Button onClick={() => setShowCustomizer(true)} className="w-full sm:w-auto">
                 <Settings className="w-4 h-4 mr-2" />
                 Customize Dashboard
               </Button>
@@ -212,92 +164,59 @@ const handleSaveDashboard = () => {
         )}
 
         {/* Integration Engine Widgets */}
-        {widgetsWithData.length > 0 && (
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Integration Widgets</h2>
-                <p className="text-gray-600">Data from your connected external sources</p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetch()}
-                >
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  Refresh Data
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLocation('/integration-engine')}
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  Manage Widgets
-                </Button>
-              </div>
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Integration Engine Widgets</h2>
+              <p className="text-gray-600 text-sm sm:text-base">Real-time data from your integrated systems</p>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {widgetsWithData.map(({ widget, data, loading }) => (
-                <DashboardWidget
-                  key={widget.id}
-                  widget={widget}
-                  data={data}
-                  className={loading ? "opacity-50" : ""}
-                />
-              ))}
-            </div>
+            <Button 
+              onClick={() => setShowWidgetManager(true)}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Manage Widgets
+            </Button>
           </div>
-        )}
 
-        {/* No Widgets State */}
-        {widgetsWithData.length === 0 && (
-          <div className="mt-8">
-            <Card className="border-dashed border-2 border-gray-300">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Zap className="w-12 h-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Integration Widgets</h3>
-                <p className="text-gray-600 text-center mb-6 max-w-md">
-                  Create widgets from your integrated data sources to display real-time information on your dashboard.
-                </p>
-                <Button onClick={() => setLocation('/integration-engine')}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Widget
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+          <ClientWidgetsManager
+            clientId={null}
+            onWidgetUpdate={() => {
+              // Refresh widgets if needed
+            }}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Recent Clients */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
+              <CardTitle className="flex items-center text-base sm:text-lg">
                 <Building className="h-5 w-5 mr-2" />
                 Recent Clients
               </CardTitle>
             </CardHeader>
             <CardContent>
               {recentClients.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {recentClients.map((client) => (
-                    <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{client.name}</p>
-                        <p className="text-sm text-gray-600">{client.industry}</p>
+                    <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm sm:text-base truncate">{client.name}</p>
+                        <p className="text-xs sm:text-sm text-gray-600 truncate">{client.industry}</p>
                       </div>
-                      <Badge variant={getStatusBadgeVariant(client.status)}>
-                        {client.status}
-                      </Badge>
+                      <div className="ml-3 flex-shrink-0">
+                        <Badge variant={getStatusBadgeVariant(client.status)} className="text-xs">
+                          {client.status}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500 py-8">
-                  No clients found. Add your first client to get started.
+                <div className="text-center text-gray-500 py-6 sm:py-8">
+                  <p className="text-sm sm:text-base">No clients found. Add your first client to get started.</p>
                 </div>
               )}
             </CardContent>
@@ -306,38 +225,74 @@ const handleSaveDashboard = () => {
           {/* Recent Transactions */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
+              <CardTitle className="flex items-center text-base sm:text-lg">
                 <DollarSign className="h-5 w-5 mr-2" />
                 Recent Transactions
               </CardTitle>
             </CardHeader>
             <CardContent>
               {recentTransactions.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {recentTransactions.map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-gray-600">{getClientName(transaction.clientId)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-semibold ${transaction.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
-                          {transaction.type === 'revenue' ? '+' : '-'}{formatAmount(transaction.amount)}
+                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm sm:text-base truncate">{transaction.description}</p>
+                        <p className="text-xs sm:text-sm text-gray-600">
+                          {new Date(transaction.transactionDate).toLocaleDateString()}
                         </p>
-                        <p className="text-xs text-gray-500">{formatDate(transaction.transactionDate)}</p>
+                      </div>
+                      <div className="ml-3 flex-shrink-0">
+                        <span className={`font-medium text-sm sm:text-base ${
+                          transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500 py-8">
-                  No recent transactions found.
+                <div className="text-center text-gray-500 py-6 sm:py-8">
+                  <p className="text-sm sm:text-base">No recent transactions found.</p>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
-      </main>
+
+        {/* Dashboard Customizer */}
+        <EnhancedDashboard 
+          className={showCustomizer ? "block" : "hidden"}
+        />
+
+        {/* Widget Manager Modal */}
+        {showWidgetManager && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto">
+              <div className="p-4 sm:p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg sm:text-xl font-semibold">Widget Manager</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowWidgetManager(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="p-4 sm:p-6">
+                <ClientWidgetsManager
+                  clientId={null}
+                  onWidgetUpdate={() => {
+                    // Refresh widgets if needed
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </AppLayout>
   );
 }

@@ -1,0 +1,48 @@
+{
+  "systemName": "test",
+  "displayName": "test",
+  "originalSystemId": 13,
+  "migratedAt": "2025-06-14T15:49:00.759Z",
+  "config": {
+    "instances": [],
+    "defaultRefreshInterval": 60,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "burstSize": 10
+    }
+  },
+  "originalData": {
+    "system": {
+      "id": 13,
+      "systemName": "test",
+      "displayName": "test",
+      "systemType": "api",
+      "baseUrl": "https://jsonplaceholder.typicode.com/posts",
+      "authType": "none",
+      "authConfig": {},
+      "connectionConfig": {
+        "timeout": 30000,
+        "sslVerify": true,
+        "retryAttempts": 3
+      },
+      "queryMethods": {},
+      "dataTransforms": [],
+      "apiEndpoints": null,
+      "healthCheckConfig": {
+        "enabled": true,
+        "interval": 300
+      },
+      "rateLimitConfig": {
+        "burstLimit": 10,
+        "requestsPerMinute": 60
+      },
+      "defaultMapping": null,
+      "errorHandling": null,
+      "isActive": true,
+      "createdBy": 1,
+      "createdAt": "2025-06-09T00:01:32.688Z",
+      "updatedAt": "2025-06-09T00:01:32.688Z"
+    },
+    "instances": []
+  }
+}

@@ -103,7 +103,9 @@ import {
   PaginationParams,
   ScopeDefinitionTemplateResponse,
   type ServiceScopeField, 
-  type InsertServiceScopeField
+  type InsertServiceScopeField,
+  type ExternalSystemInstance,
+  type InsertExternalSystemInstance
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, like, or, asc, gte, lte, sql, isNull, isNotNull, ne } from "drizzle-orm";
@@ -112,6 +114,7 @@ import connectPg from "connect-pg-simple";
 import createMemoryStore from "memorystore";
 
 import { pool } from "./db";
+import { externalSystemInstances } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
 const MemoryStore = createMemoryStore(session);
@@ -184,6 +187,7 @@ export interface IStorage {
   createServiceScope(serviceScope: InsertServiceScope): Promise<ServiceScope>;
   updateServiceScope(id: number, serviceScope: Partial<InsertServiceScope>): Promise<ServiceScope | undefined>;
   deleteServiceScope(id: number): Promise<boolean>;
+  restoreServiceScopeVersion(scopeId: number, versionId: number): Promise<ServiceScope | undefined>;
   
   // Proposals
   getContractProposals(contractId: number): Promise<Proposal[]>;
@@ -220,6 +224,10 @@ export interface IStorage {
   createServiceAuthorizationForm(saf: InsertServiceAuthorizationForm): Promise<ServiceAuthorizationForm>;
   updateServiceAuthorizationForm(id: number, saf: Partial<InsertServiceAuthorizationForm>): Promise<ServiceAuthorizationForm | undefined>;
   deleteServiceAuthorizationForm(id: number): Promise<boolean>;
+  /**
+   * Get all SAFs belonging to a specific client
+   */
+  getServiceAuthorizationFormsByClientId(clientId: number): Promise<ServiceAuthorizationForm[]>;
   
   // Certificate of Compliance (COC)
   getAllCertificatesOfCompliance(): Promise<CertificateOfCompliance[]>;
@@ -369,6 +377,12 @@ export interface IStorage {
   removeUserDashboardCard(userId: number, cardId: string): Promise<void>;
   resetUserDashboardSettings(userId: number): Promise<void>;
   createDefaultDashboardSettings(userId: number): Promise<void>;
+
+  // External system instances
+  getExternalSystemInstances(systemId: number): Promise<ExternalSystemInstance[]>;
+  createExternalSystemInstance(instance: InsertExternalSystemInstance): Promise<ExternalSystemInstance>;
+  updateExternalSystemInstance(id: number, instance: Partial<InsertExternalSystemInstance>): Promise<ExternalSystemInstance | undefined>;
+  deleteExternalSystemInstance(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -878,6 +892,12 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async restoreServiceScopeVersion(scopeId: number, versionId: number): Promise<ServiceScope | undefined> {
+    // Implement the logic to restore a specific version of a service scope
+    // This is a placeholder implementation
+    return undefined;
+  }
+
   // Proposals
   async getContractProposals(contractId: number): Promise<Proposal[]> {
     return await db
@@ -1200,6 +1220,17 @@ export class DatabaseStorage implements IStorage {
   async deleteServiceAuthorizationForm(id: number): Promise<boolean> {
     const result = await db.delete(serviceAuthorizationForms).where(eq(serviceAuthorizationForms.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Get all SAFs belonging to a specific client
+   */
+  async getServiceAuthorizationFormsByClientId(clientId: number): Promise<ServiceAuthorizationForm[]> {
+    return await db
+      .select()
+      .from(serviceAuthorizationForms)
+      .where(eq(serviceAuthorizationForms.clientId, clientId))
+      .orderBy(serviceAuthorizationForms.title);
   }
 
   // Certificate of Compliance (COC)
@@ -1604,7 +1635,7 @@ export class DatabaseStorage implements IStorage {
     const offset = (page - 1) * safeLimit;
 
     // Build the base query
-    let query = db
+    let query: any = db
       .select()
       .from(integratedData)
       .where(eq(integratedData.dataSourceId, dataSourceId));
@@ -1626,7 +1657,7 @@ export class DatabaseStorage implements IStorage {
     query = query.orderBy(orderFn(sortColumn));
 
     // Get total count for pagination
-    const totalQuery = db
+    const totalQuery: any = db
       .select({ count: sql<number>`count(*)` })
       .from(integratedData)
       .where(eq(integratedData.dataSourceId, dataSourceId));
@@ -1662,7 +1693,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getIntegratedDataCount(dataSourceId: number, filters: Record<string, any> = {}): Promise<number> {
-    let query = db
+    let query: any = db
       .select({ count: sql<number>`count(*)` })
       .from(integratedData)
       .where(eq(integratedData.dataSourceId, dataSourceId));
@@ -2615,8 +2646,36 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Client management
-  async getClientsWithStats(): Promise<(Client & { contractsCount: number; servicesCount: number; licensesCount: number; })[]>;
+  // External system instances
+  async getExternalSystemInstances(systemId: number): Promise<ExternalSystemInstance[]> {
+    return await db
+      .select()
+      .from(externalSystemInstances)
+      .where(eq(externalSystemInstances.systemId, systemId))
+      .orderBy(externalSystemInstances.id);
+  }
+
+  async createExternalSystemInstance(instance: InsertExternalSystemInstance): Promise<ExternalSystemInstance> {
+    const [newInstance] = await db
+      .insert(externalSystemInstances)
+      .values(instance)
+      .returning();
+    return newInstance;
+  }
+
+  async updateExternalSystemInstance(id: number, instance: Partial<InsertExternalSystemInstance>): Promise<ExternalSystemInstance | undefined> {
+    const [updatedInstance] = await db
+      .update(externalSystemInstances)
+      .set(instance)
+      .where(eq(externalSystemInstances.id, id))
+      .returning();
+    return updatedInstance || undefined;
+  }
+
+  async deleteExternalSystemInstance(id: number): Promise<boolean> {
+    const result = await db.delete(externalSystemInstances).where(eq(externalSystemInstances.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
 }
 
 export const storage = new DatabaseStorage();
