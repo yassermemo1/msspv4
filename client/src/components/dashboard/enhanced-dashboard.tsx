@@ -240,7 +240,7 @@ const KPICard: React.FC<{
 
 export default function EnhancedDashboard({ className }: EnhancedDashboardProps) {
   const [location, setLocation] = useLocation();
-  const [selectedTimeRange, setSelectedTimeRange] = useState('this_month');
+  const [selectedTimeRange, setSelectedTimeRange] = useState('ytd');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [showDrilldown, setShowDrilldown] = useState(false);
@@ -262,7 +262,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
 
   // Query for dashboard statistics
   const { data: stats, isLoading: statsLoading, refetch } = useQuery<DashboardStats>({
-    queryKey: ['/api/dashboard/stats', selectedTimeRange, filters],
+    queryKey: ['/api/dashboard/stats', selectedTimeRange, filters, 'fixed-null-handling-2025-06-15'],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('timeRange', selectedTimeRange);

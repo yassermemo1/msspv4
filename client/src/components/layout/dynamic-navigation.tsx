@@ -18,6 +18,11 @@ import {
   FolderOpen,
   Zap,
   Upload,
+  Menu,
+  HardDrive,
+  Plug,
+  Grid3X3,
+  UserPlus,
   LucideIcon
 } from "lucide-react";
 
@@ -38,6 +43,11 @@ const iconMap: Record<string, LucideIcon> = {
   FolderOpen,
   Zap,
   Upload,
+  Menu,
+  HardDrive,
+  Plug,
+  Grid3X3,
+  UserPlus,
 };
 
 interface AccessiblePage {
@@ -68,7 +78,7 @@ export function DynamicNavigation({
 
   // Query for accessible pages with proper cache invalidation
   const { data: accessiblePages = [], isLoading } = useQuery<AccessiblePage[]>({
-    queryKey: ["/api/user/accessible-pages", "field-visibility-added-2025-06-08"],
+    queryKey: ["/api/user/accessible-pages", "missing-pages-added-2025-06-15"],
     enabled: !!user, // Only fetch if user is authenticated
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
@@ -185,7 +195,7 @@ export function useAccessiblePages() {
   const { user } = useAuth();
   
   return useQuery<AccessiblePage[]>({
-    queryKey: ["/api/user/accessible-pages", "reorder-2025-06-07"],
+    queryKey: ["/api/user/accessible-pages", "missing-pages-added-2025-06-15"],
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
