@@ -239,16 +239,19 @@ export class DatabaseAutoSync {
   private async seedDevUsers(): Promise<void> {
     console.log('👥 Seeding development users (if missing)…');
 
+    // Import test data generator to get consistent credentials
+    const { testDataGenerator } = await import('./lib/test-data-generator');
+    const testCredentials = testDataGenerator.getTestCredentials();
+
     const devUsers = [
-      { username: 'admin', email: 'admin@test.mssp.local', role: 'admin' },
-      { username: 'manager', email: 'manager@test.mssp.local', role: 'manager' },
-      { username: 'engineer', email: 'engineer@test.mssp.local', role: 'engineer' },
-      { username: 'user', email: 'user@test.mssp.local', role: 'user' },
+      { username: 'admin', email: testCredentials.admin.email, role: 'admin', password: testCredentials.admin.password },
+      { username: 'manager', email: testCredentials.manager.email, role: 'manager', password: testCredentials.manager.password },
+      { username: 'engineer', email: testCredentials.engineer.email, role: 'engineer', password: testCredentials.engineer.password },
+      { username: 'user', email: testCredentials.user.email, role: 'user', password: testCredentials.user.password },
     ];
 
     const bcrypt = await import('bcryptjs');
     const saltRounds = 10;
-    const passwordPlain = process.env.TEST_PASSWORD || 'E38!1P0Y5rt$rAyA';
 
     for (const u of devUsers) {
       try {
@@ -258,7 +261,7 @@ export class DatabaseAutoSync {
           .where(eq(schema.users.email, u.email));
 
         if (exists.length === 0) {
-          const hash = await bcrypt.hash(passwordPlain, saltRounds);
+          const hash = await bcrypt.hash(u.password, saltRounds);
           await this.db.insert(schema.users).values({
             username: u.username,
             email: u.email,
@@ -268,6 +271,8 @@ export class DatabaseAutoSync {
             role: u.role,
           });
           console.log(`✅ Seeded ${u.role} (${u.email})`);
+        } else {
+          console.log(`⏭️  User already exists: ${u.role} (${u.email})`);
         }
       } catch (seedErr) {
         console.warn(`⚠️  Could not seed ${u.email}:`, (seedErr as Error).message);

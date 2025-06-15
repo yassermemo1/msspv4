@@ -728,6 +728,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get dashboard statistics
+  app.get("/api/dashboard/stats", requireAuth, async (req, res, next) => {
+    try {
+      const { timeRange = 'ytd' } = req.query;
+      
+      // Calculate date range based on timeRange parameter
+      let startDate = new Date();
+      const endDate = new Date();
+      
+      switch (timeRange) {
+        case 'mtd':
+          startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+          break;
+        case 'qtd':
+          const quarter = Math.floor(endDate.getMonth() / 3);
+          startDate = new Date(endDate.getFullYear(), quarter * 3, 1);
+          break;
+        case 'ytd':
+        default:
+          startDate = new Date(endDate.getFullYear(), 0, 1);
+          break;
+      }
+
+      // Get basic statistics
+      const [clientCount] = await db
+        .select({ count: count() })
+        .from(clients);
+
+      const [contractCount] = await db
+        .select({ count: count() })
+        .from(contracts);
+
+      const [serviceCount] = await db
+        .select({ count: count() })
+        .from(services);
+
+      // Get contract value statistics (all active contracts, not just created in time range)
+      const [contractStats] = await db
+        .select({
+          totalValue: sql<number>`COALESCE(SUM(CASE WHEN ${contracts.totalValue} IS NOT NULL THEN CAST(${contracts.totalValue} AS DECIMAL) ELSE 0 END), 0)`,
+          activeContracts: sql<number>`CAST(COUNT(CASE WHEN ${contracts.status} = 'active' THEN 1 END) AS INTEGER)`
+        })
+        .from(contracts)
+        .where(eq(contracts.status, 'active'));
+
+      // Get recent activity (simplified)
+      const recentClients = await db
+        .select({
+          id: clients.id,
+          name: clients.name,
+          createdAt: clients.createdAt
+        })
+        .from(clients)
+        .orderBy(desc(clients.createdAt))
+        .limit(5);
+
+      const recentContracts = await db
+        .select({
+          id: contracts.id,
+          name: contracts.name,
+          clientName: clients.name,
+          createdAt: contracts.createdAt
+        })
+        .from(contracts)
+        .leftJoin(clients, eq(contracts.clientId, clients.id))
+        .orderBy(desc(contracts.createdAt))
+        .limit(5);
+
+      const stats = {
+        overview: {
+          totalClients: clientCount?.count || 0,
+          totalContracts: contractCount?.count || 0,
+          totalServices: serviceCount?.count || 0,
+          activeContracts: Number(contractStats?.activeContracts || 0),
+          totalRevenue: Number(contractStats?.totalValue || 0)
+        },
+        timeRange,
+        period: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString()
+        },
+        recentActivity: {
+          clients: recentClients || [],
+          contracts: recentContracts || []
+        }
+      };
+
+      res.json(stats);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get license pools
+  app.get("/api/license-pools", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - license pools would need to be implemented
+      // This is a placeholder to prevent frontend errors
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get license pools summary
+  app.get("/api/license-pools/summary", requireAuth, async (req, res, next) => {
+    try {
+      // Return placeholder data to prevent frontend errors
+      res.json({
+        totalPools: 0,
+        totalLicenses: 0,
+        availableLicenses: 0,
+        utilizationRate: 0
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
 
 
 // Get client by ID
@@ -4240,109 +4359,197 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reorder page permissions (admin only) - MUST come before the :id route
+  // ========================================
+  // MISSING API ENDPOINTS
+  // ========================================
 
-// Custom contract schema that accepts date strings from JSON and converts them to Date objects
-const apiContractSchema = z.object({
-  clientId: z.number(),
-  name: z.string(),
-  startDate: z.string().transform((str) => new Date(str)),
-  endDate: z.string().transform((str) => new Date(str)),
-  status: z.string().optional(),
-  notes: z.string().nullable().optional(),
-  autoRenewal: z.boolean().optional(),
-  renewalTerms: z.string().nullable().optional(),
-  totalValue: z.string().nullable().optional(),
-  documentUrl: z.string().nullable().optional(),
-});
+  // Get all services
+  app.get("/api/services", requireAuth, async (req, res, next) => {
+    try {
+      const servicesList = await db
+        .select()
+        .from(services)
+        .orderBy(services.name);
+      res.json(servicesList);
+    } catch (error) {
+      next(error);
+    }
+  });
 
-// Custom license pool schema that accepts date strings from JSON and converts them to Date objects
-const apiLicensePoolSchema = z.object({
-  name: z.string(),
-  vendor: z.string(),
-  productName: z.string(),
-  licenseType: z.string().optional(),
-  totalLicenses: z.number(),
-  availableLicenses: z.number(),
-  costPerLicense: z.string().optional(),
-  renewalDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  notes: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
+  // Get all users
+  app.get("/api/users", requireAuth, async (req, res, next) => {
+    try {
+      const usersList = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+          isActive: users.isActive,
+          createdAt: users.createdAt
+        })
+        .from(users)
+        .orderBy(users.firstName, users.lastName);
+      res.json(usersList);
+    } catch (error) {
+      next(error);
+    }
+  });
 
-// Custom hardware asset schema that accepts date strings from JSON and converts them to Date objects
-const apiHardwareAssetSchema = z.object({
-  name: z.string(),
-  category: z.string(),
-  manufacturer: z.string().optional(),
-  model: z.string().optional(),
-  serialNumber: z.string().optional(),
-  purchaseDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  purchaseCost: z.string().optional(),
-  warrantyExpiry: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  status: z.string().optional(),
-  location: z.string().optional(),
-  notes: z.string().optional(),
-});
+  // Get user settings
+  app.get("/api/user/settings", requireAuth, async (req, res, next) => {
+    try {
+      // Return default user settings for now
+      res.json({
+        theme: 'light',
+        notifications: true,
+        language: 'en',
+        timezone: 'UTC'
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-// Custom individual license schema that accepts date strings from JSON and converts them to Date objects
-const apiIndividualLicenseSchema = z.object({
-  clientId: z.number(),
-  serviceScopeId: z.number().optional(),
-  name: z.string(),
-  vendor: z.string(),
-  productName: z.string(),
-  licenseKey: z.string().optional(),
-  licenseType: z.string().optional(),
-  quantity: z.number().default(1),
-  costPerLicense: z.string().optional(),
-  purchaseDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  expiryDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  renewalDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  purchaseRequestNumber: z.string().optional(),
-  purchaseOrderNumber: z.string().optional(),
-  documentUrl: z.string().optional(),
-  status: z.string().optional(),
-  notes: z.string().optional(),
-});
+  // Get company settings
+  app.get("/api/company/settings", requireAuth, async (req, res, next) => {
+    try {
+      // Return default company settings for now
+      res.json({
+        companyName: 'MSSP Portal',
+        logo: null,
+        primaryColor: '#3b82f6',
+        timezone: 'UTC'
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-// Custom SAF schema that accepts date strings from JSON and converts them to Date objects
-const apiServiceAuthorizationFormSchema = z.object({
-  clientId: z.number(),
-  contractId: z.number(),
-  serviceScopeId: z.number().optional(),
-  safNumber: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  startDate: z.string().transform((str) => new Date(str)),
-  endDate: z.string().transform((str) => new Date(str)),
-  status: z.string().optional(),
-  documentUrl: z.string().optional(),
-  approvedBy: z.number().optional(),
-  approvedDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  value: z.string().optional(),
-  notes: z.string().optional(),
-});
+  // Get global widgets
+  app.get("/api/global-widgets", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - widgets would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
 
-// Custom COC schema that accepts date strings from JSON and converts them to Date objects
-const apiCertificateOfComplianceSchema = z.object({
-  clientId: z.number(),
-  contractId: z.number().optional(),
-  serviceScopeId: z.number().optional(),
-  safId: z.number().optional(),
-  cocNumber: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  complianceType: z.string(),
-  issueDate: z.string().transform((str) => new Date(str)),
-  expiryDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  status: z.string().optional(),
-  documentUrl: z.string().optional(),
-  issuedBy: z.number().optional(),
-  auditDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  nextAuditDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
-  notes: z.string().optional(),
-});
+  // Get user dashboard settings
+  app.get("/api/user-dashboard-settings", requireAuth, async (req, res, next) => {
+    try {
+      // Return default dashboard settings for now
+      res.json({
+        layout: 'grid',
+        cards: [],
+        refreshInterval: 300000
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get dashboard card data
+  app.get("/api/dashboard/card-data", requireAuth, async (req, res, next) => {
+    try {
+      const { table, aggregation, filter_status } = req.query;
+      
+      let result = 0;
+      
+      switch (table) {
+        case 'clients':
+          const [clientCount] = await db.select({ count: count() }).from(clients);
+          result = clientCount?.count || 0;
+          break;
+        case 'contracts':
+          if (aggregation === 'sum') {
+            const [contractSum] = await db
+              .select({
+                sum: sql<number>`COALESCE(SUM(CASE WHEN ${contracts.totalValue} IS NOT NULL THEN CAST(${contracts.totalValue} AS DECIMAL) ELSE 0 END), 0)`
+              })
+              .from(contracts);
+            result = Number(contractSum?.sum || 0);
+          } else {
+            let query = db.select({ count: count() }).from(contracts);
+            if (filter_status) {
+              query = query.where(eq(contracts.status, filter_status as string));
+            }
+            const [contractCount] = await query;
+            result = contractCount?.count || 0;
+          }
+          break;
+        case 'services':
+          const [serviceCount] = await db.select({ count: count() }).from(services);
+          result = serviceCount?.count || 0;
+          break;
+        case 'tasks':
+          result = 0; // Placeholder - tasks table would need to be implemented
+          break;
+        case 'license_pools':
+          result = 0; // Placeholder - license pools would need to be implemented
+          break;
+        default:
+          result = 0;
+      }
+      
+      res.json({ value: result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get widgets manage
+  app.get("/api/widgets/manage", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - widget management would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get plugins
+  app.get("/api/plugins", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - plugins would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get documents
+  app.get("/api/documents", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - documents would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get financial transactions
+  app.get("/api/financial-transactions", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - financial transactions would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get team assignments
+  app.get("/api/team-assignments", requireAuth, async (req, res, next) => {
+    try {
+      // Return empty array for now - team assignments would need to be implemented
+      res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   return httpServer;
 } // end registerRoutes function
