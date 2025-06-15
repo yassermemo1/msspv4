@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/queryClient';
+import { Label } from '@/components/ui/label';
 
 const enhancedServiceScopeSchema = z.object({
   serviceName: z.string().min(1, 'Service name is required'),
@@ -67,6 +68,10 @@ export function EnhancedServiceScopeForm({
 }: EnhancedServiceScopeFormProps) {
   const [validationResults, setValidationResults] = useState<Record<string, any>>({});
   const [selectedHardware, setSelectedHardware] = useState<number[]>([]);
+  const [licenseData, setLicenseData] = useState<any>({});
+  const [selectedLicensePools, setSelectedLicensePools] = useState<number[]>([]);
+  const [hardwareData, setHardwareData] = useState<any>({});
+  const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
 
   const form = useForm<EnhancedServiceScopeFormData>({
     resolver: zodResolver(enhancedServiceScopeSchema),

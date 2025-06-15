@@ -21,7 +21,7 @@ export interface FilterOption {
 }
 
 export interface FilterValue {
-  [key: string]: string | number | boolean | Date | { from?: Date; to?: Date } | string[];
+  [key: string]: string | number | boolean | Date | { from?: Date; to?: Date } | string[] | null | undefined;
 }
 
 interface GlobalFiltersProps {
@@ -136,7 +136,7 @@ export function GlobalFilters({
         );
 
       case 'multiselect':
-        const selectedValues = value || [];
+        const selectedValues = (value as string[]) || [];
         return (
           <div className="space-y-2">
             <Label>{filter.label}</Label>
@@ -167,7 +167,7 @@ export function GlobalFilters({
           <div className="space-y-2">
             <Label>{filter.label}</Label>
             <DatePicker
-              date={value}
+              date={value as Date}
               onDateChange={(date) => handleFilterChange(filter.key, date)}
               placeholder={filter.placeholder}
             />
@@ -175,7 +175,7 @@ export function GlobalFilters({
         );
 
       case 'dateRange':
-        const dateRange = value || {};
+        const dateRange = (value as { from?: Date; to?: Date }) || {};
         return (
           <div className="space-y-2">
             <Label>{filter.label}</Label>
@@ -199,7 +199,7 @@ export function GlobalFilters({
           <div className="flex items-center space-x-2">
             <Checkbox
               id={filter.key}
-              checked={value || false}
+              checked={Boolean(value)}
               onCheckedChange={(checked) => handleFilterChange(filter.key, checked)}
             />
             <Label htmlFor={filter.key}>{filter.label}</Label>

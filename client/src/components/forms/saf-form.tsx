@@ -57,13 +57,11 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
       safNumber: saf?.safNumber || "",
       title: saf?.title || "",
       description: saf?.description || "",
-      startDate: saf?.startDate ? new Date(saf.startDate).toISOString().split('T')[0] : "",
-      endDate: saf?.endDate ? new Date(saf.endDate).toISOString().split('T')[0] : "",
-      status: saf?.status || "draft",
-      documentUrl: saf?.documentUrl || "",
-      approvedBy: saf?.approvedBy || undefined,
+      requestedDate: saf?.requestedDate ? new Date(saf.requestedDate).toISOString().split('T')[0] : "",
       approvedDate: saf?.approvedDate ? new Date(saf.approvedDate).toISOString().split('T')[0] : "",
-      value: saf?.value || "",
+      expiryDate: saf?.expiryDate ? new Date(saf.expiryDate).toISOString().split('T')[0] : "",
+      status: saf?.status || "pending",
+      approvedBy: saf?.approvedBy || undefined,
       notes: saf?.notes || "",
     },
   });
@@ -211,7 +209,6 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="approved">Approved</SelectItem>
                         <SelectItem value="active">Active</SelectItem>
@@ -267,10 +264,10 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <FormField
                 control={form.control}
-                name="startDate"
+                name="requestedDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Date</FormLabel>
+                    <FormLabel>Requested Date</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -281,30 +278,12 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
 
               <FormField
                 control={form.control}
-                name="endDate"
+                name="expiryDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date</FormLabel>
+                    <FormLabel>Expiry Date</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="value"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Value ($)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="0.00"
-                        {...field}
-                        value={field.value || ""}
-                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -333,20 +312,6 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
             
             <FormField
               control={form.control}
-              name="documentUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Document URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="URL to SAF document" {...field} value={field.value || ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="notes"
               render={({ field }) => (
                 <FormItem>
@@ -355,7 +320,7 @@ export function SAFForm({ saf, onSubmit, onCancel, isLoading = false, clientId, 
                     <Textarea
                       placeholder="Additional notes about this SAF..."
                       className="resize-none"
-                      rows={2}
+                      rows={4}
                       {...field}
                       value={field.value || ""}
                     />

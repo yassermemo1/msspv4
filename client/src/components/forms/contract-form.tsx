@@ -111,7 +111,7 @@ export function ContractForm({ contract, clients, onSubmit, onCancel, isLoading 
       endDate: contract?.endDate ? new Date(contract.endDate).toISOString().split('T')[0] : "",
       autoRenewal: contract?.autoRenewal ?? false,
       renewalTerms: contract?.renewalTerms || "",
-      totalValue: contract?.totalValue || "",
+      totalValue: contract?.totalValue ? contract.totalValue.toString() : "",
       status: contract?.status || "draft",
       documentUrl: contract?.documentUrl || "",
       notes: contract?.notes || "",

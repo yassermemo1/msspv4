@@ -92,6 +92,13 @@ interface SearchResult {
   highlightedContent: string;
 }
 
+interface FieldDefinition {
+  field: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  options?: string[];
+}
+
 interface AdvancedSearchProps {
   onSearchResults?: (results: SearchResult[]) => void;
   onClose?: () => void;
