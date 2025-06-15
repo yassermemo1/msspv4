@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { emailService } from "./email";
 import { scheduler } from "./scheduler";
-import { twoFAService } from "./twofa";
+
 import passport from "passport";
 import packageJson from "../package.json";
 import { 
@@ -13,14 +13,11 @@ import {
   insertClientHardwareAssignmentSchema, insertFinancialTransactionSchema,
   insertClientTeamAssignmentSchema, insertCustomFieldSchema, insertCustomFieldValueSchema,
   insertDocumentSchema, insertDocumentVersionSchema, insertDocumentAccessSchema,
-  insertUserDashboardSchema,
   validateSAFClientConsistency, validateProposalClientConsistency, validateContractClientConsistency,
   // Import all the table schemas needed for Drizzle queries
   users, userSettings, companySettings, clients, clientContacts, contracts, proposals, services, serviceScopes, financialTransactions,
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
   clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
-  dashboardWidgets, userDashboards, dashboardWidgetAssignments,
-
   pagePermissions, savedSearches, searchHistory,
   serviceScopeFields, scopeVariableValues
 } from "@shared/schema";
@@ -34,7 +31,7 @@ import crypto from "crypto";
 import { upload, getFileInfo, deleteFile } from "./fileUpload";
 import path from "path";
 import fs from "fs";
-import { eq, and, or, desc, asc, sql, count, sum, avg, max, min, like, ilike, between, gte, lte, isNull, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, count, sum, avg, max, min, like, ilike, between, gte, lte, isNull, isNotNull, inArray, ne } from "drizzle-orm";
 import { db, pool } from "./db";
 import * as schema from "@shared/schema";
 // Duplicate imports removed - already imported above
@@ -50,15 +47,12 @@ import { type Client, type InsertClient, type User,
   type InsertServiceScope, type Document, type InsertDocument,
   type ServiceAuthorizationForm, type InsertServiceAuthorizationForm,
   type CertificateOfCompliance, type InsertCertificateOfCompliance,
-  type CustomField, type InsertCustomField, type DataSource, type InsertDataSource,
-  type DataSourceMapping, type InsertDataSourceMapping, type IntegratedData,
-  type InsertIntegratedData, type DashboardWidget, type InsertDashboardWidget,
+  type CustomField, type InsertCustomField
   } from "@shared/schema";
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
 // External widget routes removed - migrated to plugin system
-import { integrationEngineWidgetRoutes } from './routes/integration-engine-widgets';
 import { codebaseAnalyzer } from './services/codebase-analyzer';
 import { pluginRoutes } from './plugins-routes';
 
@@ -267,6 +261,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ---- Mock data routes for Jira ticket widgets ----
   app.use('/api/mock-jira', mockJiraRoutes);
+  
+  // ---- Pool validation routes ----
+  app.use('/api/pools', poolValidationRoutes);
 
   // Auth routes are now set up in server/index.ts
 
@@ -472,156 +469,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   
   // ========================================
-  // TWO-FACTOR AUTHENTICATION ENDPOINTS
-  // ========================================
 
-  // Get 2FA status for current user
-  app.get("/api/user/2fa/status", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
 
-      // Since twoFactorSecret doesn't exist in our schema, always return disabled
-      res.json({
-        enabled: false,
-        backupCodesRemaining: 0
-      });
-    } catch (error) {
-      console.error("Get 2FA status error:", error);
-      res.status(500).json({ message: "Failed to get 2FA status" });
-    }
-  });
 
-  // Setup 2FA
-  app.post("/api/user/2fa/setup", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
 
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
 
-      // Generate secret and QR code
-      const { secret, qrCode } = await twoFAService.generateSecret(user.email);
-      
-      // Store the secret temporarily (not enabled yet)
-      req.session.tempTwoFactorSecret = secret;
 
-      res.json({
-        secret,
-        qrCode
-      });
-    } catch (error) {
-      console.error("Setup 2FA error:", error);
-      res.status(500).json({ message: "Failed to setup 2FA" });
-    }
-  });
 
-  // Enable 2FA
-  app.post("/api/user/2fa/enable", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { token } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
 
-      if (!req.session.tempTwoFactorSecret) {
-        return res.status(400).json({ message: "No 2FA setup in progress" });
-      }
 
-      // Verify the token
-      const isValid = twoFAService.verifyToken(req.session.tempTwoFactorSecret, token);
-      if (!isValid) {
-        return res.status(400).json({ message: "Invalid verification code" });
-      }
-
-      // Generate backup codes
-      const backupCodes = twoFAService.generateBackupCodes();
-
-      // Update user with 2FA enabled
-      await storage.updateUser(userId, {
-        twoFactorSecret: req.session.tempTwoFactorSecret,
-        twoFactorBackupCodes: JSON.stringify(backupCodes.map(code => ({ code, used: false })))
-      });
-
-      // Clear temp secret
-      delete req.session.tempTwoFactorSecret;
-
-      res.json({
-        success: true,
-        backupCodes
-      });
-    } catch (error) {
-      console.error("Enable 2FA error:", error);
-      res.status(500).json({ message: "Failed to enable 2FA" });
-    }
-  });
-
-  // Disable 2FA
-  app.post("/api/user/2fa/disable", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { password } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Verify password
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        return res.status(400).json({ message: "Invalid password" });
-      }
-
-      // Disable 2FA
-      await storage.updateUser(userId, {
-        twoFactorSecret: null,
-        twoFactorBackupCodes: null
-      });
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Disable 2FA error:", error);
-      res.status(500).json({ message: "Failed to disable 2FA" });
-    }
-  });
-
-  // Verify 2FA token
-  app.post("/api/user/2fa/verify", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { token } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      const user = await storage.getUserById(userId);
-      if (!user || !user.twoFactorSecret) {
-        return res.status(400).json({ message: "2FA not enabled" });
-      }
-
-      const isValid = twoFAService.verifyToken(user.twoFactorSecret, token);
-      
-      res.json({ valid: isValid });
-    } catch (error) {
-      console.error("Verify 2FA error:", error);
-      res.status(500).json({ message: "Failed to verify 2FA token" });
-    }
-  });
 
 
   // ========================================
@@ -686,16 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   
-  // Get dashboard widgets
-  app.get("/api/dashboard/widgets", requireAuth, async (req, res, next) => {
-    try {
-      const widgets = await db.select().from(dashboardWidgets);
-      res.json(widgets);
-    } catch (error) {
-      console.error("Error fetching widgets:", error);
-      res.status(500).json({ error: "Failed to fetch widgets" });
-    }
-  });
+  // Dashboard widgets endpoint removed - integration engine deprecated
 
   // Get recent activity
   app.get("/api/dashboard/recent-activity", requireAuth, async (req, res, next) => {
@@ -842,6 +689,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         availableLicenses: 0,
         utilizationRate: 0
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get all license pool allocations
+  app.get("/api/license-pools/allocations/all", requireAuth, async (req, res, next) => {
+    try {
+      const allocations = await storage.getAllLicensePoolAllocations();
+      res.json(allocations);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get hardware assets
+  app.get("/api/hardware-assets", requireAuth, async (req, res, next) => {
+    try {
+      const hardwareAssets = await storage.getAllHardwareAssets();
+      res.json(hardwareAssets);
     } catch (error) {
       next(error);
     }
@@ -1855,153 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // TWO-FACTOR AUTHENTICATION ENDPOINTS
   // ========================================
 
-  // Get 2FA status for current user
-  app.get("/api/user/2fa/status", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
 
-      // Since twoFactorSecret doesn't exist in our schema, always return disabled
-      res.json({
-        enabled: false,
-        backupCodesRemaining: 0
-      });
-    } catch (error) {
-      console.error("Get 2FA status error:", error);
-      res.status(500).json({ message: "Failed to get 2FA status" });
-    }
-  });
-
-  // Setup 2FA
-  app.post("/api/user/2fa/setup", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Generate secret and QR code
-      const { secret, qrCode } = await twoFAService.generateSecret(user.email);
-      
-      // Store the secret temporarily (not enabled yet)
-      req.session.tempTwoFactorSecret = secret;
-
-      res.json({
-        secret,
-        qrCode
-      });
-    } catch (error) {
-      console.error("Setup 2FA error:", error);
-      res.status(500).json({ message: "Failed to setup 2FA" });
-    }
-  });
-
-  // Enable 2FA
-  app.post("/api/user/2fa/enable", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { token } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      if (!req.session.tempTwoFactorSecret) {
-        return res.status(400).json({ message: "No 2FA setup in progress" });
-      }
-
-      // Verify the token
-      const isValid = twoFAService.verifyToken(req.session.tempTwoFactorSecret, token);
-      if (!isValid) {
-        return res.status(400).json({ message: "Invalid verification code" });
-      }
-
-      // Generate backup codes
-      const backupCodes = twoFAService.generateBackupCodes();
-
-      // Update user with 2FA enabled
-      await storage.updateUser(userId, {
-        twoFactorSecret: req.session.tempTwoFactorSecret,
-        twoFactorBackupCodes: JSON.stringify(backupCodes.map(code => ({ code, used: false })))
-      });
-
-      // Clear temp secret
-      delete req.session.tempTwoFactorSecret;
-
-      res.json({
-        success: true,
-        backupCodes
-      });
-    } catch (error) {
-      console.error("Enable 2FA error:", error);
-      res.status(500).json({ message: "Failed to enable 2FA" });
-    }
-  });
-
-  // Disable 2FA
-  app.post("/api/user/2fa/disable", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { password } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      const user = await storage.getUserById(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Verify password
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        return res.status(400).json({ message: "Invalid password" });
-      }
-
-      // Disable 2FA
-      await storage.updateUser(userId, {
-        twoFactorSecret: null,
-        twoFactorBackupCodes: null
-      });
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Disable 2FA error:", error);
-      res.status(500).json({ message: "Failed to disable 2FA" });
-    }
-  });
-
-  // Verify 2FA token
-  app.post("/api/user/2fa/verify", requireAuth, async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      const { token } = req.body;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      const user = await storage.getUserById(userId);
-      if (!user || !user.twoFactorSecret) {
-        return res.status(400).json({ message: "2FA not enabled" });
-      }
-
-      const isValid = twoFAService.verifyToken(user.twoFactorSecret, token);
-      
-      res.json({ valid: isValid });
-    } catch (error) {
-      console.error("Verify 2FA error:", error);
-      res.status(500).json({ message: "Failed to verify 2FA token" });
-    }
-  });
 
 
   // ========================================
@@ -2067,15 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   
   // Get dashboard widgets
-  app.get("/api/dashboard/widgets", requireAuth, async (req, res, next) => {
-    try {
-      const widgets = await db.select().from(dashboardWidgets);
-      res.json(widgets);
-    } catch (error) {
-      console.error("Error fetching widgets:", error);
-      res.status(500).json({ error: "Failed to fetch widgets" });
-    }
-  });
+  // Dashboard widgets endpoint removed - integration engine deprecated
 
   // Get recent activity
   app.get("/api/dashboard/recent-activity", requireAuth, async (req, res, next) => {
@@ -4546,6 +4259,505 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Return empty array for now - team assignments would need to be implemented
       res.json([]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // PREVIOUSLY MISSING ENDPOINTS
+  // ========================================
+  
+  // Admin stats endpoint
+  app.get("/api/admin/stats", requireAdmin, async (req, res, next) => {
+    try {
+      const [clientCount] = await db.select({ count: sql<number>`count(*)` }).from(clients);
+      const [contractCount] = await db.select({ count: sql<number>`count(*)` }).from(contracts);
+      const [serviceCount] = await db.select({ count: sql<number>`count(*)` }).from(services);
+      const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+
+      const stats = {
+        overview: {
+          totalClients: Number(clientCount?.count || 0),
+          totalContracts: Number(contractCount?.count || 0),
+          totalServices: Number(serviceCount?.count || 0),
+          totalUsers: Number(userCount?.count || 0)
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      res.json(stats);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Search analytics endpoint
+  app.get("/api/search/analytics", requireAuth, async (req, res, next) => {
+    try {
+      const analytics = {
+        popularSearches: [],
+        searchVolume: 0,
+        averageResponseTime: 0,
+        timestamp: new Date().toISOString()
+      };
+      res.json(analytics);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Proposals endpoint
+  app.get("/api/proposals", requireAuth, async (req, res, next) => {
+    try {
+      const { clientId } = req.query;
+      
+      let whereConditions: any[] = [];
+      if (clientId) {
+        // Join with contracts to filter by clientId
+        const contractsWithClient = await db
+          .select({ id: contracts.id })
+          .from(contracts)
+          .where(eq(contracts.clientId, parseInt(clientId as string)));
+        
+        const contractIds = contractsWithClient.map(c => c.id);
+        if (contractIds.length > 0) {
+          whereConditions.push(inArray(proposals.contractId, contractIds));
+        } else {
+          return res.json([]);
+        }
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const proposalsList = await db
+        .select({
+          id: proposals.id,
+          contractId: proposals.contractId,
+          type: proposals.type,
+          description: proposals.description,
+          proposedValue: proposals.proposedValue,
+          proposedStartDate: proposals.proposedStartDate,
+          proposedEndDate: proposals.proposedEndDate,
+          status: proposals.status,
+          documentUrl: proposals.documentUrl,
+          notes: proposals.notes,
+          createdAt: proposals.createdAt,
+          contractName: contracts.name,
+          clientName: clients.name
+        })
+        .from(proposals)
+        .leftJoin(contracts, eq(proposals.contractId, contracts.id))
+        .leftJoin(clients, eq(contracts.clientId, clients.id))
+        .where(whereClause)
+        .orderBy(desc(proposals.createdAt));
+
+      res.json(proposalsList);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Service Authorization Forms endpoint
+  app.get("/api/service-authorization-forms", requireAuth, async (req, res, next) => {
+    try {
+      const { contractId, clientId } = req.query;
+      
+      let whereConditions: any[] = [];
+      
+      if (contractId) {
+        whereConditions.push(eq(serviceAuthorizationForms.contractId, parseInt(contractId as string)));
+      }
+      
+      if (clientId) {
+        whereConditions.push(eq(serviceAuthorizationForms.clientId, parseInt(clientId as string)));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const safs = await db
+        .select({
+          id: serviceAuthorizationForms.id,
+          clientId: serviceAuthorizationForms.clientId,
+          contractId: serviceAuthorizationForms.contractId,
+          serviceScopeId: serviceAuthorizationForms.serviceScopeId,
+          safNumber: serviceAuthorizationForms.safNumber,
+          title: serviceAuthorizationForms.title,
+          description: serviceAuthorizationForms.description,
+          status: serviceAuthorizationForms.status,
+          requestedDate: serviceAuthorizationForms.requestedDate,
+          approvedDate: serviceAuthorizationForms.approvedDate,
+          expiryDate: serviceAuthorizationForms.expiryDate,
+          approvedBy: serviceAuthorizationForms.approvedBy,
+          notes: serviceAuthorizationForms.notes,
+          createdAt: serviceAuthorizationForms.createdAt,
+          clientName: clients.name,
+          contractName: contracts.name
+        })
+        .from(serviceAuthorizationForms)
+        .leftJoin(clients, eq(serviceAuthorizationForms.clientId, clients.id))
+        .leftJoin(contracts, eq(serviceAuthorizationForms.contractId, contracts.id))
+        .where(whereClause)
+        .orderBy(desc(serviceAuthorizationForms.createdAt));
+
+      res.json(safs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Reports endpoints (placeholders)
+  app.get("/api/reports/revenue-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Revenue analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/invoice-summary", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Invoice summary report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/payment-history", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Payment history report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/client-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Client analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/contract-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Contract analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/service-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Service analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/operational-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Operational analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/security-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Security analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reports/compliance-analysis", requireAuth, async (req, res, next) => {
+    try {
+      res.json({ message: "Compliance analysis report placeholder", data: [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // AUDIT MANAGEMENT ENDPOINTS
+  // ========================================
+  
+  // Audit logs endpoint
+  app.get("/api/audit-logs", requireAuth, async (req, res, next) => {
+    try {
+      const { dateRange = '7d' } = req.query;
+      
+      // Mock audit logs data for now
+      const mockAuditLogs = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          action: 'LOGIN',
+          resource: 'authentication',
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          details: { success: true }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          action: 'VIEW_CLIENT',
+          resource: 'clients',
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          details: { clientId: 1 }
+        }
+      ];
+      
+      res.json(mockAuditLogs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Security events endpoint
+  app.get("/api/security-events", requireAuth, async (req, res, next) => {
+    try {
+      const { dateRange = '7d' } = req.query;
+      
+      // Mock security events data
+      const mockSecurityEvents = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          eventType: 'FAILED_LOGIN',
+          severity: 'MEDIUM',
+          source: req.ip,
+          description: 'Multiple failed login attempts detected',
+          details: { attempts: 3, timeWindow: '5m' }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 7200000).toISOString(),
+          eventType: 'SUSPICIOUS_ACTIVITY',
+          severity: 'HIGH',
+          source: req.ip,
+          description: 'Unusual access pattern detected',
+          details: { pattern: 'rapid_requests' }
+        }
+      ];
+      
+      res.json(mockSecurityEvents);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Data access logs endpoint
+  app.get("/api/data-access-logs", requireAuth, async (req, res, next) => {
+    try {
+      const { dateRange = '7d' } = req.query;
+      
+      // Mock data access logs
+      const mockDataAccessLogs = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          dataType: 'CLIENT_DATA',
+          operation: 'READ',
+          resourceId: 'client_1',
+          ipAddress: req.ip,
+          details: { fields: ['name', 'email', 'contracts'] }
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 1800000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          dataType: 'CONTRACT_DATA',
+          operation: 'UPDATE',
+          resourceId: 'contract_5',
+          ipAddress: req.ip,
+          details: { fields: ['status', 'endDate'] }
+        }
+      ];
+      
+      res.json(mockDataAccessLogs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Change history endpoint
+  app.get("/api/change-history", requireAuth, async (req, res, next) => {
+    try {
+      const { dateRange = '7d' } = req.query;
+      
+      // Mock change history data
+      const mockChangeHistory = [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          entityType: 'CONTRACT',
+          entityId: 1,
+          action: 'UPDATE',
+          field: 'status',
+          oldValue: 'DRAFT',
+          newValue: 'ACTIVE',
+          reason: 'Contract approved and activated'
+        },
+        {
+          id: 2,
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          userId: req.user?.id,
+          userName: req.user?.username,
+          entityType: 'CLIENT',
+          entityId: 2,
+          action: 'CREATE',
+          field: null,
+          oldValue: null,
+          newValue: null,
+          reason: 'New client onboarded'
+        }
+      ];
+      
+      res.json(mockChangeHistory);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // USER PROFILE ENDPOINTS
+  // ========================================
+  
+  // Update user profile endpoint
+  app.put("/api/user/profile", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { firstName, lastName, email, phone, timezone, language, notifications } = req.body;
+
+      // Validate email uniqueness if changing email
+      if (email && email !== req.user.email) {
+        const existingUser = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.email, email), ne(users.id, userId)))
+          .limit(1);
+
+        if (existingUser.length > 0) {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+      }
+
+      // Update user basic info (users table)
+      const userUpdateData: any = {};
+      if (firstName !== undefined) userUpdateData.firstName = firstName;
+      if (lastName !== undefined) userUpdateData.lastName = lastName;
+      if (email !== undefined) userUpdateData.email = email;
+
+      if (Object.keys(userUpdateData).length > 0) {
+        await db
+          .update(users)
+          .set(userUpdateData)
+          .where(eq(users.id, userId));
+      }
+
+      // Update user settings (userSettings table)
+      const settingsUpdateData: any = {};
+      if (timezone !== undefined) settingsUpdateData.timezone = timezone;
+      if (language !== undefined) settingsUpdateData.language = language;
+      if (notifications !== undefined) {
+        // Map notifications object to individual fields
+        if (notifications.email !== undefined) settingsUpdateData.emailNotifications = notifications.email;
+        if (notifications.push !== undefined) settingsUpdateData.pushNotifications = notifications.push;
+        if (notifications.contractReminders !== undefined) settingsUpdateData.contractReminders = notifications.contractReminders;
+        if (notifications.financialAlerts !== undefined) settingsUpdateData.financialAlerts = notifications.financialAlerts;
+      }
+
+      if (Object.keys(settingsUpdateData).length > 0) {
+        settingsUpdateData.updatedAt = new Date();
+        
+        // Check if user settings exist
+        const existingSettings = await db
+          .select()
+          .from(userSettings)
+          .where(eq(userSettings.userId, userId))
+          .limit(1);
+
+        if (existingSettings.length > 0) {
+          // Update existing settings
+          await db
+            .update(userSettings)
+            .set(settingsUpdateData)
+            .where(eq(userSettings.userId, userId));
+        } else {
+          // Create new settings record
+          await db
+            .insert(userSettings)
+            .values({
+              userId,
+              ...settingsUpdateData
+            });
+        }
+      }
+
+      // Get updated user data with settings
+      const updatedUser = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+          authProvider: users.authProvider,
+          isActive: users.isActive,
+          createdAt: users.createdAt,
+          // Settings from userSettings table
+          timezone: userSettings.timezone,
+          language: userSettings.language,
+          emailNotifications: userSettings.emailNotifications,
+          pushNotifications: userSettings.pushNotifications,
+          contractReminders: userSettings.contractReminders,
+          financialAlerts: userSettings.financialAlerts,
+          darkMode: userSettings.darkMode,
+          currency: userSettings.currency
+        })
+        .from(users)
+        .leftJoin(userSettings, eq(users.id, userSettings.userId))
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (updatedUser.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const user = updatedUser[0];
+      
+      // Format response to match expected structure
+      const responseUser = {
+        ...user,
+        notifications: {
+          email: user.emailNotifications,
+          push: user.pushNotifications,
+          contractReminders: user.contractReminders,
+          financialAlerts: user.financialAlerts
+        }
+      };
+
+      res.json({
+        message: "Profile updated successfully",
+        user: responseUser
+      });
     } catch (error) {
       next(error);
     }

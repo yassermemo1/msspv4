@@ -20,17 +20,12 @@ import {
   clientTeamAssignments,
   serviceScopes,
   serviceScopeFields,
-  dataSources,
-  dataSourceMappings,
-  integratedData,
-  dashboardWidgets,
-  userDashboards,
-  dashboardWidgetAssignments,
   customFields,
   customFieldValues,
   documents,
   documentVersions,
   documentAccess,
+  clientExternalMappings,
 
   type User,
   type InsertUser,
@@ -72,18 +67,6 @@ import {
   type InsertClientHardwareAssignment,
   type ClientLicense,
   type InsertClientLicense,
-  type DataSource,
-  type InsertDataSource,
-  type DataSourceMapping,
-  type InsertDataSourceMapping,
-  type IntegratedData,
-  type InsertIntegratedData,
-  type DashboardWidget,
-  type InsertDashboardWidget,
-  type UserDashboard,
-  type InsertUserDashboard,
-  type DashboardWidgetAssignment,
-  type InsertDashboardWidgetAssignment,
   type CustomField,
   type InsertCustomField,
   type CustomFieldValue,
@@ -94,6 +77,8 @@ import {
   type InsertDocumentVersion,
   type DocumentAccess,
   type InsertDocumentAccess,
+  type ClientExternalMapping,
+  type InsertClientExternalMapping,
   PaginatedResponse,
   PaginationParams,
   ScopeDefinitionTemplateResponse,
@@ -274,62 +259,31 @@ export interface IStorage {
   createDocumentAccess(access: InsertDocumentAccess): Promise<DocumentAccess>;
   deleteDocumentAccess(id: number): Promise<boolean>;
   
-  // Integration Engine methods
-  // Data Sources
-  getAllDataSources(): Promise<DataSource[]>;
-  getDataSource(id: number): Promise<DataSource | undefined>;
-  createDataSource(dataSource: InsertDataSource): Promise<DataSource>;
-  updateDataSource(id: number, dataSource: Partial<InsertDataSource>): Promise<DataSource | undefined>;
-  deleteDataSource(id: number): Promise<boolean>;
-  
-  // Data Source Mappings
-  getDataSourceMappings(dataSourceId: number): Promise<DataSourceMapping[]>;
-  createDataSourceMapping(mapping: InsertDataSourceMapping): Promise<DataSourceMapping>;
-  updateDataSourceMapping(id: number, mapping: Partial<InsertDataSourceMapping>): Promise<DataSourceMapping | undefined>;
-  deleteDataSourceMapping(id: number): Promise<boolean>;
-  
-  // Integrated Data
-  getIntegratedData(dataSourceId: number, pagination?: PaginationParams): Promise<PaginatedResponse<IntegratedData>>;
-  getIntegratedDataCount(dataSourceId: number, filters?: Record<string, any>): Promise<number>;
-  createIntegratedData(data: InsertIntegratedData): Promise<IntegratedData>;
-  deleteIntegratedData(id: number): Promise<boolean>;
-  
-  // Dashboard Widgets
-  getAllDashboardWidgets(): Promise<DashboardWidget[]>;
-  getDashboardWidget(id: number): Promise<DashboardWidget | undefined>;
-  createDashboardWidget(widget: InsertDashboardWidget): Promise<DashboardWidget>;
-  updateDashboardWidget(id: number, widget: Partial<InsertDashboardWidget>): Promise<DashboardWidget | undefined>;
-  deleteDashboardWidget(id: number): Promise<boolean>;
-  
-  // User Dashboards
-  getUserDashboards(userId: number): Promise<UserDashboard[]>;
-  getUserDashboard(id: number): Promise<UserDashboard | undefined>;
-  createUserDashboard(dashboard: InsertUserDashboard): Promise<UserDashboard>;
-  updateUserDashboard(id: number, dashboard: Partial<InsertUserDashboard>): Promise<UserDashboard | undefined>;
-  deleteUserDashboard(id: number): Promise<boolean>;
-  
-  // Dashboard Widget Assignments
-  getDashboardWidgetAssignments(dashboardId: number): Promise<DashboardWidgetAssignment[]>;
-  createDashboardWidgetAssignment(assignment: InsertDashboardWidgetAssignment): Promise<DashboardWidgetAssignment>;
-  deleteDashboardWidgetAssignment(id: number): Promise<boolean>;
-  
-  // Dynamic Dashboard Module methods
-  // Dashboards
-  getAllDashboards(userId: number): Promise<UserDashboard[]>;
-  getDashboard(id: number): Promise<UserDashboard | undefined>;
-  createDashboard(dashboard: InsertUserDashboard): Promise<UserDashboard>;
-  updateDashboard(id: number, dashboard: Partial<InsertUserDashboard>): Promise<UserDashboard | undefined>;
-  deleteDashboard(id: number): Promise<boolean>;
-  
-  // Widgets
-  getDashboardWidgets(dashboardId: number): Promise<DashboardWidget[]>;
-  getWidget(id: number): Promise<DashboardWidget | undefined>;
-  createWidget(widget: InsertDashboardWidget): Promise<DashboardWidget>;
-  updateWidget(id: number, widget: Partial<InsertDashboardWidget>): Promise<DashboardWidget | undefined>;
-  deleteWidget(id: number): Promise<boolean>;
-  updateWidgetPositions(widgets: Array<{ id: number; position: any }>): Promise<boolean>;
-  
   // API Aggregator methods
+  getAllClientExternalMappings(): Promise<(ClientExternalMapping & { clientName: string })[]>;
+  getClientExternalMappings(clientId: number): Promise<ClientExternalMapping[]>;
+  getClientExternalMapping(id: number): Promise<ClientExternalMapping | undefined>;
+  createClientExternalMapping(mapping: InsertClientExternalMapping): Promise<ClientExternalMapping>;
+  updateClientExternalMapping(id: number, mapping: Partial<InsertClientExternalMapping>): Promise<ClientExternalMapping | undefined>;
+  deleteClientExternalMapping(id: number): Promise<boolean>;
+  
+  // Service helper methods
+  getClientByName(name: string): Promise<Client | undefined>;
+  getServiceByName(name: string): Promise<Service | undefined>;
+  getContractByClientAndName(clientId: number, name: string): Promise<Contract | undefined>;
+  getServiceScopeByContractAndDescription(contractId: number, description: string): Promise<ServiceScope | undefined>;
+  getSAFByNumber(safNumber: string): Promise<ServiceAuthorizationForm | undefined>;
+  getCOCByNumber(cocNumber: string): Promise<CertificateOfCompliance | undefined>;
+  createSAF(data: any): Promise<ServiceAuthorizationForm>;
+  createCOC(data: any): Promise<CertificateOfCompliance>;
+  createServiceBulk(data: any): Promise<Service>;
+  
+  // Field visibility
+  getFieldVisibilityConfigs(): Promise<any[]>;
+  getFieldVisibilityForTable(tableName: string, context?: string): Promise<Record<string, boolean>>;
+  setFieldVisibility(tableName: string, fieldName: string, isVisible: boolean, context?: string): Promise<any>;
+  resetFieldVisibility(tableName: string, fieldName: string, context?: string): Promise<void>;
+  isFieldVisible(tableName: string, fieldName: string, context?: string): Promise<boolean>;
   
   // Audit logging
   createAuditLog(auditLog: InsertAuditLog): Promise<AuditLog>;
@@ -1529,416 +1483,8 @@ export class DatabaseStorage implements IStorage {
       .where(eq(documentAccess.id, id));
     return (result.rowCount || 0) > 0;
   }
-
-  // Integration Engine methods
-  // Data Sources
-  async getAllDataSources(): Promise<DataSource[]> {
-    return await db.select().from(dataSources).orderBy(dataSources.name);
-  }
-
-  async getDataSource(id: number): Promise<DataSource | undefined> {
-    const [dataSource] = await db.select().from(dataSources).where(eq(dataSources.id, id));
-    return dataSource || undefined;
-  }
-
-  async createDataSource(dataSource: InsertDataSource): Promise<DataSource> {
-    const [newDataSource] = await db
-      .insert(dataSources)
-      .values(dataSource)
-      .returning();
-    return newDataSource;
-  }
-
-  async updateDataSource(id: number, dataSource: Partial<InsertDataSource>): Promise<DataSource | undefined> {
-    const [updatedDataSource] = await db
-      .update(dataSources)
-      .set(dataSource)
-      .where(eq(dataSources.id, id))
-      .returning();
-    return updatedDataSource || undefined;
-  }
-
-  async deleteDataSource(id: number): Promise<boolean> {
-    const result = await db.delete(dataSources).where(eq(dataSources.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
   
-  // Data Source Mappings
-  async getDataSourceMappings(dataSourceId: number): Promise<DataSourceMapping[]> {
-    return await db
-      .select()
-      .from(dataSourceMappings)
-      .where(eq(dataSourceMappings.dataSourceId, dataSourceId))
-      .orderBy(dataSourceMappings.targetField);
-  }
-
-  async createDataSourceMapping(mapping: InsertDataSourceMapping): Promise<DataSourceMapping> {
-    const [newMapping] = await db
-      .insert(dataSourceMappings)
-      .values(mapping)
-      .returning();
-    return newMapping;
-  }
-
-  async updateDataSourceMapping(id: number, mapping: Partial<InsertDataSourceMapping>): Promise<DataSourceMapping | undefined> {
-    const [updatedMapping] = await db
-      .update(dataSourceMappings)
-      .set(mapping)
-      .where(eq(dataSourceMappings.id, id))
-      .returning();
-    return updatedMapping || undefined;
-  }
-
-  async deleteDataSourceMapping(id: number): Promise<boolean> {
-    const result = await db.delete(dataSourceMappings).where(eq(dataSourceMappings.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
-  // Integrated Data
-  async getIntegratedData(dataSourceId: number, pagination: PaginationParams = {}): Promise<PaginatedResponse<IntegratedData>> {
-    const {
-      page = 1,
-      limit = 100,
-      sortBy = 'syncedAt',
-      sortOrder = 'desc',
-      filters = {}
-    } = pagination;
-
-    // Ensure limit doesn't exceed maximum
-    const safeLimit = Math.min(limit, 1000);
-    const offset = (page - 1) * safeLimit;
-
-    // Build the base query
-    let query: any = db
-      .select()
-      .from(integratedData)
-      .where(eq(integratedData.dataSourceId, dataSourceId));
-
-    // Apply filters
-    if (filters.recordIdentifier) {
-      query = query.where(like(integratedData.recordIdentifier, `%${filters.recordIdentifier}%`));
-    }
-    if (filters.syncedAfter) {
-      query = query.where(gte(integratedData.syncedAt, new Date(filters.syncedAfter)));
-    }
-    if (filters.syncedBefore) {
-      query = query.where(lte(integratedData.syncedAt, new Date(filters.syncedBefore)));
-    }
-
-    // Apply sorting
-    const sortColumn = sortBy === 'syncedAt' ? integratedData.syncedAt : integratedData.id;
-    const orderFn = sortOrder === 'asc' ? asc : desc;
-    query = query.orderBy(orderFn(sortColumn));
-
-    // Get total count for pagination
-    const totalQuery: any = db
-      .select({ count: sql<number>`count(*)` })
-      .from(integratedData)
-      .where(eq(integratedData.dataSourceId, dataSourceId));
-
-    // Apply same filters to count query
-    if (filters.recordIdentifier) {
-      totalQuery.where(like(integratedData.recordIdentifier, `%${filters.recordIdentifier}%`));
-    }
-    if (filters.syncedAfter) {
-      totalQuery.where(gte(integratedData.syncedAt, new Date(filters.syncedAfter)));
-    }
-    if (filters.syncedBefore) {
-      totalQuery.where(lte(integratedData.syncedAt, new Date(filters.syncedBefore)));
-    }
-
-    const [{ count: total }] = await totalQuery;
-    const totalPages = Math.ceil(Number(total) / safeLimit);
-
-    // Get paginated data
-    const data = await query.limit(safeLimit).offset(offset);
-
-    return {
-      data,
-      pagination: {
-        page,
-        limit: safeLimit,
-        total: Number(total),
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1
-      }
-    };
-  }
-
-  async getIntegratedDataCount(dataSourceId: number, filters: Record<string, any> = {}): Promise<number> {
-    let query: any = db
-      .select({ count: sql<number>`count(*)` })
-      .from(integratedData)
-      .where(eq(integratedData.dataSourceId, dataSourceId));
-
-    // Apply filters
-    if (filters.recordIdentifier) {
-      query = query.where(like(integratedData.recordIdentifier, `%${filters.recordIdentifier}%`));
-    }
-    if (filters.syncedAfter) {
-      query = query.where(gte(integratedData.syncedAt, new Date(filters.syncedAfter)));
-    }
-    if (filters.syncedBefore) {
-      query = query.where(lte(integratedData.syncedAt, new Date(filters.syncedBefore)));
-    }
-
-    const [{ count }] = await query;
-    return count;
-  }
-
-  async createIntegratedData(data: InsertIntegratedData): Promise<IntegratedData> {
-    const [newData] = await db
-      .insert(integratedData)
-      .values(data)
-      .returning();
-    return newData;
-  }
-
-  async deleteIntegratedData(id: number): Promise<boolean> {
-    const result = await db.delete(integratedData).where(eq(integratedData.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
-  // Dashboard Widgets
-  async getAllDashboardWidgets(): Promise<DashboardWidget[]> {
-    return await db
-      .select()
-      .from(dashboardWidgets)
-      .orderBy(dashboardWidgets.name);
-  }
-
-  async getDashboardWidget(id: number): Promise<DashboardWidget | undefined> {
-    const [widget] = await db.select().from(dashboardWidgets).where(eq(dashboardWidgets.id, id));
-    return widget || undefined;
-  }
-
-  async createDashboardWidget(widget: InsertDashboardWidget): Promise<DashboardWidget> {
-    const [newWidget] = await db
-      .insert(dashboardWidgets)
-      .values(widget)
-      .returning();
-    return newWidget;
-  }
-
-  async updateDashboardWidget(id: number, widget: Partial<InsertDashboardWidget>): Promise<DashboardWidget | undefined> {
-    const [updatedWidget] = await db
-      .update(dashboardWidgets)
-      .set({
-        ...widget,
-        updatedAt: new Date() // Ensure updatedAt is set with a proper Date object
-      })
-      .where(eq(dashboardWidgets.id, id))
-      .returning();
-    return updatedWidget || undefined;
-  }
-
-  async deleteDashboardWidget(id: number): Promise<boolean> {
-    const result = await db.delete(dashboardWidgets).where(eq(dashboardWidgets.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
-  // User Dashboards
-  async getUserDashboards(userId: number): Promise<UserDashboard[]> {
-    return await db
-      .select()
-      .from(userDashboards)
-      .where(eq(userDashboards.userId, userId))
-      .orderBy(userDashboards.name);
-  }
-
-  async getUserDashboard(id: number): Promise<UserDashboard | undefined> {
-    const [dashboard] = await db.select().from(userDashboards).where(eq(userDashboards.id, id));
-    return dashboard || undefined;
-  }
-
-  async createUserDashboard(dashboard: InsertUserDashboard): Promise<UserDashboard> {
-    const [newDashboard] = await db
-      .insert(userDashboards)
-      .values(dashboard)
-      .returning();
-    return newDashboard;
-  }
-
-  async updateUserDashboard(id: number, dashboard: Partial<InsertUserDashboard>): Promise<UserDashboard | undefined> {
-    const [updatedDashboard] = await db
-      .update(userDashboards)
-      .set(dashboard)
-      .where(eq(userDashboards.id, id))
-      .returning();
-    return updatedDashboard || undefined;
-  }
-
-  async deleteUserDashboard(id: number): Promise<boolean> {
-    const result = await db.delete(userDashboards).where(eq(userDashboards.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
-  // Dashboard Widget Assignments
-  async getDashboardWidgetAssignments(dashboardId: number): Promise<DashboardWidgetAssignment[]> {
-    return await db
-      .select()
-      .from(dashboardWidgetAssignments)
-      .where(eq(dashboardWidgetAssignments.dashboardId, dashboardId))
-      .orderBy(dashboardWidgetAssignments.id);
-  }
-
-  async createDashboardWidgetAssignment(assignment: InsertDashboardWidgetAssignment): Promise<DashboardWidgetAssignment> {
-    const [newAssignment] = await db
-      .insert(dashboardWidgetAssignments)
-      .values(assignment)
-      .returning();
-    return newAssignment;
-  }
-
-  async deleteDashboardWidgetAssignment(id: number): Promise<boolean> {
-    const result = await db.delete(dashboardWidgetAssignments).where(eq(dashboardWidgetAssignments.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-
-  // Dynamic Dashboard Module methods
-  // Dashboards
-  async getAllDashboards(userId: number): Promise<UserDashboard[]> {
-    return await db
-      .select()
-      .from(userDashboards)
-      .where(eq(userDashboards.userId, userId))
-      .orderBy(userDashboards.name);
-  }
-
-  async getDashboard(id: number): Promise<UserDashboard | undefined> {
-    const [dashboard] = await db.select().from(userDashboards).where(eq(userDashboards.id, id));
-    return dashboard || undefined;
-  }
-
-  async createDashboard(dashboard: InsertUserDashboard): Promise<UserDashboard> {
-    const [newDashboard] = await db
-      .insert(userDashboards)
-      .values(dashboard)
-      .returning();
-    return newDashboard;
-  }
-
-  async updateDashboard(id: number, dashboard: Partial<InsertUserDashboard>): Promise<UserDashboard | undefined> {
-    const [updatedDashboard] = await db
-      .update(userDashboards)
-      .set({ ...dashboard, updatedAt: new Date() })
-      .where(eq(userDashboards.id, id))
-      .returning();
-    return updatedDashboard || undefined;
-  }
-
-  async deleteDashboard(id: number): Promise<boolean> {
-    const result = await db.delete(userDashboards).where(eq(userDashboards.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
-  // Widgets
-  async getDashboardWidgets(dashboardId: number): Promise<DashboardWidget[]> {
-    const results = await db
-      .select({
-        id: dashboardWidgets.id,
-        name: dashboardWidgets.name,
-        widgetType: dashboardWidgets.widgetType,
-        config: dashboardWidgets.config,
-        dataSourceId: dashboardWidgets.dataSourceId,
-        refreshInterval: dashboardWidgets.refreshInterval,
-        isActive: dashboardWidgets.isActive,
-        createdBy: dashboardWidgets.createdBy,
-        createdAt: dashboardWidgets.createdAt,
-        updatedAt: dashboardWidgets.updatedAt,
-      })
-      .from(dashboardWidgets)
-      .innerJoin(dashboardWidgetAssignments, eq(dashboardWidgets.id, dashboardWidgetAssignments.widgetId))
-      .where(eq(dashboardWidgetAssignments.dashboardId, dashboardId))
-      .orderBy(dashboardWidgets.createdAt);
-    
-    return results;
-  }
-
-  async getWidget(id: number): Promise<DashboardWidget | undefined> {
-    const [widget] = await db.select().from(dashboardWidgets).where(eq(dashboardWidgets.id, id));
-    return widget || undefined;
-  }
-
-  async createWidget(widget: InsertDashboardWidget): Promise<DashboardWidget> {
-    const [newWidget] = await db
-      .insert(dashboardWidgets)
-      .values(widget)
-      .returning();
-    return newWidget;
-  }
-
-  async updateWidget(id: number, widget: Partial<InsertDashboardWidget>): Promise<DashboardWidget | undefined> {
-    const [updatedWidget] = await db
-      .update(dashboardWidgets)
-      .set({ ...widget, updatedAt: new Date() })
-      .where(eq(dashboardWidgets.id, id))
-      .returning();
-    return updatedWidget || undefined;
-  }
-
-  async deleteWidget(id: number): Promise<boolean> {
-    const result = await db.delete(dashboardWidgets).where(eq(dashboardWidgets.id, id));
-    return result.rowCount > 0;
-  }
-
-  async updateWidgetPositions(widgetUpdates: Array<{ id: number; position: any }>): Promise<boolean> {
-    try {
-      // Update each widget assignment's position
-      for (const update of widgetUpdates) {
-        await db
-          .update(dashboardWidgetAssignments)
-          .set({ 
-            position: update.position
-          })
-          .where(eq(dashboardWidgetAssignments.widgetId, update.id));
-      }
-      return true;
-    } catch (error) {
-      console.error('Error updating widget positions:', error);
-      return false;
-    }
-  }
-
   // API Aggregator methods
-  // External Systems
-  async getAllExternalSystems(): Promise<ExternalSystem[]> {
-    return await db.select().from(externalSystems).orderBy(externalSystems.systemName);
-  }
-
-  async getExternalSystem(id: number): Promise<ExternalSystem | undefined> {
-    const [system] = await db.select().from(externalSystems).where(eq(externalSystems.id, id));
-    return system || undefined;
-  }
-
-  async getExternalSystemByName(systemName: string): Promise<ExternalSystem | undefined> {
-    const [system] = await db.select().from(externalSystems).where(eq(externalSystems.systemName, systemName));
-    return system || undefined;
-  }
-
-  async createExternalSystem(system: InsertExternalSystem): Promise<ExternalSystem> {
-    const [newSystem] = await db
-      .insert(externalSystems)
-      .values(system)
-      .returning();
-    return newSystem;
-  }
-
-  async updateExternalSystem(id: number, system: Partial<InsertExternalSystem>): Promise<ExternalSystem | undefined> {
-    const [updatedSystem] = await db
-      .update(externalSystems)
-      .set(system)
-      .where(eq(externalSystems.id, id))
-      .returning();
-    return updatedSystem || undefined;
-  }
-
-  async deleteExternalSystem(id: number): Promise<boolean> {
-    const result = await db.delete(externalSystems).where(eq(externalSystems.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-  
   // Client External Mappings
   async getAllClientExternalMappings(): Promise<(ClientExternalMapping & { clientName: string })[]> {
     return await db
@@ -1971,68 +1517,7 @@ export class DatabaseStorage implements IStorage {
       explicitMappings.map(m => [m.systemName, m])
     );
 
-    // Retrieve *active* external systems that define a default mapping rule
-    const systemsWithDefaults = await db
-      .select()
-      .from(externalSystems)
-      .where(eq(externalSystems.isActive, true));
-
-    // Get client record (needed for template substitution)
-    const client = await this.getClient(clientId);
-
-    // Helper – recursively replace {{field}} tokens with client values
-    function applyTemplate(input: any, ctx: any): any {
-      if (input == null) return input;
-      if (typeof input === 'string') {
-        return input.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, p1) => {
-          return ctx?.[p1] ?? '';
-        });
-      }
-      if (Array.isArray(input)) {
-        return input.map(v => applyTemplate(v, ctx));
-      }
-      if (typeof input === 'object') {
-        const out: any = {};
-        for (const [k, v] of Object.entries(input)) {
-          out[k] = applyTemplate(v, ctx);
-        }
-        return out;
-      }
-      return input;
-    }
-
-    for (const system of systemsWithDefaults) {
-      // Skip if explicit mapping exists or no default mapping defined
-      if (mappingIndex.has(system.systemName) || !system.defaultMapping) continue;
-
-      // If client not found (should not happen) just skip
-      if (!client) continue;
-
-      const defaultCfg: any = system.defaultMapping;
-
-      // Support both flat and template-based structures
-      const externalIdentifierTemplate =
-        defaultCfg.externalIdentifierTemplate ?? defaultCfg.externalIdentifier ?? '{{shortName}}';
-
-      const externalIdentifier = applyTemplate(externalIdentifierTemplate, client);
-
-      const metadataTemplate = defaultCfg.metadataTemplate ?? defaultCfg.metadata ?? {};
-      const metadata = applyTemplate(metadataTemplate, client);
-
-      // Build synthetic mapping (not persisted)
-      const syntheticMapping: ClientExternalMapping = {
-        id: 0, // 0 indicates derived
-        clientId,
-        systemName: system.systemName,
-        externalIdentifier,
-        metadata,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as unknown as ClientExternalMapping;
-
-      mappingIndex.set(system.systemName, syntheticMapping);
-    }
+    // No external systems support anymore - just return explicit mappings
 
     return Array.from(mappingIndex.values());
   }
@@ -2620,36 +2105,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // External system instances
-  async getExternalSystemInstances(systemId: number): Promise<ExternalSystemInstance[]> {
-    return await db
-      .select()
-      .from(externalSystemInstances)
-      .where(eq(externalSystemInstances.systemId, systemId))
-      .orderBy(externalSystemInstances.id);
-  }
 
-  async createExternalSystemInstance(instance: InsertExternalSystemInstance): Promise<ExternalSystemInstance> {
-    const [newInstance] = await db
-      .insert(externalSystemInstances)
-      .values(instance)
-      .returning();
-    return newInstance;
-  }
-
-  async updateExternalSystemInstance(id: number, instance: Partial<InsertExternalSystemInstance>): Promise<ExternalSystemInstance | undefined> {
-    const [updatedInstance] = await db
-      .update(externalSystemInstances)
-      .set(instance)
-      .where(eq(externalSystemInstances.id, id))
-      .returning();
-    return updatedInstance || undefined;
-  }
-
-  async deleteExternalSystemInstance(id: number): Promise<boolean> {
-    const result = await db.delete(externalSystemInstances).where(eq(externalSystemInstances.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
 }
 
 export const storage = new DatabaseStorage();

@@ -644,3 +644,141 @@ pluginRoutes.post('/instances/:pluginName/:instanceId/toggle', (req, res) => {
     res.status(500).json({ message: 'Failed to toggle instance' });
   }
 }); 
+
+// ========================================
+// PLUGIN INSTANCE CREATION ENDPOINTS
+// ========================================
+
+// Create a new plugin instance
+pluginRoutes.post('/instances/:pluginName', requireAuth, (req, res) => {
+  try {
+    const { pluginName } = req.params;
+    const { name, baseUrl, authType, authConfig, tags, isActive = true } = req.body;
+    
+    // Validate required fields
+    if (!name || !baseUrl) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Name and baseUrl are required' 
+      });
+    }
+    
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Plugin not found' 
+      });
+    }
+    
+    // Generate a unique instance ID
+    const instanceId = `${pluginName}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+    
+    // Check if instance with this name already exists
+    const existingInstance = plugin.config.instances.find(inst => 
+      inst.name.toLowerCase() === name.toLowerCase()
+    );
+    
+    if (existingInstance) {
+      return res.status(400).json({ 
+        success: false,
+        message: `Instance with name '${name}' already exists` 
+      });
+    }
+    
+    // Create new instance
+    const newInstance = {
+      id: instanceId,
+      name,
+      baseUrl: baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl, // Remove trailing slash
+      authType: authType || 'none',
+      authConfig: authConfig || {},
+      isActive,
+      tags: tags || []
+    };
+    
+    // Add instance to plugin config
+    plugin.config.instances.push(newInstance);
+    
+    console.log(`✅ Created new plugin instance: ${pluginName}/${instanceId}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Instance '${name}' created successfully`,
+      instance: newInstance 
+    });
+  } catch (error) {
+    console.error('Failed to create plugin instance:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to create instance' 
+    });
+  }
+});
+
+// Delete a plugin instance
+pluginRoutes.delete('/instances/:pluginName/:instanceId', requireAuth, (req, res) => {
+  try {
+    const { pluginName, instanceId } = req.params;
+    
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Plugin not found' 
+      });
+    }
+    
+    const instanceIndex = plugin.config.instances.findIndex(inst => inst.id === instanceId);
+    if (instanceIndex === -1) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Instance not found' 
+      });
+    }
+    
+    const instanceName = plugin.config.instances[instanceIndex].name;
+    
+    // Remove the instance
+    plugin.config.instances.splice(instanceIndex, 1);
+    
+    console.log(`🗑️ Deleted plugin instance: ${pluginName}/${instanceId}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Instance '${instanceName}' deleted successfully`
+    });
+  } catch (error) {
+    console.error('Failed to delete plugin instance:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to delete instance' 
+    });
+  }
+});
+
+// Get available plugin types for creating new instances
+pluginRoutes.get('/types', (req, res) => {
+  try {
+    const plugins = listPlugins();
+    const pluginTypes = plugins.map(plugin => ({
+      systemName: plugin.systemName,
+      displayName: plugin.systemName.charAt(0).toUpperCase() + plugin.systemName.slice(1),
+      description: `${plugin.systemName} integration plugin`,
+      supportedAuthTypes: ['none', 'basic', 'bearer', 'api_key'],
+      defaultQueries: plugin.defaultQueries?.length || 0,
+      currentInstances: plugin.config?.instances?.length || 0
+    }));
+    
+    res.json({ 
+      success: true,
+      pluginTypes 
+    });
+  } catch (error) {
+    console.error('Failed to list plugin types:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to list plugin types' 
+    });
+  }
+});
