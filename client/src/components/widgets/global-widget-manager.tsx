@@ -209,19 +209,24 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
     }
   };
 
-  const handleDuplicateWidget = async (widget: GlobalWidget) => {
-    const duplicatedWidget = {
-      ...widget,
+  const handleDuplicateWidget = (widget: GlobalWidget) => {
+    const duplicatedWidget = { ...widget };
+    // Remove properties that should be auto-generated
+    const { id, createdAt, updatedAt, createdBy, ...widgetData } = duplicatedWidget;
+    
+    setEditingWidget({
+      ...widgetData,
       name: `${widget.name} (Copy)`,
-      isGlobal: false // New widgets start as local
-    };
-    
-    delete duplicatedWidget.id;
-    delete duplicatedWidget.createdAt;
-    delete duplicatedWidget.updatedAt;
-    delete duplicatedWidget.createdBy;
-    
-    await handleSaveWidget(duplicatedWidget);
+      // Add required properties for CustomWidget compatibility
+      instanceId: widget.pluginName || '',
+      queryType: 'custom' as const,
+      queryMethod: 'GET',
+      queryParameters: {},
+      customQuery: '',
+      transformations: [],
+      variables: []
+    });
+    setShowBuilder(true);
   };
 
   const getStatusIcon = (widget: GlobalWidget) => {
@@ -246,6 +251,11 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
     } else {
       return 'Local & Inactive';
     }
+  };
+
+  const handleCloseBuilder = () => {
+    setShowBuilder(false);
+    setEditingWidget(null);
   };
 
   if (loading) {
@@ -470,12 +480,22 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
               {editingWidget ? 'Edit Widget' : 'Create New Widget'}
             </DialogTitle>
           </DialogHeader>
-          <DynamicWidgetBuilder
-            onSave={handleSaveWidget}
-            onCancel={() => setShowBuilder(false)}
-            editingWidget={editingWidget}
-            placement="client-details"
-          />
+          {showBuilder && (
+            <DynamicWidgetBuilder
+              onSave={handleSaveWidget}
+              onCancel={handleCloseBuilder}
+              editingWidget={editingWidget ? {
+                ...editingWidget,
+                instanceId: editingWidget.pluginName || '',
+                queryType: 'custom' as const,
+                queryMethod: 'GET',
+                queryParameters: {},
+                customQuery: '',
+                transformations: [],
+                variables: []
+              } : undefined}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -499,30 +519,22 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
               </div>
               
               <DynamicWidgetRenderer
+                key={`${previewWidget.id}-demo`}
                 widget={{
                   id: previewWidget.id,
                   name: previewWidget.name,
                   description: previewWidget.description,
                   pluginName: previewWidget.pluginName,
-                  instanceId: previewWidget.systemId.toString(),
-                  queryType: 'custom',
+                  instanceId: previewWidget.pluginName || '',
+                  queryType: 'custom' as const,
                   customQuery: previewWidget.query,
                   queryMethod: previewWidget.method,
                   queryParameters: previewWidget.parameters,
-                  displayType: previewWidget.widgetType,
-                  chartType: previewWidget.chartType,
-                  refreshInterval: previewWidget.refreshInterval,
-                  placement: 'client-details',
-                  styling: {
-                    width: 'full',
-                    height: 'medium',
-                    showBorder: true,
-                    showHeader: true
-                  },
+                  transformations: [],
+                  variables: [],
                   enabled: previewWidget.isActive
                 }}
                 clientShortName="DEMO"
-                clientName="Demo Client"
                 clientDomain="demo.example.com"
               />
             </div>

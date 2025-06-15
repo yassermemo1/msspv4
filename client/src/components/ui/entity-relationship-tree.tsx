@@ -282,6 +282,7 @@ export const EntityRelationshipTree: React.FC<EntityRelationshipTreeProps> = ({
     queryKey: ['entity-relationships', clientId],
     queryFn: async () => {
       const response = await apiRequest(`/api/entities/client/${clientId}/relationships`, {
+        method: 'GET',
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch relationships');
@@ -294,6 +295,7 @@ export const EntityRelationshipTree: React.FC<EntityRelationshipTreeProps> = ({
     queryKey: ['relationship-stats', clientId],
     queryFn: async () => {
       const response = await apiRequest(`/api/entities/client/${clientId}/relationships/stats`, {
+        method: 'GET', 
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch stats');

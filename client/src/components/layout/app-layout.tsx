@@ -176,7 +176,7 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
       {/* Mobile Sidebar Overlay */}
       {!isSidebarOpen && (
         <div className="md:hidden">
-          <MobileNav />
+          {/* Mobile nav content would go here */}
         </div>
       )}
     </div>

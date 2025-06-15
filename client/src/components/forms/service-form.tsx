@@ -174,7 +174,7 @@ export function ServiceForm({ service, onSubmit, onCancel, isLoading = false }: 
               <FormItem>
                 <FormLabel>Pricing Unit</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., per month, per user" {...field} />
+                  <Input placeholder="e.g., per month, per user" {...field} value={field.value || ''} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

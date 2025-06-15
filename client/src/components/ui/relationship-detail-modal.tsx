@@ -42,10 +42,8 @@ export const RelationshipDetailModal: React.FC<RelationshipDetailModalProps> = (
                 return (
                   <EntityLink
                     key={relationship.id}
-                    entity={entity}
-                    variant="detailed"
-                    className="block p-2 rounded hover:bg-muted/50 transition-colors border"
-                    description={relationship.description}
+                    entity={relationship.targetEntity}
+                    showIcon={true}
                   />
                 );
               })}

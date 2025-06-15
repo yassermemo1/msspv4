@@ -257,7 +257,12 @@ export function LicensePoolForm({ licensePool, onSubmit, onCancel, isLoading = f
                   <FormItem>
                     <FormLabel>Renewal Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input 
+                        type="date" 
+                        {...field} 
+                        value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
+                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
