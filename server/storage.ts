@@ -31,8 +31,7 @@ import {
   documents,
   documentVersions,
   documentAccess,
-  externalSystems,
-  clientExternalMappings,
+
   type User,
   type InsertUser,
   type Client,
@@ -338,20 +337,6 @@ export interface IStorage {
   updateWidgetPositions(widgets: Array<{ id: number; position: any }>): Promise<boolean>;
   
   // API Aggregator methods
-  // External Systems
-  getAllExternalSystems(): Promise<ExternalSystem[]>;
-  getExternalSystem(id: number): Promise<ExternalSystem | undefined>;
-  getExternalSystemByName(systemName: string): Promise<ExternalSystem | undefined>;
-  createExternalSystem(system: InsertExternalSystem): Promise<ExternalSystem>;
-  updateExternalSystem(id: number, system: Partial<InsertExternalSystem>): Promise<ExternalSystem | undefined>;
-  deleteExternalSystem(id: number): Promise<boolean>;
-  
-  // Client External Mappings
-  getClientExternalMappings(clientId: number): Promise<ClientExternalMapping[]>;
-  getClientExternalMapping(id: number): Promise<ClientExternalMapping | undefined>;
-  createClientExternalMapping(mapping: InsertClientExternalMapping): Promise<ClientExternalMapping>;
-  updateClientExternalMapping(id: number, mapping: Partial<InsertClientExternalMapping>): Promise<ClientExternalMapping | undefined>;
-  deleteClientExternalMapping(id: number): Promise<boolean>;
   
   // Audit logging
   createAuditLog(auditLog: InsertAuditLog): Promise<AuditLog>;

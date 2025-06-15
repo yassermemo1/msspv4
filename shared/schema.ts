@@ -1089,62 +1089,7 @@ export const clientExternalMappings = pgTable("client_external_mappings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// ⚠️ DEPRECATED: External system configurations - Use Plugin Architecture Instead
-// This table is kept for backward compatibility during migration to plugins
-// New development should use the plugin system in server/plugins/
-export const externalSystems = pgTable("external_systems", {
-  id: serial("id").primaryKey(),
-  systemName: text("system_name").notNull().unique(), // Unique identifier for the system
-  displayName: text("display_name").notNull(), // Human-readable name
-  systemType: text("system_type").notNull(), // 'api', 'database', 'file', 'custom'
-  baseUrl: text("base_url").notNull(),
-  authType: text("auth_type").notNull(), // 'none', 'basic', 'bearer', 'api_key', 'oauth', 'custom'
-  authConfig: jsonb("auth_config"), // Dynamic auth configuration
-  connectionConfig: jsonb("connection_config"), // Connection settings (timeouts, SSL, etc.)
-  queryMethods: jsonb("query_methods"), // Supported query methods and their configurations
-  dataTransforms: jsonb("data_transforms"), // Data transformation rules
-  apiEndpoints: jsonb("api_endpoints"), // Endpoint configurations
-  healthCheckConfig: jsonb("health_check_config"), // Health check configuration
-  rateLimitConfig: jsonb("rate_limit_config"), // Rate limiting configuration
-  // System-wide default mapping rule (applied when a client has no explicit override)
-  defaultMapping: jsonb("default_mapping"),
-  errorHandling: jsonb("error_handling"), // Error handling rules
-  isActive: boolean("is_active").notNull().default(true),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
 
-// API Aggregator Relations
-export const clientExternalMappingsRelations = relations(clientExternalMappings, ({ one }) => ({
-  client: one(clients, { fields: [clientExternalMappings.clientId], references: [clients.id] }),
-}));
-
-export const externalSystemsRelations = relations(externalSystems, ({ one, many }) => ({
-  createdByUser: one(users, { fields: [externalSystems.createdBy], references: [users.id] }),
-  widgetTemplates: many(externalWidgetTemplates),
-}));
-
-
-// API Aggregator Schemas
-export const insertClientExternalMappingSchema = createInsertSchema(clientExternalMappings).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertExternalSystemSchema = createInsertSchema(externalSystems).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertClientExternalMapping = z.infer<typeof insertClientExternalMappingSchema>;
-export type ClientExternalMapping = typeof clientExternalMappings.$inferSelect;
-
-export type InsertExternalSystem = z.infer<typeof insertExternalSystemSchema>;
-export type ExternalSystem = typeof externalSystems.$inferSelect;
-export type WidgetExecutionCache = typeof widgetExecutionCache.$inferSelect;
 
 // Advanced Search & Filtering System
 export const savedSearches = pgTable("saved_searches", {
@@ -1500,69 +1445,7 @@ export const insertFieldVisibilityConfigSchema = createInsertSchema(fieldVisibil
 export type InsertFieldVisibilityConfig = z.infer<typeof insertFieldVisibilityConfigSchema>;
 export type FieldVisibilityConfig = typeof fieldVisibilityConfig.$inferSelect;
 
-// Enhanced external widget templates with custom query support
-export const externalWidgetTemplates = pgTable("externalWidgetTemplates", {
-  id: serial("id").primaryKey(),
-  systemId: integer("systemId").notNull().references(() => externalSystems.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  widgetType: text("widgetType").notNull(), // 'chart', 'table', 'metric', 'gauge'
-  chartType: text("chartType"), // 'bar', 'line', 'pie', 'area'
-  query: text("query").notNull(),
-  method: text("method"), // Query method to use from the system
-  parameters: jsonb("parameters").notNull().default({}),
-  transformations: jsonb("transformations").notNull().default([]),
-  variables: jsonb("variables").notNull().default([]),
-  displayConfig: jsonb("displayConfig").notNull().default({}),
-  isActive: boolean("isActive").notNull().default(true),
-  isGlobal: boolean("isGlobal").notNull().default(false),
-  isPublic: boolean("isPublic").notNull().default(false),
-  tags: jsonb("tags").notNull().default([]),
-  refreshInterval: integer("refreshInterval").notNull().default(300), // seconds
-  cacheEnabled: boolean("cacheEnabled").notNull().default(true),
-  position: integer("position").notNull().default(0),
-  createdBy: integer("createdBy").notNull().references(() => users.id),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-});
 
-// Widget execution cache for enhanced performance
-export const widgetExecutionCache = pgTable("widget_execution_cache", {
-  id: serial("id").primaryKey(),
-  widgetId: integer("widget_id").notNull().references(() => externalWidgetTemplates.id, { onDelete: 'cascade' }),
-  queryHash: text("query_hash").notNull(), // Hash of query + parameters
-  resultData: jsonb("result_data").notNull(),
-  metadata: jsonb("metadata").notNull().default({}),
-  executionTime: integer("execution_time"), // milliseconds
-  isValid: boolean("is_valid").notNull().default(true),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// External system instances (multiple connections under one system)
-export const externalSystemInstances = pgTable("external_system_instances", {
-  id: serial("id").primaryKey(),
-  systemId: integer("system_id").notNull().references(() => externalSystems.id, { onDelete: 'cascade' }),
-  instanceName: text("instance_name").notNull(),
-  baseUrl: text("base_url"), // Override if different
-  host: text("host"),
-  port: integer("port"),
-  authType: text("auth_type"),
-  authConfig: jsonb("auth_config"),
-  connectionConfig: jsonb("connection_config"),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-export const insertExternalSystemInstanceSchema = createInsertSchema(externalSystemInstances).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertExternalSystemInstance = z.infer<typeof insertExternalSystemInstanceSchema>;
-export type ExternalSystemInstance = typeof externalSystemInstances.$inferSelect;
 
 // Saved Queries table for user-defined plugin queries
 export const savedQueries = pgTable("saved_queries", {

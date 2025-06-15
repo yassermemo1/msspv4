@@ -20,7 +20,7 @@ import {
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
   clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   dashboardWidgets, userDashboards, dashboardWidgetAssignments,
-  externalSystems, clientExternalMappings, externalWidgetTemplates, widgetExecutionCache,
+
   pagePermissions, savedSearches, searchHistory,
   serviceScopeFields, scopeVariableValues
 } from "@shared/schema";
@@ -40,8 +40,6 @@ import * as schema from "@shared/schema";
 // Duplicate imports removed - already imported above
 import multer from "multer";
 import fetch from 'node-fetch';
-import { ExternalApiService } from './external-api-service';
-import { DynamicQueryExecutionService } from './services/query-execution-service.ts';
 import { entityRelationsService } from "./entity-relations";
 import { EntityType, RelationshipType, ENTITY_TYPES, RELATIONSHIP_TYPES } from "@shared/entity-relations";
 import { type Client, type InsertClient, type User, 
@@ -55,8 +53,7 @@ import { type Client, type InsertClient, type User,
   type CustomField, type InsertCustomField, type DataSource, type InsertDataSource,
   type DataSourceMapping, type InsertDataSourceMapping, type IntegratedData,
   type InsertIntegratedData, type DashboardWidget, type InsertDashboardWidget,
-  type ExternalSystem, type InsertExternalSystem, type ClientExternalMapping,
-  type InsertClientExternalMapping } from "@shared/schema";
+  } from "@shared/schema";
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
@@ -335,8 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // USER AUTHENTICATION ENDPOINTS
   // ========================================
 
-  // Import external API service
-  const { externalApiService } = await import("./external-api-service");
+
 
   
   // Get entity relation types
