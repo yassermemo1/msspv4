@@ -1524,29 +1524,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SERVICE SCOPES ENDPOINTS
   // ========================================
 
-  // Get all service scopes with filtering support
-
-// Custom financial transaction schema that accepts date strings from JSON and converts them to Date objects
-const apiFinancialTransactionSchema = z.object({
-  type: z.string(),
-  amount: z.string(),
-  description: z.string(),
-  status: z.string().optional(),
-  clientId: z.number().optional(),
-  contractId: z.number().optional(),
-  serviceScopeId: z.number().optional(),
-  licensePoolId: z.number().optional(),
-  hardwareAssetId: z.number().optional(),
-  transactionDate: z.string().transform((str) => new Date(str)),
-  category: z.string().optional(),
-  reference: z.string().optional(),
-  notes: z.string().optional(),
-});
-
   // SERVICE SCOPES ENDPOINTS
   // ========================================
 
   // Get all service scopes with filtering support
+  
   // ---- Mock data routes for Jira ticket widgets ----
   app.use('/api/mock-jira', mockJiraRoutes);
 

@@ -8,7 +8,7 @@ import { setupVite, serveStatic } from "./vite";
 import { environmentConfig } from "./lib/environment-config";
 import { configureAuth } from "./auth";
 import { setupDatabaseAutoSync } from "./db-auto-sync";
-import { initializeDefaultIntegrations } from "./startup-integrations";
+// import { initializeDefaultIntegrations } from "./startup-integrations"; // TODO: Create this module
 import { initializeDefaultPagePermissions } from "./startup-page-permissions";
 import compression from "compression";
 import path from "path";
@@ -79,7 +79,7 @@ type WithError = {
   });
 
   // Initialize default integrations (Jira system, etc.)
-  await initializeDefaultIntegrations();
+  // await initializeDefaultIntegrations(); // TODO: Implement this function
 
   // Ensure page permission records are up to date (e.g. /bulk-import -> /comprehensive-bulk-import)
   await initializeDefaultPagePermissions(databaseUrl);

@@ -94,17 +94,11 @@ import {
   type InsertDocumentVersion,
   type DocumentAccess,
   type InsertDocumentAccess,
-  type ExternalSystem,
-  type InsertExternalSystem,
-  type ClientExternalMapping,
-  type InsertClientExternalMapping,
   PaginatedResponse,
   PaginationParams,
   ScopeDefinitionTemplateResponse,
   type ServiceScopeField, 
-  type InsertServiceScopeField,
-  type ExternalSystemInstance,
-  type InsertExternalSystemInstance
+  type InsertServiceScopeField
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, like, or, asc, gte, lte, sql, isNull, isNotNull, ne } from "drizzle-orm";
@@ -113,7 +107,6 @@ import connectPg from "connect-pg-simple";
 import createMemoryStore from "memorystore";
 
 import { pool } from "./db";
-import { externalSystemInstances } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
 const MemoryStore = createMemoryStore(session);
@@ -363,11 +356,7 @@ export interface IStorage {
   resetUserDashboardSettings(userId: number): Promise<void>;
   createDefaultDashboardSettings(userId: number): Promise<void>;
 
-  // External system instances
-  getExternalSystemInstances(systemId: number): Promise<ExternalSystemInstance[]>;
-  createExternalSystemInstance(instance: InsertExternalSystemInstance): Promise<ExternalSystemInstance>;
-  updateExternalSystemInstance(id: number, instance: Partial<InsertExternalSystemInstance>): Promise<ExternalSystemInstance | undefined>;
-  deleteExternalSystemInstance(id: number): Promise<boolean>;
+
 }
 
 export class DatabaseStorage implements IStorage {

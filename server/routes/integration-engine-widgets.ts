@@ -2,7 +2,14 @@ import { Router } from "express";
 import { IntegrationEngineAdapter } from "../services/integration-engine-adapter";
 import { getPlugin, getAllInstances } from "../plugins/plugin-manager";
 import { pluginCache } from "../services/plugin-cache";
-import { requireAuth } from "../routes";
+
+// Auth middleware - simple inline implementation
+function requireAuth(req: any, res: any, next: any) {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  next();
+}
 
 const router = Router();
 
@@ -355,7 +362,7 @@ router.get("/instances", requireAuth, async (req, res) => {
  */
 router.get("/cache/stats", requireAuth, async (req, res) => {
   try {
-    const stats = pluginCache.getStats();
+    const stats = pluginCache.getCacheStats();
     res.json({
       cache: stats,
       timestamp: new Date().toISOString()
@@ -373,7 +380,7 @@ router.delete("/:pluginName/:instanceId/cache", requireAuth, async (req, res) =>
   try {
     const { pluginName, instanceId } = req.params;
     
-    pluginCache.invalidatePlugin(pluginName, instanceId);
+    pluginCache.clearPluginCache(pluginName, instanceId);
     
     res.json({
       message: `Cache cleared for plugin ${pluginName}:${instanceId}`,
@@ -392,7 +399,7 @@ router.delete("/:pluginName/cache", requireAuth, async (req, res) => {
   try {
     const { pluginName } = req.params;
     
-    pluginCache.invalidatePlugin(pluginName);
+    pluginCache.clearPluginCache(pluginName);
     
     res.json({
       message: `Cache cleared for plugin ${pluginName}`,
@@ -409,7 +416,7 @@ router.delete("/:pluginName/cache", requireAuth, async (req, res) => {
  */
 router.delete("/cache/all", requireAuth, async (req, res) => {
   try {
-    pluginCache.clearAll();
+    pluginCache.clearCache();
     
     res.json({
       message: "All plugin caches cleared",
@@ -428,10 +435,11 @@ router.post("/:pluginName/:instanceId/cache/warmup", requireAuth, async (req, re
   try {
     const { pluginName, instanceId } = req.params;
     
-    await pluginCache.warmUpPlugin(pluginName, instanceId);
+    // Cache warmup not directly supported - just clear old cache
+    pluginCache.clearPluginCache(pluginName, instanceId);
     
     res.json({
-      message: `Cache warmed up for plugin ${pluginName}:${instanceId}`,
+      message: `Cache cleared for plugin ${pluginName}:${instanceId}`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
