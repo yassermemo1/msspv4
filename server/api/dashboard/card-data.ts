@@ -51,59 +51,6 @@ const TABLE_MAP = {
   client_external_mappings: clientExternalMappings,
 };
 
-// External data source integration
-async function fetchExternalData(dataSourceId: number, aggregation: string, filters: Record<string, any>) {
-  try {
-    // Get data source configuration
-    const dataSource = await db
-      .select()
-      .from(dataSources)
-      .where(eq(dataSources.id, dataSourceId))
-      .limit(1);
-    
-    if (!dataSource.length || !dataSource[0].isActive) {
-      throw new Error('Data source not found or inactive');
-    }
-
-    // Get integrated data with aggregation
-    const query = db
-      .select()
-      .from(integratedData)
-      .where(eq(integratedData.dataSourceId, dataSourceId));
-
-    const data = await query;
-    
-    // Apply aggregation to external data
-    switch (aggregation) {
-      case 'count':
-        return data.length;
-      case 'sum':
-        // Extract numeric values from mapped data and sum them
-        const numericValues = data
-          .map(record => {
-            const mappedData = record.mappedData as any;
-            // Look for common numeric fields
-            return mappedData?.value || mappedData?.amount || mappedData?.count || mappedData?.total || 0;
-          })
-          .filter(val => typeof val === 'number');
-        return numericValues.reduce((sum, val) => sum + val, 0);
-      case 'average':
-        const avgValues = data
-          .map(record => {
-            const mappedData = record.mappedData as any;
-            return mappedData?.value || mappedData?.amount || mappedData?.count || mappedData?.total || 0;
-          })
-          .filter(val => typeof val === 'number');
-        return avgValues.length > 0 ? avgValues.reduce((sum, val) => sum + val, 0) / avgValues.length : 0;
-      default:
-        return data.length;
-    }
-  } catch (error) {
-    console.error('External data fetch error:', error);
-    return 0;
-  }
-}
-
 // Comparison data processing
 async function getComparisonData(comparisonConfig: any) {
   const results: Record<string, any> = {};
@@ -111,40 +58,35 @@ async function getComparisonData(comparisonConfig: any) {
   for (const [key, config] of Object.entries(comparisonConfig)) {
     const { table, aggregation = 'count', filters = {} } = config as any;
     
-    if (table === 'external' && config.dataSourceId) {
-      // Handle external data source
-      results[key] = await fetchExternalData(config.dataSourceId, aggregation, filters);
-    } else {
-      // Handle database table
-      const tableSchema = TABLE_MAP[table as keyof typeof TABLE_MAP];
-      if (tableSchema) {
-        const whereConditions = buildWhereConditions(filters, tableSchema);
-        const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-        
-        let result = 0;
-        switch (aggregation) {
-          case 'count':
-            const countResult = await db
-              .select({ count: count() })
-              .from(tableSchema)
-              .where(whereClause);
-            result = countResult[0]?.count || 0;
-            break;
-          case 'sum':
-            result = await performSumAggregation(table, tableSchema, whereClause);
-            break;
-          case 'average':
-            result = await performAverageAggregation(table, tableSchema, whereClause);
-            break;
-          case 'max':
-            result = await performMaxAggregation(table, tableSchema, whereClause);
-            break;
-          case 'min':
-            result = await performMinAggregation(table, tableSchema, whereClause);
-            break;
-        }
-        results[key] = result;
+    // Handle database table only (external data functionality removed)
+    const tableSchema = TABLE_MAP[table as keyof typeof TABLE_MAP];
+    if (tableSchema) {
+      const whereConditions = buildWhereConditions(filters, tableSchema);
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      
+      let result = 0;
+      switch (aggregation) {
+        case 'count':
+          const countResult = await db
+            .select({ count: count() })
+            .from(tableSchema)
+            .where(whereClause);
+          result = countResult[0]?.count || 0;
+          break;
+        case 'sum':
+          result = await performSumAggregation(table, tableSchema, whereClause);
+          break;
+        case 'average':
+          result = await performAverageAggregation(table, tableSchema, whereClause);
+          break;
+        case 'max':
+          result = await performMaxAggregation(table, tableSchema, whereClause);
+          break;
+        case 'min':
+          result = await performMinAggregation(table, tableSchema, whereClause);
+          break;
       }
+      results[key] = result;
     }
   }
   
@@ -303,7 +245,6 @@ export default async function handler(req: Request, res: Response) {
       table, 
       aggregation = 'count',
       comparison,
-      dataSourceId,
       ...filters 
     } = req.query;
 
@@ -322,20 +263,6 @@ export default async function handler(req: Request, res: Response) {
         console.error('Comparison parsing error:', error);
         return res.status(400).json({ error: 'Invalid comparison configuration' });
       }
-    }
-
-    // Handle external data source requests
-    if (dataSourceId && typeof dataSourceId === 'string') {
-      const result = await fetchExternalData(parseInt(dataSourceId), aggregation as string, filters as Record<string, any>);
-      
-      return res.json({
-        value: result,
-        metadata: { 
-          source: 'external',
-          dataSourceId: parseInt(dataSourceId)
-        },
-        timestamp: new Date().toISOString()
-      });
     }
 
     // Handle standard database table requests

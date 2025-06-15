@@ -41,7 +41,6 @@ export interface DashboardCard {
     name?: string;
     // External system integration
     externalSystemId?: number;
-    externalDataSourceId?: number;
     customApiEndpoint?: string;
     refreshInterval?: number; // In seconds
     // Advanced options

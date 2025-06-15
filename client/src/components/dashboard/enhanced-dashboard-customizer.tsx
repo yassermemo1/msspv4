@@ -37,8 +37,8 @@ import { apiRequest } from '@/lib/api';
 export interface EnhancedDashboardCard {
   id: string;
   title: string;
-  type: 'metric' | 'chart' | 'comparison' | 'external' | 'pool-comparison';
-  category: 'dashboard' | 'kpi' | 'comparison' | 'external' | 'integration-engine';
+  type: 'metric' | 'chart' | 'comparison' | 'pool-comparison';
+  category: 'dashboard' | 'kpi' | 'comparison' | 'integration-engine';
   dataSource: string;
   size: 'small' | 'medium' | 'large' | 'xlarge';
   visible: boolean;
@@ -72,7 +72,6 @@ export interface EnhancedDashboardCard {
     name?: string;
     // External system integration
     externalSystemId?: number;
-    externalDataSourceId?: number;
     customApiEndpoint?: string;
     refreshInterval?: number; // In seconds
     // Advanced options
@@ -197,19 +196,11 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     isRemovable: true
   });
 
-  // Fetch external systems and data sources
+  // Fetch external systems
   const { data: externalSystems = [] } = useQuery({
     queryKey: ['external-systems'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/external-systems');
-      return response.json();
-    }
-  });
-
-  const { data: externalDataSources = [] } = useQuery({
-    queryKey: ['external-data-sources'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/data-sources');
       return response.json();
     }
   });
@@ -520,7 +511,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                             <span>{DATABASE_SOURCES.find(s => s.value === card.config.compareWith)?.label || card.config.compareWith}</span>
                           </>
                         )}
-                        {card.config.externalDataSourceId && (
+                        {card.config.externalSystemId && (
                           <>
                             <span>•</span>
                             <Badge variant="secondary" className="text-xs">
@@ -595,7 +586,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             onSave={handleAddCard}
             onCancel={() => setShowAddCard(false)}
             externalSystems={externalSystems}
-            externalDataSources={externalDataSources}
             getFieldsForDataSource={getFieldsForDataSource}
           />
         </DialogContent>
@@ -664,7 +654,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                 setPendingUpdates(null);
               }}
               externalSystems={externalSystems}
-              externalDataSources={externalDataSources}
               getFieldsForDataSource={getFieldsForDataSource}
               isEditing
             />
@@ -793,7 +782,6 @@ interface CardCreatorFormProps {
   onSave: () => void;
   onCancel: () => void;
   externalSystems: any[];
-  externalDataSources: any[];
   getFieldsForDataSource: (dataSource: string) => string[];
   isEditing?: boolean;
 }
@@ -804,7 +792,6 @@ function CardCreatorForm({
   onSave, 
   onCancel, 
   externalSystems, 
-  externalDataSources, 
   getFieldsForDataSource,
   isEditing = false 
 }: CardCreatorFormProps) {
@@ -821,11 +808,10 @@ function CardCreatorForm({
   return (
     <div className="space-y-6">
       <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="basic">Basic Settings</TabsTrigger>
           <TabsTrigger value="data">Data & Comparison</TabsTrigger>
           <TabsTrigger value="visualization">Visualization</TabsTrigger>
-          <TabsTrigger value="external">External Sources</TabsTrigger>
         </TabsList>
         
         <TabsContent value="basic" className="space-y-4">
@@ -854,7 +840,6 @@ function CardCreatorForm({
                   <SelectItem value="chart">Chart</SelectItem>
                   <SelectItem value="comparison">Comparison</SelectItem>
                   <SelectItem value="pool-comparison">Pool Comparison</SelectItem>
-                  <SelectItem value="external">External Data</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1101,74 +1086,6 @@ function CardCreatorForm({
                 onCheckedChange={(checked) => updateConfig({ enableDrillDown: checked })}
               />
               <Label>Enable Drill Down</Label>
-            </div>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="external" className="space-y-4">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="external-system">External System</Label>
-              <Select 
-                value={card.config?.externalSystemId?.toString() || ''} 
-                onValueChange={(value) => updateConfig({ 
-                  externalSystemId: value ? parseInt(value) : undefined 
-                })}
-              >
-                <SelectTrigger id="external-system">
-                  <SelectValue placeholder="Select external system (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {externalSystems.map(system => (
-                    <SelectItem key={system.id} value={system.id.toString()}>
-                      {system.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="external-data-source">External Data Source</Label>
-              <Select 
-                value={card.config?.externalDataSourceId?.toString() || ''} 
-                onValueChange={(value) => updateConfig({ 
-                  externalDataSourceId: value ? parseInt(value) : undefined 
-                })}
-              >
-                <SelectTrigger id="external-data-source">
-                  <SelectValue placeholder="Select external data source (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {externalDataSources.map(source => (
-                    <SelectItem key={source.id} value={source.id.toString()}>
-                      {source.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="custom-api">Custom API Endpoint</Label>
-              <Input
-                id="custom-api"
-                value={card.config?.customApiEndpoint || ''}
-                onChange={(e) => updateConfig({ customApiEndpoint: e.target.value })}
-                placeholder="https://api.example.com/data"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="refresh-interval">Refresh Interval (seconds)</Label>
-              <Input
-                id="refresh-interval"
-                type="number"
-                value={card.config?.refreshInterval || 300}
-                onChange={(e) => updateConfig({ refreshInterval: parseInt(e.target.value) || 300 })}
-                min="30"
-                max="3600"
-              />
             </div>
           </div>
         </TabsContent>
