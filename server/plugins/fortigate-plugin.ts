@@ -1,23 +1,10 @@
 import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plugin-manager';
+import { buildBasicHeaders, buildFetchOptions } from './plugin-utils';
 import fetch from 'node-fetch';
 
 function buildUrl(base: string, path: string) {
   if (path.startsWith('http')) return path;
   return `${base.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
-}
-
-function buildHeaders(instance: PluginInstance): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const cfg = instance.authConfig || {};
-  
-  if (instance.authType === 'bearer' && cfg.token) {
-    headers['Authorization'] = `Bearer ${cfg.token}`;
-  } else if (instance.authType === 'api_key' && cfg.key) {
-    headers[cfg.header || 'X-API-Key'] = cfg.key;
-  } else if (instance.authType === 'basic' && cfg.username && cfg.password) {
-    headers['Authorization'] = 'Basic ' + Buffer.from(`${cfg.username}:${cfg.password}`).toString('base64');
-  }
-  return headers;
 }
 
 // ---------------- Default Query Catalogue ----------------
@@ -54,7 +41,12 @@ const fortigateConfig: PluginConfig = {
         header: 'Authorization'
       },
       isActive: true,
-      tags: ['production', 'firewall']
+      tags: ['production', 'firewall'],
+      sslConfig: {
+        rejectUnauthorized: true,
+        allowSelfSigned: false,
+        timeout: 30000
+      }
     },
     {
       id: 'fortigate-test',
@@ -66,7 +58,12 @@ const fortigateConfig: PluginConfig = {
         header: 'Authorization'
       },
       isActive: true,
-      tags: ['test', 'firewall']
+      tags: ['test', 'firewall'],
+      sslConfig: {
+        rejectUnauthorized: true,
+        allowSelfSigned: false,
+        timeout: 30000
+      }
     }
   ],
   defaultRefreshInterval: 30,
@@ -93,13 +90,16 @@ const fortigatePlugin: QueryPlugin = {
     }
     
     const url = buildUrl(instance.baseUrl, query);
-    const headers = buildHeaders(instance);
+    const headers = buildBasicHeaders(instance, { 'Content-Type': 'application/json' });
+    const fetchOptions = buildFetchOptions(instance, headers);
+    
+    // Add method and body to fetch options
+    fetchOptions.method = method.toUpperCase();
+    if (opts?.body) {
+      fetchOptions.body = JSON.stringify(opts.body);
+    }
 
-    const res = await fetch(url, {
-      method: method.toUpperCase(),
-      headers,
-      body: opts?.body ? JSON.stringify(opts.body) : undefined,
-    });
+    const res = await fetch(url, fetchOptions);
 
     const contentType = res.headers.get('content-type') || '';
     const data = contentType.includes('application/json') ? await res.json() : await res.text();

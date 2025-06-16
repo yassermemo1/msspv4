@@ -7,7 +7,9 @@ import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Ensure proper __dirname for ESM modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const viteLogger = createLogger();
 
@@ -55,36 +57,62 @@ export async function setupVite(app: Express, server: Server) {
     }
 
     try {
-      // Ensure __dirname is a valid string
-      if (!__dirname || typeof __dirname !== 'string') {
-        throw new Error('__dirname is not defined or not a string');
-      }
-      
-      const clientTemplate = path.resolve(__dirname, "..", "client", "index.html");
+      // Ensure we have a valid base directory
+      const baseDir = __dirname && typeof __dirname === 'string' ? __dirname : process.cwd();
+      const clientTemplate = path.resolve(baseDir, "..", "client", "index.html");
       
       // Check if the client template exists
       if (!fs.existsSync(clientTemplate)) {
-        // Fallback: try to serve a basic HTML page
-        const fallbackHtml = `
-          <!DOCTYPE html>
-          <html>
-            <head><title>MSSP Portal</title></head>
-            <body>
-              <div id="root">Loading MSSP Portal...</div>
-              <script>
-                // Try to redirect to the API or show an error
-                setTimeout(() => {
-                  if (!document.querySelector('#root').innerHTML.includes('Loading')) return;
-                  document.querySelector('#root').innerHTML = '<h1>MSSP Portal API Server Running</h1><p>Frontend client not found. Server is running on port 3000.</p>';
-                }, 2000);
-              </script>
-            </body>
-          </html>`;
-        res.status(200).set({ "Content-Type": "text/html" }).end(fallbackHtml);
+        // Fallback: try alternative paths
+        const altPaths = [
+          path.resolve(process.cwd(), "client", "index.html"),
+          path.resolve(process.cwd(), "client", "public", "index.html"),
+          path.resolve(baseDir, "client", "index.html")
+        ];
+        
+        let foundTemplate = null;
+        for (const altPath of altPaths) {
+          if (fs.existsSync(altPath)) {
+            foundTemplate = altPath;
+            break;
+          }
+        }
+        
+        if (!foundTemplate) {
+          // Serve a basic HTML page if no template found
+          const fallbackHtml = `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>MSSP Portal</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              </head>
+              <body>
+                <div id="root">
+                  <h1>MSSP Portal API Server</h1>
+                  <p>The server is running successfully on port 3001.</p>
+                  <p>Frontend client templates not found in expected locations.</p>
+                  <p>Check the build process or ensure the client directory exists.</p>
+                </div>
+              </body>
+            </html>`;
+          res.status(200).set({ "Content-Type": "text/html" }).end(fallbackHtml);
+          return;
+        }
+        
+        // Use the found template
+        let template = await fs.promises.readFile(foundTemplate, "utf-8");
+        template = template.replace(
+          `src="/src/main.tsx"`,
+          `src="/src/main.tsx?v=${nanoid()}"`,
+        );
+        const page = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(page);
         return;
       }
 
-      // always reload the index.html file from disk incase it changes
+      // Standard path - template exists
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,

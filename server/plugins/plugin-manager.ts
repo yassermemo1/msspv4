@@ -23,6 +23,11 @@ export interface PluginInstance {
   };
   isActive: boolean;
   tags?: string[];
+  sslConfig?: {
+    rejectUnauthorized?: boolean;
+    allowSelfSigned?: boolean;
+    timeout?: number;
+  };
 }
 
 export interface DefaultQueryDef {

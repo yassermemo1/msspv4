@@ -265,6 +265,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ---- Pool validation routes ----
   app.use('/api/pools', poolValidationRoutes);
 
+  // ---- Plugin routes ----
+  console.log('🔥 MOUNTING PLUGIN ROUTES at /api/plugins');
+  app.use('/api/plugins', pluginRoutes);
+
   // ---- Dynamic service scopes routes (must be before other service-scopes routes) ----
   console.log('🔥 MOUNTING DYNAMIC SERVICE SCOPE ROUTES at /api/service-scopes');
   app.use('/api/service-scopes', dynamicServiceScopeRoutes);
@@ -4227,15 +4231,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get plugins
-  app.get("/api/plugins", requireAuth, async (req, res, next) => {
-    try {
-      // Return empty array for now - plugins would need to be implemented
-      res.json([]);
-    } catch (error) {
-      next(error);
-    }
-  });
+  // Note: Plugin routes are now handled by pluginRoutes mounted at /api/plugins
+  // (Legacy route commented out - handled by plugin-routes.ts)
 
   // Get documents
   app.get("/api/documents", requireAuth, async (req, res, next) => {
@@ -5397,55 +5394,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ========================================
-  // PLUGINS ENDPOINTS
+  // PLUGINS ENDPOINTS - Now handled by plugin-routes.ts
   // ========================================
 
-  // Get plugin types
-  app.get("/api/plugins/types", requireAuth, async (req, res, next) => {
-    try {
-      const pluginTypes = [
-        {
-          id: 'security',
-          name: 'Security Tools',
-          description: 'Security monitoring and analysis plugins',
-          category: 'security',
-          icon: 'shield'
-        },
-        {
-          id: 'monitoring',
-          name: 'Monitoring Tools',
-          description: 'Infrastructure and application monitoring',
-          category: 'monitoring',
-          icon: 'activity'
-        },
-        {
-          id: 'backup',
-          name: 'Backup Solutions',
-          description: 'Data backup and recovery tools',
-          category: 'backup',
-          icon: 'database'
-        },
-        {
-          id: 'collaboration',
-          name: 'Collaboration Tools',
-          description: 'Team collaboration and communication',
-          category: 'collaboration',
-          icon: 'users'
-        },
-        {
-          id: 'analytics',
-          name: 'Analytics Tools',
-          description: 'Data analysis and reporting tools',
-          category: 'analytics',
-          icon: 'bar-chart'
-        }
-      ];
-
-      res.json(pluginTypes);
-    } catch (error) {
-      next(error);
-    }
-  });
+  // Note: Plugin types endpoint is now handled by pluginRoutes mounted at /api/plugins
+  // (Legacy route commented out - handled by plugin-routes.ts)
 
   // Get plugin configurations
   app.get("/api/plugins/configurations", requireAuth, async (req, res, next) => {

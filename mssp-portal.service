@@ -1,0 +1,29 @@
+[Unit]
+Description=MSSP Portal - Modern Management Platform
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+ExecStart=/root/.nvm/versions/node/v18.20.8/bin/node /root/mcsportal/msspv2/node_modules/.bin/tsx server/index.ts
+WorkingDirectory=/root/mcsportal/msspv2
+Environment=NODE_ENV=production
+Environment=PORT=80
+Environment=SESSION_SECRET=413bc276264441a67c6d57bc79996874d9453547e80ce7af1a25dca982748980
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mssp-portal
+
+# Security
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/root/mcsportal/msspv2
+
+[Install]
+WantedBy=multi-user.target 

@@ -1,18 +1,6 @@
 import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plugin-manager';
+import { buildBasicHeaders, buildFetchOptions } from './plugin-utils';
 import fetch from 'node-fetch';
-
-function buildHeaders(instance: PluginInstance): Record<string, string> {
-  const headers: Record<string, string> = { 'Accept': 'application/json' };
-  const cfg = instance.authConfig || {};
-  
-  if (instance.authType === 'basic' && cfg.username && cfg.password) {
-    headers['Authorization'] = 'Basic ' + Buffer.from(`${cfg.username}:${cfg.password}`).toString('base64');
-  } else if (instance.authType === 'bearer' && cfg.token) {
-    headers['Authorization'] = `Bearer ${cfg.token}`;
-  }
-  
-  return headers;
-}
 
 // Plugin Configuration - Self-Contained
 const jiraConfig: PluginConfig = {
@@ -27,7 +15,12 @@ const jiraConfig: PluginConfig = {
         password: process.env.JIRA_API_TOKEN || 'your-api-token'
       },
       isActive: true,
-      tags: ['tickets', 'project-management']
+      tags: ['tickets', 'project-management'],
+      sslConfig: {
+        rejectUnauthorized: true,
+        allowSelfSigned: false,
+        timeout: 30000
+      }
     }
   ],
   defaultRefreshInterval: 60,
@@ -41,7 +34,7 @@ const jiraPlugin: QueryPlugin = {
   systemName: 'jira',
   config: jiraConfig,
   
-  async executeQuery(query: string, _method: string | undefined, instanceId: string) {
+  async executeQuery(query: string, method: string | undefined, instanceId: string) {
     const instance = this.getInstance(instanceId);
     if (!instance) {
       throw new Error(`Jira instance '${instanceId}' not found`);
@@ -51,15 +44,55 @@ const jiraPlugin: QueryPlugin = {
       throw new Error(`Jira instance '${instanceId}' is not active`);
     }
     
-    // Build JIRA search URL
-    const base = instance.baseUrl;
-    const url = `${base.replace(/\/$/, '')}/rest/api/2/search?jql=${encodeURIComponent(query)}`;
-    const headers = buildHeaders(instance);
+    const base = instance.baseUrl.replace(/\/$/, '');
+    
+    // Handle special health check query
+    if (query === '__health_check__') {
+      const url = `${base}/rest/api/2/serverInfo`;
+      const headers = buildBasicHeaders(instance);
+      const fetchOptions = buildFetchOptions(instance, headers);
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`Jira API ${res.status}: ${res.statusText}`);
+      console.log(`🏥 Jira Health Check: ${url}`);
+      
+      const res = await fetch(url, fetchOptions);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`❌ Jira Health Check Failed ${res.status}: ${errorText}`);
+        throw new Error(`Jira Health Check Failed ${res.status}: ${res.statusText}`);
+      }
+      
+      const serverInfo = await res.json();
+      console.log(`✅ Jira Health Check Success: ${serverInfo.serverTitle || 'Jira Server'}`);
+      
+      return {
+        status: 'healthy',
+        serverInfo: {
+          version: serverInfo.version,
+          title: serverInfo.serverTitle,
+          baseUrl: serverInfo.baseUrl
+        },
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // Regular JQL query
+    const url = `${base}/rest/api/2/search?jql=${encodeURIComponent(query)}`;
+    const headers = buildBasicHeaders(instance);
+    const fetchOptions = buildFetchOptions(instance, headers);
+
+    console.log(`🔍 Jira API Request: ${url}`);
+    
+    const res = await fetch(url, fetchOptions);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`❌ Jira API Error ${res.status}: ${errorText}`);
+      throw new Error(`Jira API ${res.status}: ${res.statusText} - ${errorText}`);
+    }
+    
     const data = await res.json();
-    return data; // issues array etc.
+    return data;
   },
   
   getInstances(): PluginInstance[] {
@@ -71,9 +104,11 @@ const jiraPlugin: QueryPlugin = {
   },
   
   defaultQueries: [
-    { id: 'recentIssues', method: 'GET', path: 'created >= -7d ORDER BY created DESC', description: 'Issues created in the last 7 days' },
-    { id: 'openBugs', method: 'GET', path: 'type = Bug AND status != Done', description: 'Open bug tickets' },
-    { id: 'myIssues', method: 'GET', path: 'assignee = currentUser() AND status != Done', description: 'My open issues' }
+    { id: 'healthCheck', method: 'GET', path: '__health_check__', description: 'Server health check' },
+    { id: 'recentIssues', method: 'GET', path: 'created >= -1w ORDER BY created DESC', description: 'Issues created in the last week' },
+    { id: 'openBugs', method: 'GET', path: 'type = Bug AND resolution = Unresolved', description: 'Open bug tickets' },
+    { id: 'myIssues', method: 'GET', path: 'assignee = currentUser() AND resolution = Unresolved', description: 'My open issues' },
+    { id: 'recentlyUpdated', method: 'GET', path: 'updated >= -3d ORDER BY updated DESC', description: 'Recently updated issues' }
   ]
 };
 

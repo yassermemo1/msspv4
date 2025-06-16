@@ -189,7 +189,7 @@ export const contracts = pgTable("contracts", {
 });
 
 // Service scopes for each service within a contract
-export const serviceScopes: any = pgTable("service_scopes", {
+export const serviceScopes = pgTable("service_scopes", {
   id: serial("id").primaryKey(),
   contractId: integer("contract_id").notNull().references(() => contracts.id),
   serviceId: integer("service_id").references(() => services.id),

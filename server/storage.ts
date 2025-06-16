@@ -770,6 +770,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceScopesByClientId(clientId: number): Promise<ServiceScope[]> {
+    // Use a proper drizzle join instead of manual SQL construction
     return await db
       .select({
         id: serviceScopes.id,
@@ -784,8 +785,20 @@ export class DatabaseStorage implements IStorage {
         endDate: serviceScopes.endDate,
         status: serviceScopes.status,
         monthlyValue: serviceScopes.monthlyValue,
+        description: serviceScopes.description,
         notes: serviceScopes.notes,
+        eps: serviceScopes.eps,
+        endpoints: serviceScopes.endpoints,
+        dataVolumeGb: serviceScopes.dataVolumeGb,
+        logSources: serviceScopes.logSources,
+        firewallDevices: serviceScopes.firewallDevices,
+        pamUsers: serviceScopes.pamUsers,
+        responseTimeMinutes: serviceScopes.responseTimeMinutes,
+        coverageHours: serviceScopes.coverageHours,
+        serviceTier: serviceScopes.serviceTier,
+        safId: serviceScopes.safId,
         createdAt: serviceScopes.createdAt,
+        updatedAt: serviceScopes.updatedAt
       })
       .from(serviceScopes)
       .innerJoin(contracts, eq(serviceScopes.contractId, contracts.id))
@@ -794,11 +807,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createServiceScope(serviceScope: InsertServiceScope): Promise<ServiceScope> {
-    const [newServiceScope] = await db
+    const [createdScope] = await db
       .insert(serviceScopes)
       .values(serviceScope)
-      .returning();
-    return newServiceScope;
+      .returning({
+        id: serviceScopes.id,
+        contractId: serviceScopes.contractId,
+        serviceId: serviceScopes.serviceId,
+        scopeDefinition: serviceScopes.scopeDefinition,
+        safDocumentUrl: serviceScopes.safDocumentUrl,
+        safStartDate: serviceScopes.safStartDate,
+        safEndDate: serviceScopes.safEndDate,
+        safStatus: serviceScopes.safStatus,
+        startDate: serviceScopes.startDate,
+        endDate: serviceScopes.endDate,
+        status: serviceScopes.status,
+        monthlyValue: serviceScopes.monthlyValue,
+        description: serviceScopes.description,
+        notes: serviceScopes.notes,
+        eps: serviceScopes.eps,
+        endpoints: serviceScopes.endpoints,
+        dataVolumeGb: serviceScopes.dataVolumeGb,
+        logSources: serviceScopes.logSources,
+        firewallDevices: serviceScopes.firewallDevices,
+        pamUsers: serviceScopes.pamUsers,
+        responseTimeMinutes: serviceScopes.responseTimeMinutes,
+        coverageHours: serviceScopes.coverageHours,
+        serviceTier: serviceScopes.serviceTier,
+        safId: serviceScopes.safId,
+        createdAt: serviceScopes.createdAt,
+        updatedAt: serviceScopes.updatedAt
+      });
+
+    if (!createdScope) {
+      throw new Error('Failed to create service scope');
+    }
+
+    return createdScope;
   }
 
   async updateServiceScope(id: number, serviceScope: Partial<InsertServiceScope>): Promise<ServiceScope | undefined> {
@@ -1127,7 +1172,7 @@ export class DatabaseStorage implements IStorage {
     const [newSaf] = await db
       .insert(serviceAuthorizationForms)
       .values(saf)
-      .returning();
+      .returning() as ServiceAuthorizationForm[];
     return newSaf;
   }
 
@@ -1145,9 +1190,6 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
-  /**
-   * Get all SAFs belonging to a specific client
-   */
   async getServiceAuthorizationFormsByClientId(clientId: number): Promise<ServiceAuthorizationForm[]> {
     return await db
       .select()
@@ -1382,7 +1424,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Document management implementation
+  // Document management
   async getDocuments(clientId?: number, documentType?: string): Promise<Document[]> {
     const conditions = [eq(documents.isActive, true)];
     
@@ -1478,8 +1520,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(documentAccess.id, id));
     return (result.rowCount || 0) > 0;
   }
-  
-  // Removed API Aggregator methods (external integrations deprecated)
 
   // Service helper methods
   async getClientByName(name: string): Promise<Client | undefined> {
@@ -1531,7 +1571,7 @@ export class DatabaseStorage implements IStorage {
       value: data.value,
       status: data.status,
       notes: data.notes
-    }).returning();
+    }).returning() as ServiceAuthorizationForm[];
     return saf;
   }
 
@@ -1610,8 +1650,6 @@ export class DatabaseStorage implements IStorage {
     return !!deletedField;
   }
 
-
-
   // Service scopes
   async getServiceScopes(): Promise<ServiceScope[]> {
     return await db
@@ -1622,9 +1660,6 @@ export class DatabaseStorage implements IStorage {
 
   // User Dashboard Settings Management
   async getUserDashboardSettings(userId: number): Promise<UserDashboardSetting[]> {
-    console.log(`=== STORAGE: getUserDashboardSettings ===`);
-    console.log(`User ID: ${userId}`);
-    
     try {
       const settings = await db
         .select()
@@ -1632,7 +1667,6 @@ export class DatabaseStorage implements IStorage {
         .where(eq(userDashboardSettings.userId, userId))
         .orderBy(asc(userDashboardSettings.position));
       
-      console.log(`Found ${settings.length} dashboard settings`);
       return settings;
     } catch (error) {
       console.error('Error fetching user dashboard settings:', error);
@@ -1641,9 +1675,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveUserDashboardSettings(userId: number, cards: any[]): Promise<void> {
-    console.log(`=== STORAGE: saveUserDashboardSettings ===`);
-    console.log(`User ID: ${userId}, Cards: ${cards.length}`);
-    
     try {
       await db.transaction(async (tx) => {
         // Delete existing settings
@@ -1671,8 +1702,6 @@ export class DatabaseStorage implements IStorage {
           await tx.insert(userDashboardSettings).values(insertData);
         }
       });
-      
-      console.log('Dashboard settings saved successfully');
     } catch (error) {
       console.error('Error saving user dashboard settings:', error);
       throw error;
@@ -1680,9 +1709,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserDashboardCard(userId: number, cardId: string, updates: Partial<UserDashboardSetting>): Promise<void> {
-    console.log(`=== STORAGE: updateUserDashboardCard ===`);
-    console.log(`User ID: ${userId}, Card ID: ${cardId}`);
-    
     try {
       const updateData: any = {
         ...updates,
@@ -1704,8 +1730,6 @@ export class DatabaseStorage implements IStorage {
             eq(userDashboardSettings.cardId, cardId)
           )
         );
-      
-      console.log('Dashboard card updated successfully');
     } catch (error) {
       console.error('Error updating dashboard card:', error);
       throw error;
@@ -1713,26 +1737,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeUserDashboardCard(userId: number, cardId: string): Promise<void> {
-    console.log(`=== STORAGE: removeUserDashboardCard ===`);
-    console.log(`User ID: ${userId}, Card ID: ${cardId}`);
-    
     try {
-      // First, check if the card exists
-      const existingCard = await db
-        .select()
-        .from(userDashboardSettings)
-        .where(
-          and(
-            eq(userDashboardSettings.userId, userId),
-            eq(userDashboardSettings.cardId, cardId)
-          )
-        );
-      
-      console.log(`Found ${existingCard.length} matching cards`);
-      if (existingCard.length > 0) {
-        console.log(`Existing card:`, existingCard[0]);
-      }
-      
       const result = await db
         .delete(userDashboardSettings)
         .where(
@@ -1743,14 +1748,9 @@ export class DatabaseStorage implements IStorage {
         )
         .returning();
       
-      console.log(`Delete operation result:`, result);
-      console.log(`Deleted ${result.length} records`);
-      
       if (result.length === 0) {
         throw new Error(`Dashboard card '${cardId}' not found or not removable`);
       }
-      
-      console.log('Dashboard card removed successfully');
     } catch (error) {
       console.error('Error removing dashboard card:', error);
       throw error;
@@ -1758,9 +1758,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetUserDashboardSettings(userId: number): Promise<void> {
-    console.log(`=== STORAGE: resetUserDashboardSettings ===`);
-    console.log(`User ID: ${userId}`);
-    
     try {
       // Delete all existing settings
       await db
@@ -1769,8 +1766,6 @@ export class DatabaseStorage implements IStorage {
       
       // Create default settings
       await this.createDefaultDashboardSettings(userId);
-      
-      console.log('Dashboard settings reset to defaults');
     } catch (error) {
       console.error('Error resetting dashboard settings:', error);
       throw error;
@@ -1778,92 +1773,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDefaultDashboardSettings(userId: number): Promise<void> {
-    console.log(`=== STORAGE: createDefaultDashboardSettings ===`);
-    console.log(`User ID: ${userId}`);
-    
     const defaultCards: InsertUserDashboardSetting[] = [
-      // Built-in KPI Cards
-      {
-        userId,
-        cardId: 'builtin-new-clients',
-        title: 'New Clients',
-        type: 'builtin',
-        category: 'kpi',
-        dataSource: 'clients',
-        size: 'small',
-        visible: true,
-        position: 0,
-        config: {
-          icon: 'Building',
-          color: 'blue',
-          format: 'number',
-          aggregation: 'count',
-          trend: true
-        },
-        isBuiltIn: true,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'builtin-contracts-signed',
-        title: 'Contracts Signed',
-        type: 'builtin',
-        category: 'kpi',
-        dataSource: 'contracts',
-        size: 'small',
-        visible: true,
-        position: 1,
-        config: {
-          icon: 'FileText',
-          color: 'green',
-          format: 'number',
-          aggregation: 'count',
-          trend: true
-        },
-        isBuiltIn: true,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'builtin-period-revenue',
-        title: 'Period Revenue',
-        type: 'builtin',
-        category: 'kpi',
-        dataSource: 'contracts',
-        size: 'small',
-        visible: true,
-        position: 2,
-        config: {
-          icon: 'DollarSign',
-          color: 'emerald',
-          format: 'currency',
-          aggregation: 'sum',
-          trend: true
-        },
-        isBuiltIn: true,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'builtin-tasks-progress',
-        title: 'Tasks Progress',
-        type: 'builtin',
-        category: 'kpi',
-        dataSource: 'tasks',
-        size: 'small',
-        visible: true,
-        position: 3,
-        config: {
-          icon: 'Users',
-          color: 'purple',
-          format: 'number',
-          aggregation: 'count',
-          trend: true
-        },
-        isBuiltIn: true,
-        isRemovable: true,
-      },
-      // Dynamic Dashboard Cards
       {
         userId,
         cardId: 'total-clients',
@@ -1873,68 +1783,10 @@ export class DatabaseStorage implements IStorage {
         dataSource: 'clients',
         size: 'small',
         visible: true,
-        position: 4,
+        position: 0,
         config: {
           icon: 'Building',
           color: 'blue',
-          format: 'number',
-          aggregation: 'count'
-        },
-        isBuiltIn: false,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'active-contracts',
-        title: 'Active Contracts',
-        type: 'metric',
-        category: 'dashboard',
-        dataSource: 'contracts',
-        size: 'small',
-        visible: true,
-        position: 5,
-        config: {
-          icon: 'FileText',
-          color: 'green',
-          format: 'number',
-          aggregation: 'count',
-          filters: { status: 'active' }
-        },
-        isBuiltIn: false,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'total-revenue',
-        title: 'Total Revenue',
-        type: 'metric',
-        category: 'dashboard',
-        dataSource: 'contracts',
-        size: 'small',
-        visible: true,
-        position: 6,
-        config: {
-          icon: 'DollarSign',
-          color: 'emerald',
-          format: 'currency',
-          aggregation: 'sum'
-        },
-        isBuiltIn: false,
-        isRemovable: true,
-      },
-      {
-        userId,
-        cardId: 'license-pools',
-        title: 'License Pools',
-        type: 'metric',
-        category: 'dashboard',
-        dataSource: 'license_pools',
-        size: 'small',
-        visible: true,
-        position: 7,
-        config: {
-          icon: 'Server',
-          color: 'violet',
           format: 'number',
           aggregation: 'count'
         },
@@ -1945,17 +1797,13 @@ export class DatabaseStorage implements IStorage {
     
     try {
       await db.insert(userDashboardSettings).values(defaultCards);
-      console.log('Default dashboard settings created');
     } catch (error) {
       console.error('Error creating default dashboard settings:', error);
       throw error;
     }
   }
 
-  // ========================================
-  // FIELD VISIBILITY CONFIGURATION
-  // ========================================
-
+  // Field visibility
   async getFieldVisibilityConfigs(): Promise<any[]> {
     try {
       const result = await db.execute(sql`
@@ -2036,7 +1884,6 @@ export class DatabaseStorage implements IStorage {
       return true; // Default to visible on error
     }
   }
-
 
 }
 

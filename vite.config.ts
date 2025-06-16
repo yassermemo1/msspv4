@@ -3,9 +3,9 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// The __dirname variable is not reliably available in all contexts
-// Using process.cwd() provides a more stable anchor for path resolution
-// const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Ensure we have a proper __dirname for ESM modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [
@@ -13,14 +13,14 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(process.cwd(), "client", "src"),
-      "@shared": path.resolve(process.cwd(), "shared"),
-      "@assets": path.resolve(process.cwd(), "attached_assets"),
+      "@": path.resolve(__dirname, "client", "src"),
+      "@shared": path.resolve(__dirname, "shared"),
+      "@assets": path.resolve(__dirname, "attached_assets"),
     },
   },
-  root: path.resolve(process.cwd(), "client"),
+  root: path.resolve(__dirname, "client"),
   build: {
-    outDir: path.resolve(process.cwd(), "dist/public"),
+    outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: process.env.NODE_ENV !== 'production',
     minify: 'terser',

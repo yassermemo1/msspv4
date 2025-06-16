@@ -27,6 +27,11 @@ interface PluginInstance {
   };
   isActive: boolean;
   tags?: string[];
+  sslConfig?: {
+    rejectUnauthorized?: boolean;
+    allowSelfSigned?: boolean;
+    timeout?: number;
+  };
 }
 
 interface Plugin {
@@ -49,10 +54,12 @@ interface Plugin {
 
 interface PluginTestResult {
   success: boolean;
+  status?: 'inactive' | 'configured' | 'connected';
   message?: string;
   responseTime?: number;
   statusCode?: number;
   error?: string;
+  connected?: boolean;
 }
 
 function TestConnectionButton({ pluginName, instanceId }: { pluginName: string; instanceId: string }) {
@@ -277,8 +284,6 @@ function QueryRunner({ pluginName, instanceId }: { pluginName: string; instanceI
   );
 }
 
-
-
 export default function PluginsPage() {
   const { data: plugins = [], isLoading, error, refetch } = useQuery<Plugin[]>({
     queryKey: ["plugins"],
@@ -304,18 +309,15 @@ export default function PluginsPage() {
     },
   });
 
-  const [configuring, setConfiguring] = useState<{plugin: string, instance: string} | null>(null);
-  const [testing, setTesting] = useState<{plugin: string, instance: string} | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, any>>({});
-  const [editingInstance, setEditingInstance] = useState<PluginInstance | null>(null);
+  const [selectedPluginType, setSelectedPluginType] = useState('');
   const [showAddInstanceDialog, setShowAddInstanceDialog] = useState(false);
-  const [selectedPluginType, setSelectedPluginType] = useState<string>('');
-
+  const [editingInstance, setEditingInstance] = useState<PluginInstance | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, PluginTestResult>>({});
+  const [testing, setTesting] = useState<{ plugin: string; instance: string } | null>(null);
   const { toast } = useToast();
 
-  // Function to refresh plugins data
   const loadPlugins = async () => {
-    await refetch();
+    refetch();
   };
 
   const handleInstanceUpdate = async (pluginName: string, instanceId: string, updateData: Partial<PluginInstance>) => {
@@ -331,7 +333,6 @@ export default function PluginsPage() {
       const result = await response.json();
       
       if (result.success) {
-        // Refresh plugins to show updated data
         await loadPlugins();
         setEditingInstance(null);
         toast({
@@ -344,7 +345,7 @@ export default function PluginsPage() {
     } catch (error) {
       toast({
         title: "Update Failed",
-        description: error.message || "Failed to update instance configuration",
+        description: error instanceof Error ? error.message : "Failed to update instance configuration",
         variant: "destructive"
       });
     }
@@ -375,7 +376,7 @@ export default function PluginsPage() {
     } catch (error) {
       toast({
         title: "Toggle Failed",
-        description: error.message || "Failed to toggle instance status",
+        description: error instanceof Error ? error.message : "Failed to toggle instance status",
         variant: "destructive"
       });
     }
@@ -450,7 +451,7 @@ export default function PluginsPage() {
     } catch (error) {
       toast({
         title: "Creation Failed",
-        description: error.message || "Failed to create instance",
+        description: error instanceof Error ? error.message : "Failed to create instance",
         variant: "destructive"
       });
     }
@@ -483,7 +484,7 @@ export default function PluginsPage() {
     } catch (error) {
       toast({
         title: "Deletion Failed",
-        description: error.message || "Failed to delete instance",
+        description: error instanceof Error ? error.message : "Failed to delete instance",
         variant: "destructive"
       });
     }
@@ -649,6 +650,48 @@ export default function PluginsPage() {
               />
             </div>
 
+            {/* SSL/TLS Configuration */}
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-medium mb-3">SSL/TLS Configuration</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={!formData.sslConfig?.rejectUnauthorized}
+                    onCheckedChange={(checked) => setFormData({ 
+                      ...formData, 
+                      sslConfig: { 
+                        ...formData.sslConfig,
+                        rejectUnauthorized: !checked,
+                        allowSelfSigned: checked
+                      }
+                    })}
+                  />
+                  <Label>Allow Self-Signed Certificates</Label>
+                  <span className="text-sm text-gray-500">(Disable SSL verification)</span>
+                </div>
+                
+                <div>
+                  <Label htmlFor="edit-timeout">Connection Timeout (ms)</Label>
+                  <Input
+                    id="edit-timeout"
+                    type="number"
+                    value={formData.sslConfig?.timeout || 30000}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      sslConfig: { ...formData.sslConfig, timeout: parseInt(e.target.value) || 30000 }
+                    })}
+                    placeholder="30000"
+                    min="1000"
+                    max="300000"
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    Timeout for HTTP requests (1-300 seconds)
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center space-x-2">
               <Switch
                 checked={formData.isActive}
@@ -674,7 +717,7 @@ export default function PluginsPage() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <AppLayout title="Plugin Management">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
@@ -684,7 +727,7 @@ export default function PluginsPage() {
 
   if (error) {
     return (
-      <AppLayout>
+      <AppLayout title="Plugin Management">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
@@ -702,7 +745,7 @@ export default function PluginsPage() {
   );
 
   return (
-    <AppLayout>
+    <AppLayout title="Plugin Management">
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
@@ -907,10 +950,21 @@ function AddInstanceForm({
   const [formData, setFormData] = useState({
     name: '',
     baseUrl: '',
-    authType: 'none',
-    authConfig: {},
+    authType: 'none' as 'none' | 'basic' | 'bearer' | 'api_key',
+    authConfig: {
+      username: '',
+      password: '',
+      token: '',
+      key: '',
+      header: 'Authorization'
+    },
     tags: '',
-    isActive: true
+    isActive: true,
+    sslConfig: {
+      rejectUnauthorized: true,
+      allowSelfSigned: false,
+      timeout: 30000
+    }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -983,7 +1037,7 @@ function AddInstanceForm({
         <select
           id="auth-type"
           value={formData.authType}
-          onChange={(e) => setFormData({ ...formData, authType: e.target.value })}
+          onChange={(e) => setFormData({ ...formData, authType: e.target.value as 'none' | 'basic' | 'bearer' | 'api_key' })}
           className="w-full p-2 border rounded"
         >
           <option value="none">None</option>
@@ -1072,6 +1126,48 @@ function AddInstanceForm({
           onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
           placeholder="production, firewall, security"
         />
+      </div>
+
+      {/* SSL/TLS Configuration */}
+      <div className="border-t pt-4">
+        <h3 className="text-lg font-medium mb-3">SSL/TLS Configuration</h3>
+        
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Switch
+              checked={!formData.sslConfig.rejectUnauthorized}
+              onCheckedChange={(checked) => setFormData({ 
+                ...formData, 
+                sslConfig: { 
+                  ...formData.sslConfig, 
+                  rejectUnauthorized: !checked,
+                  allowSelfSigned: checked
+                }
+              })}
+            />
+            <Label>Allow Self-Signed Certificates</Label>
+            <span className="text-sm text-gray-500">(Disable SSL verification for self-signed certs)</span>
+          </div>
+          
+          <div>
+            <Label htmlFor="timeout">Connection Timeout (ms)</Label>
+            <Input
+              id="timeout"
+              type="number"
+              value={formData.sslConfig.timeout}
+              onChange={(e) => setFormData({
+                ...formData,
+                sslConfig: { ...formData.sslConfig, timeout: parseInt(e.target.value) || 30000 }
+              })}
+              placeholder="30000"
+              min="1000"
+              max="300000"
+            />
+            <p className="text-sm text-gray-600 mt-1">
+              Timeout for HTTP requests (1-300 seconds)
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">
