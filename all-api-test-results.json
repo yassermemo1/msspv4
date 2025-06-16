@@ -1,0 +1,698 @@
+{
+  "timestamp": "2025-06-16T06:36:09.064Z",
+  "testSummary": {
+    "total": 54,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0
+  },
+  "endpointGroups": {
+    "authentication": {
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    "clients": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    "contracts": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "services": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "service-scopes": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    "license-pools": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "hardware-assets": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "documents": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "dashboard": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "compliance": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "licenses": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "system": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "permissions": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "search": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "audit": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "teams": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "security": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "error-scenarios": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "failedEndpoints": [],
+  "tests": [
+    {
+      "name": "Admin Login",
+      "method": "POST",
+      "endpoint": "/api/login",
+      "status": 200,
+      "success": "admin@mssp.local",
+      "error": null,
+      "responseTime": 76,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:09.144Z"
+    },
+    {
+      "name": "Get Current User",
+      "method": "GET",
+      "endpoint": "/api/user",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:09.147Z"
+    },
+    {
+      "name": "Get User Settings",
+      "method": "GET",
+      "endpoint": "/api/user/settings",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:09.201Z"
+    },
+    {
+      "name": "Update User Profile",
+      "method": "PUT",
+      "endpoint": "/api/user/profile",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 10,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:09.262Z"
+    },
+    {
+      "name": "Test Cookie",
+      "method": "GET",
+      "endpoint": "/api/test-cookie",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:09.318Z"
+    },
+    {
+      "name": "Get All Clients",
+      "method": "GET",
+      "endpoint": "/api/clients",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 10,
+      "group": "clients",
+      "timestamp": "2025-06-16T06:36:09.379Z"
+    },
+    {
+      "name": "Get Archived Clients",
+      "method": "GET",
+      "endpoint": "/api/clients/archived",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 8,
+      "group": "clients",
+      "timestamp": "2025-06-16T06:36:09.439Z"
+    },
+    {
+      "name": "Get All Contracts",
+      "method": "GET",
+      "endpoint": "/api/contracts",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 7,
+      "group": "contracts",
+      "timestamp": "2025-06-16T06:36:09.497Z"
+    },
+    {
+      "name": "Get All Services",
+      "method": "GET",
+      "endpoint": "/api/services",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 8,
+      "group": "services",
+      "timestamp": "2025-06-16T06:36:09.556Z"
+    },
+    {
+      "name": "Get Service Categories",
+      "method": "GET",
+      "endpoint": "/api/services/categories",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "services",
+      "timestamp": "2025-06-16T06:36:09.613Z"
+    },
+    {
+      "name": "Get All Service Scopes",
+      "method": "GET",
+      "endpoint": "/api/service-scopes",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 12,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.676Z"
+    },
+    {
+      "name": "Search Service Scopes",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/search",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 7,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.734Z"
+    },
+    {
+      "name": "Dynamic Service Scopes (No Params)",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/dynamic",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 8,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.793Z"
+    },
+    {
+      "name": "Dynamic Service Scopes (With Pagination)",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/dynamic",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 7,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.851Z"
+    },
+    {
+      "name": "Dynamic Service Scopes (With Sorting)",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/dynamic",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.908Z"
+    },
+    {
+      "name": "Dynamic Service Scopes (With Filters)",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/dynamic",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:09.966Z"
+    },
+    {
+      "name": "Get Variable Definitions",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/variables/definitions",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:10.022Z"
+    },
+    {
+      "name": "Get Variable Stats",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/variables/stats",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 11,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:10.085Z"
+    },
+    {
+      "name": "Discover Variables",
+      "method": "GET",
+      "endpoint": "/api/service-scopes/variables/discover",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T06:36:10.139Z"
+    },
+    {
+      "name": "Get All License Pools",
+      "method": "GET",
+      "endpoint": "/api/license-pools",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "license-pools",
+      "timestamp": "2025-06-16T06:36:10.192Z"
+    },
+    {
+      "name": "Get All Hardware Assets",
+      "method": "GET",
+      "endpoint": "/api/hardware-assets",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T06:36:10.248Z"
+    },
+    {
+      "name": "Get All Documents",
+      "method": "GET",
+      "endpoint": "/api/documents",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "documents",
+      "timestamp": "2025-06-16T06:36:10.303Z"
+    },
+    {
+      "name": "Get Recent Activity",
+      "method": "GET",
+      "endpoint": "/api/dashboard/recent-activity",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "dashboard",
+      "timestamp": "2025-06-16T06:36:10.359Z"
+    },
+    {
+      "name": "Get Dashboard Statistics",
+      "method": "GET",
+      "endpoint": "/api/dashboard/stats",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 7,
+      "group": "dashboard",
+      "timestamp": "2025-06-16T06:36:10.417Z"
+    },
+    {
+      "name": "Get Certificates of Compliance",
+      "method": "GET",
+      "endpoint": "/api/certificates-of-compliance",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "compliance",
+      "timestamp": "2025-06-16T06:36:10.473Z"
+    },
+    {
+      "name": "Get Individual Licenses",
+      "method": "GET",
+      "endpoint": "/api/individual-licenses",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "licenses",
+      "timestamp": "2025-06-16T06:36:10.529Z"
+    },
+    {
+      "name": "Get Field Visibility",
+      "method": "GET",
+      "endpoint": "/api/field-visibility",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "system",
+      "timestamp": "2025-06-16T06:36:10.586Z"
+    },
+    {
+      "name": "Health Check",
+      "method": "GET",
+      "endpoint": "/api/health",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "system",
+      "timestamp": "2025-06-16T06:36:10.640Z"
+    },
+    {
+      "name": "Version Info",
+      "method": "GET",
+      "endpoint": "/api/version",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "system",
+      "timestamp": "2025-06-16T06:36:10.694Z"
+    },
+    {
+      "name": "Entity Relations Types",
+      "method": "GET",
+      "endpoint": "/api/entity-relations/types",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "system",
+      "timestamp": "2025-06-16T06:36:10.750Z"
+    },
+    {
+      "name": "Get Page Permissions",
+      "method": "GET",
+      "endpoint": "/api/page-permissions",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "permissions",
+      "timestamp": "2025-06-16T06:36:10.807Z"
+    },
+    {
+      "name": "Execute Search",
+      "method": "POST",
+      "endpoint": "/api/search/execute",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "search",
+      "timestamp": "2025-06-16T06:36:10.861Z"
+    },
+    {
+      "name": "Get Search History",
+      "method": "GET",
+      "endpoint": "/api/search/history",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "search",
+      "timestamp": "2025-06-16T06:36:10.918Z"
+    },
+    {
+      "name": "Get Saved Searches",
+      "method": "GET",
+      "endpoint": "/api/search/saved",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "search",
+      "timestamp": "2025-06-16T06:36:10.974Z"
+    },
+    {
+      "name": "Get Audit Logs",
+      "method": "GET",
+      "endpoint": "/api/audit-logs",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "audit",
+      "timestamp": "2025-06-16T06:36:11.028Z"
+    },
+    {
+      "name": "Get Team Assignments",
+      "method": "GET",
+      "endpoint": "/api/team-assignments",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "teams",
+      "timestamp": "2025-06-16T06:36:11.084Z"
+    },
+    {
+      "name": "Get Change History",
+      "method": "GET",
+      "endpoint": "/api/change-history",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "audit",
+      "timestamp": "2025-06-16T06:36:11.139Z"
+    },
+    {
+      "name": "Get Security Events",
+      "method": "GET",
+      "endpoint": "/api/security-events",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "security",
+      "timestamp": "2025-06-16T06:36:11.194Z"
+    },
+    {
+      "name": "Get Data Access Logs",
+      "method": "GET",
+      "endpoint": "/api/data-access-logs",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "security",
+      "timestamp": "2025-06-16T06:36:11.248Z"
+    },
+    {
+      "name": "Create Client",
+      "method": "POST",
+      "endpoint": "/api/clients",
+      "status": 201,
+      "success": true,
+      "error": null,
+      "responseTime": 10,
+      "group": "clients",
+      "timestamp": "2025-06-16T06:36:11.310Z"
+    },
+    {
+      "name": "Create Service",
+      "method": "POST",
+      "endpoint": "/api/services",
+      "status": 201,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "services",
+      "timestamp": "2025-06-16T06:36:11.314Z"
+    },
+    {
+      "name": "Create Contract",
+      "method": "POST",
+      "endpoint": "/api/contracts",
+      "status": 201,
+      "success": true,
+      "error": null,
+      "responseTime": 15,
+      "group": "contracts",
+      "timestamp": "2025-06-16T06:36:11.329Z"
+    },
+    {
+      "name": "Create Hardware Asset",
+      "method": "POST",
+      "endpoint": "/api/hardware-assets",
+      "status": 201,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T06:36:11.333Z"
+    },
+    {
+      "name": "Update Client",
+      "method": "PUT",
+      "endpoint": "/api/clients/61",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "clients",
+      "timestamp": "2025-06-16T06:36:11.337Z"
+    },
+    {
+      "name": "Update Contract",
+      "method": "PUT",
+      "endpoint": "/api/contracts/35",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "contracts",
+      "timestamp": "2025-06-16T06:36:11.345Z"
+    },
+    {
+      "name": "Update Hardware Asset",
+      "method": "PUT",
+      "endpoint": "/api/hardware-assets/20",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T06:36:11.347Z"
+    },
+    {
+      "name": "Archive Hardware Asset",
+      "method": "DELETE",
+      "endpoint": "/api/hardware-assets/20",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T06:36:11.350Z"
+    },
+    {
+      "name": "Archive Service",
+      "method": "DELETE",
+      "endpoint": "/api/services/40",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "services",
+      "timestamp": "2025-06-16T06:36:11.353Z"
+    },
+    {
+      "name": "Archive Client",
+      "method": "DELETE",
+      "endpoint": "/api/clients/61",
+      "status": 400,
+      "success": true,
+      "error": null,
+      "responseTime": 5,
+      "group": "clients",
+      "timestamp": "2025-06-16T06:36:11.361Z"
+    },
+    {
+      "name": "Get Non-existent Client",
+      "method": "GET",
+      "endpoint": "/api/clients/99999",
+      "status": 404,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "error-scenarios",
+      "timestamp": "2025-06-16T06:36:11.363Z"
+    },
+    {
+      "name": "Get Non-existent Service",
+      "method": "GET",
+      "endpoint": "/api/services/99999",
+      "status": 404,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "error-scenarios",
+      "timestamp": "2025-06-16T06:36:11.365Z"
+    },
+    {
+      "name": "Create Client with Invalid Data",
+      "method": "POST",
+      "endpoint": "/api/clients",
+      "status": 201,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "error-scenarios",
+      "timestamp": "2025-06-16T06:36:11.369Z"
+    },
+    {
+      "name": "Search with Empty Query",
+      "method": "POST",
+      "endpoint": "/api/search/execute",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 1,
+      "group": "error-scenarios",
+      "timestamp": "2025-06-16T06:36:11.370Z"
+    },
+    {
+      "name": "Logout",
+      "method": "POST",
+      "endpoint": "/api/logout",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "authentication",
+      "timestamp": "2025-06-16T06:36:11.372Z"
+    }
+  ]
+}

@@ -1,462 +1,589 @@
+#!/usr/bin/env node
+
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 
 const BASE_URL = 'http://localhost:3000';
-const TEST_PASSWORD = 'admin123';
+const TEST_RESULTS_FILE = 'api-test-results.json';
 
 // Test credentials
 const TEST_CREDENTIALS = {
-  admin: { username: 'admin@mssp.local', password: TEST_PASSWORD },
-  manager: { username: 'manager@test.mssp.local', password: TEST_PASSWORD },
-  engineer: { username: 'engineer@test.mssp.local', password: TEST_PASSWORD },
-  user: { username: 'user@test.mssp.local', password: TEST_PASSWORD }
+  username: 'admin@mssp.local',
+  password: 'admin123'
 };
 
-let sessionCookie = '';
-let testResults = [];
-
-// API Endpoints to test
-const API_ENDPOINTS = {
-  // Authentication endpoints
-  auth: [
-    { method: 'POST', path: '/api/login', requiresAuth: false },
-    { method: 'POST', path: '/api/logout', requiresAuth: true },
-    { method: 'GET', path: '/api/user', requiresAuth: true },
-    { method: 'GET', path: '/api/test-cookie', requiresAuth: false }
-  ],
-
-  // Health & version endpoints
-  system: [
-    { method: 'GET', path: '/api/health', requiresAuth: false },
-    { method: 'GET', path: '/api/version', requiresAuth: false }
-  ],
-
-  // Client management endpoints
-  clients: [
-    { method: 'GET', path: '/api/clients', requiresAuth: true },
-    { method: 'GET', path: '/api/clients/archived', requiresAuth: true },
-    { method: 'POST', path: '/api/clients', requiresAuth: true, requiresManager: true },
-    { method: 'GET', path: '/api/clients/1', requiresAuth: true },
-    { method: 'PUT', path: '/api/clients/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/clients/1', requiresAuth: true, requiresManager: true },
-    { method: 'POST', path: '/api/clients/1/archive', requiresAuth: true, requiresManager: true },
-    { method: 'POST', path: '/api/clients/1/restore', requiresAuth: true, requiresManager: true },
-    { method: 'GET', path: '/api/clients/1/deletion-impact', requiresAuth: true, requiresManager: true }
-  ],
-
-  // Contract management endpoints
-  contracts: [
-    { method: 'GET', path: '/api/contracts', requiresAuth: true },
-    { method: 'GET', path: '/api/contracts/1', requiresAuth: true },
-    { method: 'POST', path: '/api/contracts', requiresAuth: true, requiresManager: true },
-    { method: 'PUT', path: '/api/contracts/1', requiresAuth: true, requiresManager: true }
-  ],
-
-  // Service management endpoints
-  services: [
-    { method: 'GET', path: '/api/services', requiresAuth: true },
-    { method: 'GET', path: '/api/services/1', requiresAuth: true },
-    { method: 'POST', path: '/api/services', requiresAuth: true, requiresManager: true },
-    { method: 'PUT', path: '/api/services/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/services/1', requiresAuth: true, requiresManager: true },
-    { method: 'GET', path: '/api/services/categories', requiresAuth: true }
-  ],
-
-  // Service scopes endpoints - Including the problematic dynamic endpoint
-  serviceScopes: [
-    { method: 'GET', path: '/api/service-scopes', requiresAuth: true },
-    { method: 'GET', path: '/api/service-scopes/search', requiresAuth: true },
-    { method: 'GET', path: '/api/service-scopes/dynamic', requiresAuth: true }, // PROBLEMATIC ENDPOINT
-    { method: 'GET', path: '/api/service-scopes/variables/definitions', requiresAuth: true },
-    { method: 'GET', path: '/api/service-scopes/variables/stats', requiresAuth: true },
-    { method: 'GET', path: '/api/service-scopes/variables/discover', requiresAuth: true, requiresManager: true },
-    { method: 'GET', path: '/api/service-scopes/1', requiresAuth: true },
-    { method: 'POST', path: '/api/contracts/1/service-scopes', requiresAuth: true, requiresManager: true },
-    { method: 'PUT', path: '/api/contracts/1/service-scopes/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/contracts/1/service-scopes/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/service-scopes/1', requiresAuth: true, requiresManager: true },
-    { method: 'POST', path: '/api/service-scopes/1/variables', requiresAuth: true, requiresManager: true }
-  ],
-
-  // Hardware assets endpoints
-  hardwareAssets: [
-    { method: 'GET', path: '/api/hardware-assets', requiresAuth: true },
-    { method: 'GET', path: '/api/hardware-assets/1', requiresAuth: true },
-    { method: 'POST', path: '/api/hardware-assets', requiresAuth: true, requiresManager: true },
-    { method: 'PUT', path: '/api/hardware-assets/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/hardware-assets/1', requiresAuth: true, requiresManager: true }
-  ],
-
-  // License pools endpoints
-  licensePools: [
-    { method: 'GET', path: '/api/license-pools', requiresAuth: true },
-    { method: 'GET', path: '/api/license-pools/summary', requiresAuth: true },
-    { method: 'GET', path: '/api/license-pools/allocations/all', requiresAuth: true }
-  ],
-
-  // Individual licenses endpoints
-  individualLicenses: [
-    { method: 'GET', path: '/api/individual-licenses', requiresAuth: true },
-    { method: 'POST', path: '/api/individual-licenses', requiresAuth: true, requiresManager: true }
-  ],
-
-  // Documents endpoints
-  documents: [
-    { method: 'GET', path: '/api/documents', requiresAuth: true },
-    { method: 'GET', path: '/api/documents/1', requiresAuth: true },
-    { method: 'PUT', path: '/api/documents/1', requiresAuth: true },
-    { method: 'DELETE', path: '/api/documents/1', requiresAuth: true }
-  ],
-
-  // Certificates of compliance endpoints
-  certificatesOfCompliance: [
-    { method: 'GET', path: '/api/certificates-of-compliance', requiresAuth: true },
-    { method: 'POST', path: '/api/certificates-of-compliance', requiresAuth: true, requiresManager: true },
-    { method: 'GET', path: '/api/certificates-of-compliance/1', requiresAuth: true },
-    { method: 'PUT', path: '/api/certificates-of-compliance/1', requiresAuth: true, requiresManager: true },
-    { method: 'DELETE', path: '/api/certificates-of-compliance/1', requiresAuth: true, requiresManager: true }
-  ],
-
-  // Dashboard endpoints
-  dashboard: [
-    { method: 'GET', path: '/api/dashboard/recent-activity', requiresAuth: true },
-    { method: 'GET', path: '/api/dashboard/stats', requiresAuth: true },
-    { method: 'GET', path: '/api/dashboard/card-data', requiresAuth: true },
-    { method: 'GET', path: '/api/dashboards', requiresAuth: true },
-    { method: 'POST', path: '/api/dashboards', requiresAuth: true },
-    { method: 'GET', path: '/api/dashboards/1', requiresAuth: true },
-    { method: 'PUT', path: '/api/dashboards/1', requiresAuth: true },
-    { method: 'DELETE', path: '/api/dashboards/1', requiresAuth: true }
-  ],
-
-  // Search endpoints
-  search: [
-    { method: 'POST', path: '/api/search/execute', requiresAuth: true },
-    { method: 'GET', path: '/api/search/history', requiresAuth: true },
-    { method: 'GET', path: '/api/search/saved', requiresAuth: true },
-    { method: 'POST', path: '/api/search/save', requiresAuth: true },
-    { method: 'POST', path: '/api/search/log', requiresAuth: true }
-  ],
-
-  // User management endpoints
-  users: [
-    { method: 'GET', path: '/api/users', requiresAuth: true },
-    { method: 'GET', path: '/api/users/1', requiresAuth: true },
-    { method: 'GET', path: '/api/user/accessible-pages', requiresAuth: true },
-    { method: 'PUT', path: '/api/user/profile', requiresAuth: true },
-    { method: 'GET', path: '/api/user/settings', requiresAuth: true },
-    { method: 'PUT', path: '/api/user/settings', requiresAuth: true }
-  ],
-
-  // Field visibility endpoints
-  fieldVisibility: [
-    { method: 'GET', path: '/api/field-visibility', requiresAuth: true },
-    { method: 'POST', path: '/api/field-visibility', requiresAuth: true },
-    { method: 'GET', path: '/api/field-visibility/clients', requiresAuth: true },
-    { method: 'DELETE', path: '/api/field-visibility/clients/name', requiresAuth: true }
-  ],
-
-  // Page permissions endpoints
-  pagePermissions: [
-    { method: 'GET', path: '/api/page-permissions', requiresAuth: true, requiresAdmin: true }
-  ]
-};
-
-// Sample data for POST/PUT requests
-const TEST_DATA = {
-  client: {
-    name: 'Test Client',
-    contactEmail: 'test@client.com',
-    address: '123 Test St',
-    phone: '+1234567890',
-    primaryContactName: 'Test Contact'
-  },
-  contract: {
-    clientId: 1,
-    contractNumber: 'TEST-001',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
-    totalValue: 10000,
-    status: 'active'
-  },
-  service: {
-    name: 'Test Service',
-    category: 'security',
-    description: 'Test service description',
-    isActive: true
-  },
-  hardwareAsset: {
-    assetTag: 'TEST-001',
-    serialNumber: 'SN123456',
-    category: 'server',
-    manufacturer: 'Test Manufacturer',
-    model: 'Test Model',
-    status: 'active'
-  },
-  serviceScope: {
-    serviceId: 1,
-    description: 'Test service scope',
-    deliverables: ['Test deliverable'],
-    monthlyValue: 1000,
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
-    status: 'active'
-  },
-  dashboard: {
-    name: 'Test Dashboard',
-    description: 'Test dashboard description',
-    layout: {},
-    isDefault: false,
-    isPublic: false
-  },
-  individualLicense: {
-    clientId: 1,
-    softwareName: 'Test Software',
-    licenseKey: 'TEST-LICENSE-KEY',
-    purchaseDate: '2024-01-01',
-    expiryDate: '2024-12-31',
-    cost: 100
-  },
-  certificateOfCompliance: {
-    clientId: 1,
-    cocNumber: 'COC-TEST-001',
-    standard: 'ISO 27001',
-    issueDate: '2024-01-01',
-    expiryDate: '2024-12-31',
-    status: 'active'
-  },
-  search: {
-    query: 'test',
-    entityTypes: ['clients', 'contracts'],
-    filters: {}
-  },
-  userSettings: {
-    theme: 'dark',
-    language: 'en',
-    timezone: 'UTC',
-    notifications: {
-      email: true,
-      push: false
-    }
-  },
-  fieldVisibility: {
-    tableName: 'clients',
-    fieldName: 'testField',
-    isVisible: true,
-    userRole: 'admin'
+class APITester {
+  constructor() {
+    this.results = {
+      timestamp: new Date().toISOString(),
+      testSummary: {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0
+      },
+      tests: []
+    };
+    this.sessionCookie = '';
+    this.testData = {};
   }
-};
 
-// Helper function to make API requests
-async function makeRequest(method, path, data = null, headers = {}) {
-  try {
-    const config = {
+  log(message, type = 'info') {
+    const timestamp = new Date().toTimeString().split(' ')[0];
+    const colors = {
+      info: '\x1b[36m',
+      success: '\x1b[32m',
+      error: '\x1b[31m',
+      warning: '\x1b[33m',
+      reset: '\x1b[0m'
+    };
+    console.log(`${colors[type]}[${timestamp}] ${message}${colors.reset}`);
+  }
+
+  async makeRequest(method, endpoint, data = null, headers = {}) {
+    try {
+      const config = {
+        method,
+        url: `${BASE_URL}${endpoint}`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': this.sessionCookie,
+          ...headers
+        },
+        timeout: 10000,
+        validateStatus: () => true // Accept all status codes
+      };
+
+      if (data && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+        config.data = data;
+      }
+
+      if (data && method.toUpperCase() === 'GET') {
+        config.params = data;
+      }
+
+      const response = await axios(config);
+      
+      // Update session cookie if provided
+      if (response.headers['set-cookie']) {
+        this.sessionCookie = response.headers['set-cookie']
+          .map(cookie => cookie.split(';')[0])
+          .join('; ');
+      }
+
+      return response;
+    } catch (error) {
+      return {
+        status: 0,
+        data: { error: error.message },
+        statusText: 'Network Error'
+      };
+    }
+  }
+
+  recordTest(name, method, endpoint, status, success, error = null, responseTime = 0) {
+    const test = {
+      name,
       method,
-      url: `${BASE_URL}${path}`,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      }
+      endpoint,
+      status,
+      success,
+      error,
+      responseTime,
+      timestamp: new Date().toISOString()
     };
 
-    if (sessionCookie) {
-      config.headers.Cookie = sessionCookie;
-    }
-
-    if (data && ['POST', 'PUT', 'PATCH'].includes(method)) {
-      config.data = data;
-    }
-
-    const response = await axios(config);
-    return {
-      success: true,
-      status: response.status,
-      data: response.data,
-      headers: response.headers
-    };
-  } catch (error) {
-    return {
-      success: false,
-      status: error.response?.status || 0,
-      error: error.response?.data || error.message,
-      headers: error.response?.headers || {}
-    };
-  }
-}
-
-// Login function
-async function login(credentials) {
-  console.log(`🔐 Logging in as ${credentials.username}...`);
-  
-  const result = await makeRequest('POST', '/api/login', credentials);
-  
-  if (result.success) {
-    // Extract session cookie
-    const setCookieHeader = result.headers['set-cookie'];
-    if (setCookieHeader) {
-      sessionCookie = setCookieHeader.find(cookie => cookie.startsWith('session='));
-      if (sessionCookie) {
-        sessionCookie = sessionCookie.split(';')[0]; // Remove additional cookie attributes
-      }
-    }
-    console.log('✅ Login successful');
-    return true;
-  } else {
-    console.log('❌ Login failed:', result.error);
-    return false;
-  }
-}
-
-// Test a single endpoint
-async function testEndpoint(category, endpoint) {
-  const { method, path, requiresAuth, requiresManager, requiresAdmin } = endpoint;
-  
-  console.log(`\n🧪 Testing ${method} ${path}`);
-  
-  // Skip if requires authentication but we're not logged in
-  if (requiresAuth && !sessionCookie) {
-    console.log('⏭️  Skipped - requires authentication');
-    return { category, method, path, status: 'SKIPPED', reason: 'No authentication' };
-  }
-
-  // Get appropriate test data
-  let testData = null;
-  if (['POST', 'PUT', 'PATCH'].includes(method)) {
-    if (path.includes('client')) testData = TEST_DATA.client;
-    else if (path.includes('contract')) testData = TEST_DATA.contract;
-    else if (path.includes('service') && !path.includes('scope')) testData = TEST_DATA.service;
-    else if (path.includes('service-scope')) testData = TEST_DATA.serviceScope;
-    else if (path.includes('hardware-asset')) testData = TEST_DATA.hardwareAsset;
-    else if (path.includes('dashboard')) testData = TEST_DATA.dashboard;
-    else if (path.includes('individual-license')) testData = TEST_DATA.individualLicense;
-    else if (path.includes('certificate')) testData = TEST_DATA.certificateOfCompliance;
-    else if (path.includes('search')) testData = TEST_DATA.search;
-    else if (path.includes('settings')) testData = TEST_DATA.userSettings;
-    else if (path.includes('field-visibility')) testData = TEST_DATA.fieldVisibility;
-  }
-
-  const result = await makeRequest(method, path, testData);
-  
-  let status = 'PASS';
-  let details = '';
-  
-  if (!result.success) {
-    status = 'FAIL';
-    details = `Status: ${result.status}, Error: ${JSON.stringify(result.error)}`;
+    this.results.tests.push(test);
+    this.results.testSummary.total++;
     
-    // Special handling for the problematic dynamic endpoint
-    if (path === '/api/service-scopes/dynamic' && result.error?.message?.includes('parameter $2')) {
-      console.log('🚨 FOUND THE PROBLEMATIC ENDPOINT! Parameter issue detected.');
-      details += ' [IDENTIFIED PARAMETER ISSUE]';
+    if (success) {
+      this.results.testSummary.passed++;
+      this.log(`✅ ${name} - ${method} ${endpoint} (${status})`, 'success');
+    } else {
+      this.results.testSummary.failed++;
+      this.log(`❌ ${name} - ${method} ${endpoint} (${status}) - ${error}`, 'error');
     }
-  } else {
-    details = `Status: ${result.status}`;
   }
-  
-  console.log(`${status === 'PASS' ? '✅' : '❌'} ${status}: ${details}`);
-  
-  return {
-    category,
-    method,
-    path,
-    status,
-    details,
-    responseTime: Date.now()
-  };
-}
 
-// Test all endpoints in a category
-async function testCategory(categoryName, endpoints) {
-  console.log(`\n\n📂 Testing ${categoryName.toUpperCase()} endpoints...`);
-  console.log('='.repeat(50));
-  
-  const results = [];
-  
-  for (const endpoint of endpoints) {
-    const result = await testEndpoint(categoryName, endpoint);
-    results.push(result);
-    testResults.push(result);
+  async login() {
+    this.log('🔐 Logging in with admin credentials...', 'info');
+    const startTime = Date.now();
     
-    // Small delay between requests
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  
-  return results;
-}
+    const response = await this.makeRequest('POST', '/api/login', TEST_CREDENTIALS);
+    const responseTime = Date.now() - startTime;
+    
+    const success = response.status === 200 && response.data.user;
+    
+    this.recordTest(
+      'Admin Login',
+      'POST',
+      '/api/login',
+      response.status,
+      success,
+      success ? null : response.data.message || response.statusText,
+      responseTime
+    );
 
-// Generate summary report
-function generateReport() {
-  console.log('\n\n📊 TEST SUMMARY REPORT');
-  console.log('='.repeat(60));
-  
-  const summary = {
-    total: testResults.length,
-    passed: testResults.filter(r => r.status === 'PASS').length,
-    failed: testResults.filter(r => r.status === 'FAIL').length,
-    skipped: testResults.filter(r => r.status === 'SKIPPED').length
-  };
-  
-  console.log(`Total Tests: ${summary.total}`);
-  console.log(`✅ Passed: ${summary.passed}`);
-  console.log(`❌ Failed: ${summary.failed}`);
-  console.log(`⏭️  Skipped: ${summary.skipped}`);
-  console.log(`Success Rate: ${((summary.passed / (summary.total - summary.skipped)) * 100).toFixed(1)}%`);
-  
-  // Show failed tests
-  const failedTests = testResults.filter(r => r.status === 'FAIL');
-  if (failedTests.length > 0) {
-    console.log('\n🚨 FAILED TESTS:');
-    console.log('-'.repeat(40));
-    failedTests.forEach(test => {
-      console.log(`❌ ${test.method} ${test.path}`);
-      console.log(`   ${test.details}`);
+    if (success) {
+      this.log(`Login successful for user: ${response.data.user.email}`, 'success');
+      return true;
+    } else {
+      this.log(`Login failed: ${response.data.message || response.statusText}`, 'error');
+      return false;
+    }
+  }
+
+  async testEndpoint(name, method, endpoint, testData = null, expectedStatus = 200) {
+    const startTime = Date.now();
+    const response = await this.makeRequest(method, endpoint, testData);
+    const responseTime = Date.now() - startTime;
+    
+    const success = response.status === expectedStatus;
+    
+    this.recordTest(
+      name,
+      method,
+      endpoint,
+      response.status,
+      success,
+      success ? null : response.data.message || response.data.error || response.statusText,
+      responseTime
+    );
+
+    return response;
+  }
+
+  async runComprehensiveTests() {
+    this.log('🚀 Starting Comprehensive API Test Suite', 'info');
+    
+    // Login first
+    const loginSuccess = await this.login();
+    if (!loginSuccess) {
+      this.log('Cannot proceed without authentication', 'error');
+      return;
+    }
+
+    // Test authentication endpoints
+    await this.testAuthEndpoints();
+    
+    // Test user management endpoints
+    await this.testUserEndpoints();
+    
+    // Test client management endpoints
+    await this.testClientEndpoints();
+    
+    // Test contract endpoints
+    await this.testContractEndpoints();
+    
+    // Test service endpoints
+    await this.testServiceEndpoints();
+    
+    // Test service scope endpoints (including the problematic dynamic one)
+    await this.testServiceScopeEndpoints();
+    
+    // Test license pool endpoints
+    await this.testLicensePoolEndpoints();
+    
+    // Test hardware asset endpoints
+    await this.testHardwareAssetEndpoints();
+    
+    // Test document endpoints
+    await this.testDocumentEndpoints();
+    
+    // Test dashboard endpoints
+    await this.testDashboardEndpoints();
+    
+    // Test system endpoints
+    await this.testSystemEndpoints();
+
+    this.generateReport();
+  }
+
+  async testAuthEndpoints() {
+    this.log('🔐 Testing Authentication Endpoints', 'info');
+    
+    await this.testEndpoint('Get Current User', 'GET', '/api/user');
+    await this.testEndpoint('Get User Settings', 'GET', '/api/user/settings');
+    await this.testEndpoint('Update User Settings', 'PUT', '/api/user/settings', {
+      theme: 'dark',
+      language: 'en'
+    });
+    await this.testEndpoint('Get 2FA Status', 'GET', '/api/user/2fa/status');
+  }
+
+  async testUserEndpoints() {
+    this.log('👥 Testing User Management Endpoints', 'info');
+    
+    await this.testEndpoint('Get All Users', 'GET', '/api/users');
+    await this.testEndpoint('Update User Profile', 'PUT', '/api/user/profile', {
+      firstName: 'Admin',
+      lastName: 'User Test'
     });
   }
 
-  // Show problematic dynamic endpoint specifically
-  const dynamicEndpointTest = testResults.find(r => r.path === '/api/service-scopes/dynamic');
-  if (dynamicEndpointTest && dynamicEndpointTest.status === 'FAIL') {
-    console.log('\n🎯 PROBLEMATIC ENDPOINT IDENTIFIED:');
-    console.log('-'.repeat(40));
-    console.log(`${dynamicEndpointTest.method} ${dynamicEndpointTest.path}`);
-    console.log(`Details: ${dynamicEndpointTest.details}`);
+  async testClientEndpoints() {
+    this.log('🏢 Testing Client Management Endpoints', 'info');
+    
+    const clientsResponse = await this.testEndpoint('Get All Clients', 'GET', '/api/clients');
+    
+    // Create a test client
+    const newClient = {
+      name: 'Test Client API',
+      type: 'enterprise',
+      status: 'active',
+      contactEmail: 'test@testclient.com',
+      contactPhone: '+1234567890',
+      address: '123 Test Street',
+      city: 'Test City',
+      country: 'Test Country'
+    };
+    
+    const createResponse = await this.testEndpoint('Create Client', 'POST', '/api/clients', newClient, 201);
+    
+    if (createResponse.data && createResponse.data.id) {
+      const clientId = createResponse.data.id;
+      this.testData.clientId = clientId;
+      
+      await this.testEndpoint('Get Client by ID', 'GET', `/api/clients/${clientId}`);
+      
+      await this.testEndpoint('Update Client', 'PUT', `/api/clients/${clientId}`, {
+        name: 'Updated Test Client API'
+      });
+      
+      await this.testEndpoint('Get Client Service Scopes', 'GET', `/api/clients/${clientId}/service-scopes`);
+      await this.testEndpoint('Get Client Individual Licenses', 'GET', `/api/clients/${clientId}/individual-licenses`);
+      await this.testEndpoint('Get Client SAFs', 'GET', `/api/clients/${clientId}/service-authorization-forms`);
+      await this.testEndpoint('Get Client COCs', 'GET', `/api/clients/${clientId}/certificates-of-compliance`);
+    }
+    
+    await this.testEndpoint('Get Archived Clients', 'GET', '/api/clients/archived');
   }
-  
-  // Save detailed report to file
-  const reportData = {
-    timestamp: new Date().toISOString(),
-    summary,
-    testResults,
-    problematicEndpoint: dynamicEndpointTest
-  };
-  
-  fs.writeFileSync('api-test-results.json', JSON.stringify(reportData, null, 2));
-  console.log('\n📁 Detailed results saved to: api-test-results.json');
+
+  async testContractEndpoints() {
+    this.log('📄 Testing Contract Management Endpoints', 'info');
+    
+    await this.testEndpoint('Get All Contracts', 'GET', '/api/contracts');
+    
+    if (this.testData.clientId) {
+      const newContract = {
+        clientId: this.testData.clientId,
+        name: 'Test Contract API',
+        type: 'managed_service',
+        status: 'active',
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        totalValue: 50000
+      };
+      
+      const createResponse = await this.testEndpoint('Create Contract', 'POST', '/api/contracts', newContract, 201);
+      
+      if (createResponse.data && createResponse.data.id) {
+        const contractId = createResponse.data.id;
+        this.testData.contractId = contractId;
+        
+        await this.testEndpoint('Get Contract by ID', 'GET', `/api/contracts/${contractId}`);
+        
+        await this.testEndpoint('Update Contract', 'PUT', `/api/contracts/${contractId}`, {
+          name: 'Updated Test Contract API'
+        });
+      }
+    }
+  }
+
+  async testServiceEndpoints() {
+    this.log('🔧 Testing Service Management Endpoints', 'info');
+    
+    const servicesResponse = await this.testEndpoint('Get All Services', 'GET', '/api/services');
+    
+    await this.testEndpoint('Get Service Categories', 'GET', '/api/services/categories');
+    
+    const newService = {
+      name: 'Test Service API',
+      category: 'security',
+      deliveryModel: 'managed',
+      description: 'Test service for API testing',
+      basePrice: 1000
+    };
+    
+    const createResponse = await this.testEndpoint('Create Service', 'POST', '/api/services', newService, 201);
+    
+    if (createResponse.data && createResponse.data.id) {
+      const serviceId = createResponse.data.id;
+      this.testData.serviceId = serviceId;
+      
+      await this.testEndpoint('Get Service by ID', 'GET', `/api/services/${serviceId}`);
+      
+      await this.testEndpoint('Update Service', 'PUT', `/api/services/${serviceId}`, {
+        name: 'Updated Test Service API'
+      });
+      
+      await this.testEndpoint('Patch Service', 'PATCH', `/api/services/${serviceId}`, {
+        description: 'Updated description via PATCH'
+      });
+      
+      await this.testEndpoint('Get Service Scope Template', 'GET', `/api/services/${serviceId}/scope-template`);
+      
+      await this.testEndpoint('Update Service Scope Template', 'PUT', `/api/services/${serviceId}/scope-template`, {
+        template: { fields: ['test_field'] }
+      });
+    }
+  }
+
+  async testServiceScopeEndpoints() {
+    this.log('🎯 Testing Service Scope Endpoints (Including Dynamic)', 'info');
+    
+    await this.testEndpoint('Get All Service Scopes', 'GET', '/api/service-scopes');
+    
+    // Test the problematic dynamic endpoint with various parameters
+    await this.testEndpoint('Dynamic Service Scopes (No Filters)', 'GET', '/api/service-scopes/dynamic');
+    
+    await this.testEndpoint('Dynamic Service Scopes (With Pagination)', 'GET', '/api/service-scopes/dynamic', {
+      page: 1,
+      limit: 10
+    });
+    
+    await this.testEndpoint('Dynamic Service Scopes (With Sorting)', 'GET', '/api/service-scopes/dynamic', {
+      sortBy: 'created_at',
+      sortOrder: 'desc'
+    });
+    
+    await this.testEndpoint('Dynamic Service Scopes (With Filters)', 'GET', '/api/service-scopes/dynamic', {
+      status: 'active',
+      page: 1,
+      limit: 5
+    });
+    
+    await this.testEndpoint('Get Service Scope Variables', 'GET', '/api/service-scopes/variables/definitions');
+    await this.testEndpoint('Get Variable Stats', 'GET', '/api/service-scopes/variables/stats');
+    await this.testEndpoint('Discover Variables', 'GET', '/api/service-scopes/variables/discover');
+    
+    await this.testEndpoint('Search Service Scopes', 'GET', '/api/service-scopes/search', {
+      q: 'test'
+    });
+    
+    // Create a service scope if we have contract and service data
+    if (this.testData.contractId && this.testData.serviceId) {
+      const newScope = {
+        serviceId: this.testData.serviceId,
+        description: 'Test scope for API testing',
+        deliverables: ['Test deliverable 1', 'Test deliverable 2'],
+        monthlyValue: 5000,
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+        status: 'active'
+      };
+      
+      const createResponse = await this.testEndpoint(
+        'Create Service Scope', 
+        'POST', 
+        `/api/contracts/${this.testData.contractId}/service-scopes`, 
+        newScope, 
+        201
+      );
+      
+      if (createResponse.data && createResponse.data.id) {
+        const scopeId = createResponse.data.id;
+        this.testData.scopeId = scopeId;
+        
+        await this.testEndpoint('Get Service Scope by ID', 'GET', `/api/service-scopes/${scopeId}`);
+        
+        await this.testEndpoint(
+          'Update Service Scope', 
+          'PUT', 
+          `/api/contracts/${this.testData.contractId}/service-scopes/${scopeId}`, 
+          {
+            description: 'Updated test scope'
+          }
+        );
+        
+        // Test adding scope variables
+        await this.testEndpoint(
+          'Add Scope Variable', 
+          'POST', 
+          `/api/service-scopes/${scopeId}/variables`, 
+          {
+            variableName: 'test_variable',
+            value: 'test_value',
+            type: 'text'
+          }
+        );
+      }
+    }
+  }
+
+  async testLicensePoolEndpoints() {
+    this.log('🔑 Testing License Pool Endpoints', 'info');
+    
+    await this.testEndpoint('Get All License Pools', 'GET', '/api/license-pools');
+    
+    const newLicensePool = {
+      name: 'Test License Pool API',
+      vendor: 'Test Vendor',
+      productName: 'Test Product',
+      licenseType: 'user',
+      totalLicenses: 100,
+      availableLicenses: 100,
+      costPerLicense: 50,
+      renewalDate: '2024-12-31'
+    };
+    
+    const createResponse = await this.testEndpoint('Create License Pool', 'POST', '/api/license-pools', newLicensePool, 201);
+    
+    if (createResponse.data && createResponse.data.id) {
+      const poolId = createResponse.data.id;
+      
+      await this.testEndpoint('Update License Pool', 'PUT', `/api/license-pools/${poolId}`, {
+        name: 'Updated Test License Pool API'
+      });
+      
+      await this.testEndpoint('Get License Pool Allocations', 'GET', `/api/license-pools/${poolId}/allocations`);
+    }
+  }
+
+  async testHardwareAssetEndpoints() {
+    this.log('💻 Testing Hardware Asset Endpoints', 'info');
+    
+    await this.testEndpoint('Get All Hardware Assets', 'GET', '/api/hardware-assets');
+    
+    const newAsset = {
+      name: 'Test Server API',
+      type: 'server',
+      model: 'Test Model X1',
+      serialNumber: 'TEST123456',
+      status: 'active',
+      purchaseDate: '2024-01-01',
+      warrantyExpiry: '2027-01-01'
+    };
+    
+    const createResponse = await this.testEndpoint('Create Hardware Asset', 'POST', '/api/hardware-assets', newAsset, 201);
+    
+    if (createResponse.data && createResponse.data.id) {
+      const assetId = createResponse.data.id;
+      
+      await this.testEndpoint('Get Hardware Asset by ID', 'GET', `/api/hardware-assets/${assetId}`);
+      
+      await this.testEndpoint('Update Hardware Asset', 'PUT', `/api/hardware-assets/${assetId}`, {
+        name: 'Updated Test Server API'
+      });
+    }
+  }
+
+  async testDocumentEndpoints() {
+    this.log('📁 Testing Document Endpoints', 'info');
+    
+    await this.testEndpoint('Get All Documents', 'GET', '/api/documents');
+    
+    // Note: File upload testing would require multipart/form-data
+    // For now, just test the read endpoints
+  }
+
+  async testDashboardEndpoints() {
+    this.log('📊 Testing Dashboard Endpoints', 'info');
+    
+    await this.testEndpoint('Get Dashboard Widgets', 'GET', '/api/dashboard/widgets');
+    await this.testEndpoint('Get Recent Activity', 'GET', '/api/dashboard/recent-activity');
+    await this.testEndpoint('Get User Dashboards', 'GET', '/api/dashboards');
+    
+    const newDashboard = {
+      name: 'Test Dashboard API',
+      description: 'Test dashboard for API testing',
+      layout: 'grid',
+      isDefault: false,
+      isPublic: false
+    };
+    
+    const createResponse = await this.testEndpoint('Create Dashboard', 'POST', '/api/dashboards', newDashboard, 201);
+    
+    if (createResponse.data && createResponse.data.id) {
+      const dashboardId = createResponse.data.id;
+      
+      await this.testEndpoint('Update Dashboard', 'PUT', `/api/dashboards/${dashboardId}`, {
+        name: 'Updated Test Dashboard API'
+      });
+    }
+  }
+
+  async testSystemEndpoints() {
+    this.log('⚙️ Testing System Endpoints', 'info');
+    
+    await this.testEndpoint('Health Check', 'GET', '/api/health');
+    await this.testEndpoint('Version Info', 'GET', '/api/version');
+    await this.testEndpoint('Get Field Visibility', 'GET', '/api/field-visibility');
+    await this.testEndpoint('Get Entity Relations', 'GET', '/api/entity-relations/types');
+  }
+
+  generateReport() {
+    // Save detailed results to file
+    fs.writeFileSync(TEST_RESULTS_FILE, JSON.stringify(this.results, null, 2));
+    
+    // Print summary
+    this.log('\n' + '='.repeat(80), 'info');
+    this.log('📊 API TEST SUMMARY', 'info');
+    this.log('='.repeat(80), 'info');
+    
+    const { total, passed, failed, skipped } = this.results.testSummary;
+    const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : 0;
+    
+    this.log(`Total Tests: ${total}`, 'info');
+    this.log(`Passed: ${passed}`, 'success');
+    this.log(`Failed: ${failed}`, failed > 0 ? 'error' : 'info');
+    this.log(`Skipped: ${skipped}`, 'warning');
+    this.log(`Pass Rate: ${passRate}%`, passRate > 80 ? 'success' : 'warning');
+    
+    this.log('\n📋 FAILED TESTS:', 'error');
+    const failedTests = this.results.tests.filter(test => !test.success);
+    
+    if (failedTests.length === 0) {
+      this.log('🎉 All tests passed!', 'success');
+    } else {
+      failedTests.forEach(test => {
+        this.log(`❌ ${test.name} - ${test.method} ${test.endpoint} (${test.status}) - ${test.error}`, 'error');
+      });
+    }
+    
+    this.log(`\n📄 Detailed results saved to: ${TEST_RESULTS_FILE}`, 'info');
+    this.log('='.repeat(80), 'info');
+  }
+
+  async cleanup() {
+    // Clean up test data
+    if (this.testData.scopeId && this.testData.contractId) {
+      await this.testEndpoint(
+        'Delete Test Service Scope', 
+        'DELETE', 
+        `/api/contracts/${this.testData.contractId}/service-scopes/${this.testData.scopeId}`
+      );
+    }
+    
+    if (this.testData.serviceId) {
+      await this.testEndpoint('Delete Test Service', 'DELETE', `/api/services/${this.testData.serviceId}`);
+    }
+    
+    if (this.testData.clientId) {
+      await this.testEndpoint('Delete Test Client', 'DELETE', `/api/clients/${this.testData.clientId}`);
+    }
+    
+    // Logout
+    await this.testEndpoint('Logout', 'POST', '/api/logout');
+  }
 }
 
-// Main test execution
-async function runAllTests() {
-  console.log('🚀 Starting Comprehensive API Testing...');
-  console.log('Using admin123 password for all test accounts');
-  console.log('='.repeat(60));
+// Run the test suite
+async function main() {
+  const tester = new APITester();
   
-  // Login as admin first
-  const loginSuccess = await login(TEST_CREDENTIALS.admin);
-  if (!loginSuccess) {
-    console.log('❌ Cannot proceed without authentication');
-    return;
+  try {
+    await tester.runComprehensiveTests();
+    await tester.cleanup();
+  } catch (error) {
+    tester.log(`Fatal error: ${error.message}`, 'error');
+    process.exit(1);
   }
-  
-  // Test all categories
-  for (const [categoryName, endpoints] of Object.entries(API_ENDPOINTS)) {
-    await testCategory(categoryName, endpoints);
-  }
-  
-  // Generate final report
-  generateReport();
-  
-  console.log('\n🏁 Testing completed!');
 }
 
-// Run the tests
-runAllTests().catch(console.error); 
+if (require.main === module) {
+  main();
+}
+
+module.exports = APITester; 

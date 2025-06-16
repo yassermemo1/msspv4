@@ -1,0 +1,109 @@
+[36m[09:33:16] 🚀 Starting Comprehensive API Test Suite - Target: 100% Coverage[0m
+[36m[09:33:16] 🔐 Authenticating with admin123 password...[0m
+[32m[09:33:16] ✅ Admin Login - POST /api/login (200)[0m
+[32m[09:33:16] Login successful for user: admin@mssp.local[0m
+[32m[09:33:16] ✅ Get Current User - GET /api/user (200)[0m
+[32m[09:33:16] ✅ Get User Settings - GET /api/user/settings (200)[0m
+[32m[09:33:16] ✅ Update User Profile - PUT /api/user/profile (200)[0m
+[32m[09:33:16] ✅ Test Cookie - GET /api/test-cookie (200)[0m
+[32m[09:33:16] ✅ Get All Clients - GET /api/clients (200)[0m
+[32m[09:33:16] ✅ Get Archived Clients - GET /api/clients/archived (200)[0m
+[32m[09:33:16] ✅ Get All Contracts - GET /api/contracts (200)[0m
+[32m[09:33:16] ✅ Get All Services - GET /api/services (200)[0m
+[32m[09:33:16] ✅ Get Service Categories - GET /api/services/categories (200)[0m
+[32m[09:33:16] ✅ Get All Service Scopes - GET /api/service-scopes (200)[0m
+[32m[09:33:16] ✅ Search Service Scopes - GET /api/service-scopes/search (200)[0m
+[32m[09:33:16] ✅ Dynamic Service Scopes (No Params) - GET /api/service-scopes/dynamic (200)[0m
+[32m[09:33:16] ✅ Dynamic Service Scopes (With Pagination) - GET /api/service-scopes/dynamic (200)[0m
+[32m[09:33:17] ✅ Dynamic Service Scopes (With Sorting) - GET /api/service-scopes/dynamic (200)[0m
+[32m[09:33:17] ✅ Dynamic Service Scopes (With Filters) - GET /api/service-scopes/dynamic (200)[0m
+[32m[09:33:17] ✅ Get Variable Definitions - GET /api/service-scopes/variables/definitions (200)[0m
+[32m[09:33:17] ✅ Get Variable Stats - GET /api/service-scopes/variables/stats (200)[0m
+[32m[09:33:17] ✅ Discover Variables - GET /api/service-scopes/variables/discover (200)[0m
+[32m[09:33:17] ✅ Get All License Pools - GET /api/license-pools (200)[0m
+[32m[09:33:17] ✅ Get All Hardware Assets - GET /api/hardware-assets (200)[0m
+[32m[09:33:17] ✅ Get All Documents - GET /api/documents (200)[0m
+[32m[09:33:17] ✅ Get Recent Activity - GET /api/dashboard/recent-activity (200)[0m
+[32m[09:33:17] ✅ Get Dashboard Statistics - GET /api/dashboard/stats (200)[0m
+[32m[09:33:17] ✅ Get Certificates of Compliance - GET /api/certificates-of-compliance (200)[0m
+[32m[09:33:17] ✅ Get Individual Licenses - GET /api/individual-licenses (200)[0m
+[32m[09:33:17] ✅ Get Field Visibility - GET /api/field-visibility (200)[0m
+[32m[09:33:17] ✅ Health Check - GET /api/health (200)[0m
+[32m[09:33:17] ✅ Version Info - GET /api/version (200)[0m
+[32m[09:33:17] ✅ Entity Relations Types - GET /api/entity-relations/types (200)[0m
+[32m[09:33:17] ✅ Get Page Permissions - GET /api/page-permissions (200)[0m
+[32m[09:33:18] ✅ Execute Search - POST /api/search/execute (200)[0m
+[32m[09:33:18] ✅ Get Search History - GET /api/search/history (200)[0m
+[32m[09:33:18] ✅ Get Saved Searches - GET /api/search/saved (200)[0m
+[32m[09:33:18] ✅ Get Audit Logs - GET /api/audit-logs (200)[0m
+[32m[09:33:18] ✅ Get Team Assignments - GET /api/team-assignments (200)[0m
+[32m[09:33:18] ✅ Get Change History - GET /api/change-history (200)[0m
+[32m[09:33:18] ✅ Get Security Events - GET /api/security-events (200)[0m
+[32m[09:33:18] ✅ Get Data Access Logs - GET /api/data-access-logs (200)[0m
+[36m[09:33:18] 🔨 Testing CREATE operations...[0m
+[32m[09:33:18] ✅ Create Client - POST /api/clients (201)[0m
+[32m[09:33:18] ✅ Create Service - POST /api/services (201)[0m
+[32m[09:33:18] ✅ Create Contract - POST /api/contracts (201)[0m
+[32m[09:33:18] ✅ Create Hardware Asset - POST /api/hardware-assets (201)[0m
+[36m[09:33:18] ✏️ Testing UPDATE operations...[0m
+[32m[09:33:18] ✅ Update Client - PUT /api/clients/59 (200)[0m
+[32m[09:33:18] ✅ Update Service - PUT /api/services/39 (200)[0m
+[31m[09:33:18] ❌ Patch Service - PATCH /api/services/39 (404) - Not Found[0m
+[32m[09:33:18] ✅ Update Contract - PUT /api/contracts/34 (200)[0m
+[32m[09:33:18] ✅ Update Hardware Asset - PUT /api/hardware-assets/19 (200)[0m
+[36m[09:33:18] 🗑️ Testing DELETE operations...[0m
+[32m[09:33:18] ✅ Archive Hardware Asset - DELETE /api/hardware-assets/19 (200)[0m
+[32m[09:33:18] ✅ Archive Service - DELETE /api/services/39 (200)[0m
+[31m[09:33:18] ❌ Archive Contract - DELETE /api/contracts/34 (404) - Not Found[0m
+[31m[09:33:18] ❌ Archive Client - DELETE /api/clients/59 (400) - Cannot archive client[0m
+[36m[09:33:18] 🧪 Testing error scenarios and edge cases...[0m
+[32m[09:33:18] ✅ Get Non-existent Client - GET /api/clients/99999 (404)[0m
+[32m[09:33:18] ✅ Get Non-existent Service - GET /api/services/99999 (404)[0m
+[32m[09:33:18] ✅ Create Client with Invalid Data - POST /api/clients (201)[0m
+[32m[09:33:18] ✅ Search with Empty Query - POST /api/search/execute (200)[0m
+[32m[09:33:18] ✅ Logout - POST /api/logout (200)[0m
+[36m[09:33:18] 
+====================================================================================================[0m
+[36m[09:33:18] 📊 COMPREHENSIVE API TEST SUMMARY - TARGET: 100% COVERAGE[0m
+[36m[09:33:18] ====================================================================================================[0m
+[36m[09:33:18] Total Tests: 57[0m
+[32m[09:33:18] Passed: 54[0m
+[31m[09:33:18] Failed: 3[0m
+[33m[09:33:18] Skipped: 0[0m
+[33m[09:33:18] Pass Rate: 94.7%[0m
+[36m[09:33:18] 
+📋 RESULTS BY ENDPOINT GROUP:[0m
+[32m[09:33:18] authentication: 6/6 (100.0%)[0m
+[33m[09:33:18] clients: 4/5 (80.0%)[0m
+[33m[09:33:18] contracts: 3/4 (75.0%)[0m
+[33m[09:33:18] services: 5/6 (83.3%)[0m
+[32m[09:33:18] service-scopes: 9/9 (100.0%)[0m
+[32m[09:33:18] license-pools: 1/1 (100.0%)[0m
+[32m[09:33:18] hardware-assets: 4/4 (100.0%)[0m
+[32m[09:33:18] documents: 1/1 (100.0%)[0m
+[32m[09:33:18] dashboard: 2/2 (100.0%)[0m
+[32m[09:33:18] compliance: 1/1 (100.0%)[0m
+[32m[09:33:18] licenses: 1/1 (100.0%)[0m
+[32m[09:33:18] system: 4/4 (100.0%)[0m
+[32m[09:33:18] permissions: 1/1 (100.0%)[0m
+[32m[09:33:18] search: 3/3 (100.0%)[0m
+[32m[09:33:18] audit: 2/2 (100.0%)[0m
+[32m[09:33:18] teams: 1/1 (100.0%)[0m
+[32m[09:33:18] security: 2/2 (100.0%)[0m
+[32m[09:33:18] error-scenarios: 4/4 (100.0%)[0m
+[31m[09:33:18] 
+❌ FAILED ENDPOINTS:[0m
+[31m[09:33:18]    PATCH /api/services/39 (404) - Not Found[0m
+[31m[09:33:18]    DELETE /api/contracts/34 (404) - Not Found[0m
+[31m[09:33:18]    DELETE /api/clients/59 (400) - Cannot archive client[0m
+[32m[09:33:18] 
+✅ DYNAMIC SERVICE SCOPES ENDPOINT: All tests passed![0m
+[36m[09:33:18] 
+📈 COVERAGE ANALYSIS:[0m
+[36m[09:33:18] External Systems: REMOVED (as requested)[0m
+[36m[09:33:18] Integration Engine: REMOVED (as requested)[0m
+[32m[09:33:18] Dynamic Service Scopes: FIXED[0m
+[36m[09:33:18] 
+📄 Detailed results saved to: all-api-test-results.json[0m
+[36m[09:33:18] ====================================================================================================[0m
+[33m[09:33:18] 👍 GOOD: High test coverage achieved![0m

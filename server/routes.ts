@@ -19,7 +19,7 @@ import {
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
   clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   pagePermissions, savedSearches, searchHistory,
-  serviceScopeFields, scopeVariableValues
+  serviceScopeFields, scopeVariableValues, userDashboardSettings
 } from "@shared/schema";
 import { z } from "zod";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -264,6 +264,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ---- Pool validation routes ----
   app.use('/api/pools', poolValidationRoutes);
+
+  // ---- Dynamic service scopes routes (must be before other service-scopes routes) ----
+  console.log('🔥 MOUNTING DYNAMIC SERVICE SCOPE ROUTES at /api/service-scopes');
+  app.use('/api/service-scopes', dynamicServiceScopeRoutes);
 
   // Auth routes are now set up in server/index.ts
 
@@ -2864,14 +2868,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let whereConditions: any[] = [];
 
-      // Text search across multiple fields
+      // Text search across multiple fields - simplified to avoid FROM clause issues
       if (q) {
         const searchTerm = `%${q}%`;
         whereConditions.push(
           or(
-            ilike(clients.name, searchTerm),
-            ilike(services.name, searchTerm),
-            ilike(contracts.name, searchTerm),
             ilike(serviceScopes.notes, searchTerm),
             sql`${serviceScopes.scopeDefinition}->>'description' ILIKE ${searchTerm}`
           )
@@ -3040,358 +3041,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dynamic Service Scope Variable Endpoints
-  
-  // Get variable definitions for dynamic filtering
-  app.get("/api/service-scopes/variables/definitions", requireAuth, async (req, res, next) => {
-    try {
-      const definitions = await db.execute(sql`
-        SELECT 
-          variable_name as name,
-          variable_type as "variableType",
-          display_name as "displayName",
-          description,
-          filter_component as "filterComponent",
-          unit,
-          is_filterable as "isFilterable"
-        FROM scope_variable_definitions
-        WHERE is_filterable = true
-        ORDER BY display_name
-      `);
+  // Dynamic Service Scope Variable Endpoints are now handled by the separate API file
 
-      res.json(definitions.rows);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Dynamic search endpoint that can handle any scope variable filters
-  app.get("/api/service-scopes/dynamic", requireAuth, async (req, res, next) => {
-    try {
-      const {
-        page = 1,
-        limit = 50,
-        sortBy = 'created_at',
-        sortOrder = 'desc',
-        ...filters
-      } = req.query;
-
-      // Build dynamic filter query with proper parameter indexing
-      const filterConditions: string[] = [];
-      const queryParams: any[] = [];
-
-      // Process each filter
-      for (const [key, value] of Object.entries(filters)) {
-        if (!value || value === '') continue;
-
-        // Handle range filters (key_min, key_max)
-        if (key.endsWith('_min')) {
-          const variableName = key.replace('_min', '');
-          const paramIndex = queryParams.length + 1;
-          filterConditions.push(`
-            EXISTS (
-              SELECT 1 FROM scope_variable_values svv 
-              WHERE svv.service_scope_id = service_scopes.id 
-              AND svv.variable_name = $${paramIndex}
-              AND (svv.value_integer >= $${paramIndex + 1} OR svv.value_decimal >= $${paramIndex + 2})
-            )
-          `);
-          queryParams.push(variableName, Number(value), Number(value));
-        } else if (key.endsWith('_max')) {
-          const variableName = key.replace('_max', '');
-          const paramIndex = queryParams.length + 1;
-          filterConditions.push(`
-            EXISTS (
-              SELECT 1 FROM scope_variable_values svv 
-              WHERE svv.service_scope_id = service_scopes.id 
-              AND svv.variable_name = $${paramIndex}
-              AND (svv.value_integer <= $${paramIndex + 1} OR svv.value_decimal <= $${paramIndex + 2})
-            )
-          `);
-          queryParams.push(variableName, Number(value), Number(value));
-        } else {
-          // Exact match or text search
-          if (typeof value === 'string' && value.includes('*')) {
-            // Wildcard search
-            const searchPattern = value.replace(/\*/g, '%');
-            const paramIndex = queryParams.length + 1;
-            filterConditions.push(`
-              EXISTS (
-                SELECT 1 FROM scope_variable_values svv 
-                WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex}
-                AND svv.value_text ILIKE $${paramIndex + 1}
-              )
-            `);
-            queryParams.push(key, searchPattern);
-          } else {
-            // Exact match
-            const paramIndex = queryParams.length + 1;
-            filterConditions.push(`
-              EXISTS (
-                SELECT 1 FROM scope_variable_values svv 
-                WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex}
-                AND (
-                  svv.value_text = $${paramIndex + 1} OR
-                  svv.value_integer = $${paramIndex + 2} OR
-                  svv.value_decimal = $${paramIndex + 3}
-                )
-              )
-            `);
-            queryParams.push(key, String(value), Number(value), Number(value));
-          }
-        }
-      }
-
-      // Calculate pagination
-      const offset = (Number(page) - 1) * Number(limit);
-
-      // Build the main query
-      let query = `
-        SELECT 
-          service_scopes.id,
-          service_scopes.contract_id as "contractId",
-          service_scopes.service_id as "serviceId",
-          service_scopes.scope_definition as "scopeDefinition",
-          service_scopes.created_at as "createdAt",
-          service_scopes.updated_at as "updatedAt"
-        FROM service_scopes
-      `;
-
-      // Apply filters
-      if (filterConditions.length > 0) {
-        query += ` WHERE ${filterConditions.join(' AND ')}`;
-      }
-
-      // Apply sorting and pagination
-      const validSortColumns = ['created_at', 'updated_at', 'id'];
-      const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy as string : 'created_at';
-      const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
-      
-      // Add limit and offset parameters
-      const limitParamIndex = queryParams.length + 1;
-      const offsetParamIndex = queryParams.length + 2;
-      query += ` ORDER BY ${sortColumn} ${order} LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
-      queryParams.push(Number(limit), Number(offset));
-
-      console.log('🔍 Dynamic query:', query);
-      console.log('🔍 Query params:', queryParams);
-
-      const results = await db.execute(sql.raw(query, queryParams));
-
-      // Get variable values for each scope
-      const scopeIds = results.rows.map((r: any) => r.id);
-      let variables: any[] = [];
-      
-      if (scopeIds.length > 0) {
-        const variableQuery = `
-          SELECT 
-            service_scope_id as "serviceScopeId",
-            variable_name as "variableName",
-            value_text as "valueText",
-            value_integer as "valueInteger",
-            value_decimal as "valueDecimal",
-            value_boolean as "valueBoolean"
-          FROM scope_variable_values
-          WHERE service_scope_id = ANY($1)
-        `;
-        const variableResults = await db.execute(sql.raw(variableQuery, [scopeIds]));
-        variables = variableResults.rows;
-      }
-
-      // Group variables by scope ID
-      const variablesByScope = variables.reduce((acc: any, variable: any) => {
-        const scopeId = variable.serviceScopeId;
-        if (!acc[scopeId]) acc[scopeId] = {};
-        
-        const value = variable.valueInteger ?? variable.valueDecimal ?? variable.valueBoolean ?? variable.valueText;
-        acc[scopeId][variable.variableName] = value;
-        
-        return acc;
-      }, {});
-
-      // Combine results with variables
-      const enrichedResults = results.rows.map((scope: any) => ({
-        ...scope,
-        variables: variablesByScope[scope.id] || {}
-      }));
-
-      // Get total count for pagination - build separate count query to avoid parameter conflicts
-      let countQuery = `SELECT count(*) FROM service_scopes`;
-      let countParams: any[] = [];
-
-      if (filterConditions.length > 0) {
-        // Rebuild filter conditions for count query with fresh parameter indexes
-        const countFilterConditions: string[] = [];
-        
-        for (const [key, value] of Object.entries(filters)) {
-          if (!value || value === '') continue;
-
-          if (key.endsWith('_min')) {
-            const variableName = key.replace('_min', '');
-            const paramIndex = countParams.length + 1;
-            countFilterConditions.push(`
-              EXISTS (
-                SELECT 1 FROM scope_variable_values svv 
-                WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex}
-                AND (svv.value_integer >= $${paramIndex + 1} OR svv.value_decimal >= $${paramIndex + 2})
-              )
-            `);
-            countParams.push(variableName, Number(value), Number(value));
-          } else if (key.endsWith('_max')) {
-            const variableName = key.replace('_max', '');
-            const paramIndex = countParams.length + 1;
-            countFilterConditions.push(`
-              EXISTS (
-                SELECT 1 FROM scope_variable_values svv 
-                WHERE svv.service_scope_id = service_scopes.id 
-                AND svv.variable_name = $${paramIndex}
-                AND (svv.value_integer <= $${paramIndex + 1} OR svv.value_decimal <= $${paramIndex + 2})
-              )
-            `);
-            countParams.push(variableName, Number(value), Number(value));
-          } else {
-            if (typeof value === 'string' && value.includes('*')) {
-              const searchPattern = value.replace(/\*/g, '%');
-              const paramIndex = countParams.length + 1;
-              countFilterConditions.push(`
-                EXISTS (
-                  SELECT 1 FROM scope_variable_values svv 
-                  WHERE svv.service_scope_id = service_scopes.id 
-                  AND svv.variable_name = $${paramIndex}
-                  AND svv.value_text ILIKE $${paramIndex + 1}
-                )
-              `);
-              countParams.push(key, searchPattern);
-            } else {
-              const paramIndex = countParams.length + 1;
-              countFilterConditions.push(`
-                EXISTS (
-                  SELECT 1 FROM scope_variable_values svv 
-                  WHERE svv.service_scope_id = service_scopes.id 
-                  AND svv.variable_name = $${paramIndex}
-                  AND (
-                    svv.value_text = $${paramIndex + 1} OR
-                    svv.value_integer = $${paramIndex + 2} OR
-                    svv.value_decimal = $${paramIndex + 3}
-                  )
-                )
-              `);
-              countParams.push(key, String(value), Number(value), Number(value));
-            }
-          }
-        }
-
-        countQuery += ` WHERE ${countFilterConditions.join(' AND ')}`;
-      }
-
-      console.log('🔢 Count query:', countQuery);
-      console.log('🔢 Count params:', countParams);
-
-      const [{ count }] = (await db.execute(sql.raw(countQuery, countParams))).rows;
-      const totalCount = Number(count);
-
-      res.json({
-        data: enrichedResults,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total: totalCount,
-          pages: Math.ceil(totalCount / Number(limit))
-        },
-        appliedFilters: filters
-      });
-
-    } catch (error) {
-      console.error('❌ Dynamic service scopes error:', error);
-      next(error);
-    }
-  });
-
-  // Add a new scope variable to an existing scope
-  app.post("/api/service-scopes/:scopeId/variables", requireManagerOrAbove, async (req, res, next) => {
-    try {
-      const { scopeId } = req.params;
-      const { variableName, value, type = 'auto' } = req.body;
-
-      if (!variableName || value === undefined) {
-        return res.status(400).json({ error: 'Variable name and value are required' });
-      }
-
-      // Use the SQL function to add the variable
-      await db.execute(sql`
-        SELECT add_scope_variable(${Number(scopeId)}, ${variableName}, ${String(value)}, ${type})
-      `);
-
-      res.json({ 
-        success: true, 
-        message: `Variable ${variableName} added to scope ${scopeId}` 
-      });
-
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get statistics about variable usage
-  app.get("/api/service-scopes/variables/stats", requireAuth, async (req, res, next) => {
-    try {
-      const stats = await db.execute(sql`
-        SELECT 
-          svd.variable_name,
-          svd.display_name,
-          svd.variable_type,
-          svd.unit,
-          COUNT(svv.id) as usage_count,
-          CASE 
-            WHEN svd.variable_type = 'integer' THEN 
-              json_build_object(
-                'min', MIN(svv.value_integer),
-                'max', MAX(svv.value_integer),
-                'avg', ROUND(AVG(svv.value_integer), 2)
-              )
-            WHEN svd.variable_type = 'decimal' THEN 
-              json_build_object(
-                'min', MIN(svv.value_decimal),
-                'max', MAX(svv.value_decimal),
-                'avg', ROUND(AVG(svv.value_decimal), 2)
-              )
-            ELSE 
-              json_build_object(
-                'unique_values', COUNT(DISTINCT svv.value_text)
-              )
-          END as statistics
-        FROM scope_variable_definitions svd
-        LEFT JOIN scope_variable_values svv ON svd.variable_name = svv.variable_name
-        GROUP BY svd.variable_name, svd.display_name, svd.variable_type, svd.unit
-        ORDER BY usage_count DESC, svd.display_name
-      `);
-
-      res.json(stats.rows);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Discover new variables from scope definitions
-  app.get("/api/service-scopes/variables/discover", requireManagerOrAbove, async (req, res, next) => {
-    try {
-      const discovered = await db.execute(sql`SELECT * FROM auto_discover_variables()`);
-      
-      res.json({
-        newVariables: discovered.rows,
-        message: `Found ${discovered.rows.length} potential new variables`
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get service scope by ID
+  // Get service scope by ID (exclude dynamic routes)
   app.get("/api/service-scopes/:id", requireAuth, async (req, res, next) => {
     try {
+      console.log('🔥 SERVICE SCOPE :ID ROUTE HIT with id:', req.params.id);
+      
+      // Skip if this is a dynamic route (handled by separate API file)
+      if (req.params.id === 'dynamic' || req.params.id === 'variables') {
+        console.log('🔥 SKIPPING :id route for dynamic/variables, calling next()');
+        return next();
+      }
+      
       const id = parseInt(req.params.id);
       
       const [scope] = await db
@@ -4316,6 +3978,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Update service
   app.put("/api/services/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const serviceData = req.body;
+      const updatedService = await storage.updateService(id, serviceData);
+      
+      if (!updatedService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
+      res.json(updatedService);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Patch service (partial update)
+  app.patch("/api/services/:id", requireManagerOrAbove, async (req, res, next) => {
     try {
       const id = parseInt(req.params.id);
       const serviceData = req.body;
@@ -5500,6 +5179,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       res.json(configurations);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // MISSING ENDPOINTS FOR 100% COVERAGE
+  // ========================================
+
+  // Delete contract (archive)
+  app.delete("/api/contracts/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      
+      // Get existing contract for audit logging
+      const [existingContract] = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, contractId))
+        .limit(1);
+
+      if (!existingContract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      // Archive the contract by setting status to 'archived'
+      const [archivedContract] = await db
+        .update(contracts)
+        .set({ 
+          status: 'archived',
+          updatedAt: new Date()
+        })
+        .where(eq(contracts.id, contractId))
+        .returning();
+
+      if (!archivedContract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      // Add audit logging for contract archival
+      try {
+        const { AuditLogger } = await import('./lib/audit');
+        const auditLogger = new AuditLogger(req, req.user?.id);
+        await auditLogger.logUpdate(
+          'contract',
+          contractId,
+          existingContract.name,
+          [{ field: 'status', oldValue: existingContract.status, newValue: 'archived' }],
+          existingContract
+        );
+        console.log('✅ Audit logging completed for contract archival');
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for contract archival:', auditError.message);
+      }
+
+      res.json({ message: "Contract archived successfully", contract: archivedContract });
     } catch (error) {
       next(error);
     }
