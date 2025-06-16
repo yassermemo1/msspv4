@@ -58,13 +58,16 @@ import {
   Plus,
   Trash2,
   AlertTriangle,
-  Info
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { DynamicDashboardCard } from "./dynamic-dashboard-card";
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardSettings, DashboardCard } from "@/hooks/use-dashboard-settings";
 import { formatClientName } from "@/lib/utils";
 import { EnhancedDashboardCustomizer, EnhancedDashboardCard } from "./enhanced-dashboard-customizer";
+import JiraProjectCountsWidget from "./jira-project-counts-widget";
+import ExternalApiWidget from "./external-api-widget";
 // External widget card removed - deprecated
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#a4de6c', '#d084d0', '#8dd1e1', '#ffb347'];
@@ -569,6 +572,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
 
   return (
     <div className={className}>
+
       {/* Dashboard Controls */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -657,7 +661,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
               {visibleCards.map((card) => {
                 // External widget functionality removed - deprecated
                 if (card.type === 'chart') {
-                  const chartData = getChartData(card.config.dataSource, card.config.chartType);
+                  const chartData = getChartData(card.config.dataSource || '', card.config.chartType || '');
                   // ... existing code ...
                 }
                 return (
@@ -707,6 +711,22 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
             </Card>
           )}
         </div>
+      </div>
+
+      {/* Jira Project Counts Section - MOVED TO TOP */}
+      <div className="mb-8" style={{ backgroundColor: '#ff6b6b', padding: '24px', border: '4px solid #ff0000', borderRadius: '8px' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-white">🚨 JIRA WIDGET TEST - SCROLL DOWN TO FIND ME! 🚨</h1>
+          <Badge variant="outline" className="text-xs bg-white text-red-600">
+            LIVE DATA
+          </Badge>
+        </div>
+        <div className="bg-white p-4 rounded">
+          <JiraProjectCountsWidget className="lg:col-span-1" />
+        </div>
+        <p style={{ color: 'white', fontSize: '16px', marginTop: '12px', fontWeight: 'bold' }}>
+          🎯 If you can see this RED box, the widget section is working! The widget should be in the white box above.
+        </p>
       </div>
 
       {/* License Pool Cards Section */}
@@ -814,7 +834,46 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
         )}
       </div>
 
-      {/* External Widgets Section - Removed (deprecated) */}
+      {/* External API Widgets Section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">External API Widgets</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Connect to external APIs and display real-time data from any REST endpoint
+            </p>
+          </div>
+          <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
+            LIVE DATA
+          </Badge>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {/* Sample Posts API Widget */}
+          <ExternalApiWidget
+            title="Sample Posts API"
+            apiUrl="https://jsonplaceholder.typicode.com/posts"
+            refreshInterval={60000}
+            className="border-blue-200 bg-blue-50"
+          />
+          
+          {/* Sample Users API Widget */}
+          <ExternalApiWidget
+            title="Sample Users API"
+            apiUrl="https://jsonplaceholder.typicode.com/users"
+            refreshInterval={120000}
+            className="border-green-200 bg-green-50"
+          />
+          
+          {/* Internal Jira API Widget */}
+          <ExternalApiWidget
+            title="Jira Project Counts"
+            apiUrl="/api/jira-counts"
+            refreshInterval={30000}
+            className="border-purple-200 bg-purple-50"
+          />
+        </div>
+      </div>
 
       {/* Enhanced Dashboard Customizer Modal */}
       {showCustomizer && (
@@ -851,10 +910,10 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
                     const converted = {
                       id: card.id,
                       title: card.title,
-                      type: (card.type === 'comparison' || card.type === 'external' || card.type === 'pool-comparison')
+                      type: (card.type === 'comparison' || card.type === 'pool-comparison')
                         ? ('custom' as DashboardCard['type'])
                         : (card.type as DashboardCard['type']),
-                      category: card.category === 'comparison' || card.category === 'external' ? 'custom' : card.category,
+                      category: (card.category === 'comparison' ? 'custom' : card.category) as DashboardCard['category'],
                       dataSource: card.dataSource,
                       size: card.size,
                       visible: card.visible,

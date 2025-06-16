@@ -1,5 +1,8 @@
 // Plugin registry for external query connectors - Self-Contained Architecture
 
+import fs from 'fs';
+import path from 'path';
+
 export interface PluginConfig {
   instances: PluginInstance[];
   defaultRefreshInterval?: number;
@@ -69,6 +72,45 @@ export interface QueryPlugin {
 }
 
 const registry = new Map<string, QueryPlugin>();
+const CONFIG_DIR = path.join(process.cwd(), 'server', 'plugins', 'configs');
+
+// Ensure configuration directory exists
+function ensureConfigDir() {
+  if (!fs.existsSync(CONFIG_DIR)) {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    console.log(`📁 Created plugin config directory: ${CONFIG_DIR}`);
+  }
+}
+
+// Load plugin configuration from file
+function loadPluginConfig(pluginName: string): PluginConfig | null {
+  try {
+    const configPath = path.join(CONFIG_DIR, `${pluginName}.json`);
+    if (fs.existsSync(configPath)) {
+      const configData = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configData);
+      console.log(`📋 Loaded config for plugin: ${pluginName}`);
+      return config;
+    }
+  } catch (error) {
+    console.warn(`⚠️ Failed to load config for plugin ${pluginName}:`, error);
+  }
+  return null;
+}
+
+// Save plugin configuration to file
+export function savePluginConfig(pluginName: string, config: PluginConfig): void {
+  try {
+    ensureConfigDir();
+    const configPath = path.join(CONFIG_DIR, `${pluginName}.json`);
+    const configData = JSON.stringify(config, null, 2);
+    fs.writeFileSync(configPath, configData, 'utf8');
+    console.log(`💾 Saved config for plugin: ${pluginName}`);
+  } catch (error) {
+    console.error(`❌ Failed to save config for plugin ${pluginName}:`, error);
+    throw error;
+  }
+}
 
 export function registerPlugin(plugin: QueryPlugin) {
   // Ensure plugin has proper config structure
@@ -77,6 +119,17 @@ export function registerPlugin(plugin: QueryPlugin) {
   }
   if (!plugin.config.instances) {
     plugin.config.instances = [];
+  }
+  
+  // Try to load saved configuration
+  const savedConfig = loadPluginConfig(plugin.systemName);
+  if (savedConfig) {
+    // Merge saved config with default config, preserving saved instances
+    plugin.config = {
+      ...plugin.config,
+      ...savedConfig,
+      instances: savedConfig.instances || []
+    };
   }
   
   registry.set(plugin.systemName.toLowerCase(), plugin);
@@ -106,4 +159,18 @@ export function getAllInstances(): Array<{ pluginName: string; instance: PluginI
   }
   
   return allInstances;
+}
+
+// Update plugin configuration and persist to file
+export function updatePluginConfig(pluginName: string, config: PluginConfig): void {
+  const plugin = getPlugin(pluginName);
+  if (!plugin) {
+    throw new Error(`Plugin '${pluginName}' not found`);
+  }
+  
+  // Update in-memory configuration
+  plugin.config = config;
+  
+  // Persist to file
+  savePluginConfig(pluginName, config);
 } 

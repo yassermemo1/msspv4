@@ -5,14 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, Loader2, Building2, User } from "lucide-react";
 
 export default function LoginPage() {
   const { user, loginMutation, ldapLoginMutation } = useAuth();
   const [, setLocation] = useLocation();
-  const [localCredentials, setLocalCredentials] = useState({ email: "", password: "" });
-  const [ldapCredentials, setLdapCredentials] = useState({ username: "", password: "" });
+  const [localCredentials, setLocalCredentials] = useState({ email: "", password: "", rememberMe: false });
+  const [ldapCredentials, setLdapCredentials] = useState({ username: "", password: "", rememberMe: false });
   const [activeTab, setActiveTab] = useState<"local" | "ldap">("local");
 
   // Check if we're in development mode
@@ -115,6 +116,15 @@ export default function LoginPage() {
                     disabled={isLoading}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rememberMe">Remember Me</Label>
+                  <Checkbox
+                    id="rememberMe"
+                    name="rememberMe"
+                    checked={localCredentials.rememberMe}
+                    onCheckedChange={(value) => setLocalCredentials(prev => ({ ...prev, rememberMe: value as boolean }))}
+                  />
+                </div>
                 <Button 
                   type="submit" 
                   className="w-full" 
@@ -143,7 +153,8 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "admin@mssp.local",
-                            password: "admin123"
+                            password: "admin123",
+                            rememberMe: false
                           });
                         }}
                       >
@@ -157,7 +168,8 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "manager@mssp.local",
-                            password: "admin123"
+                            password: "admin123",
+                            rememberMe: false
                           });
                         }}
                       >
@@ -171,7 +183,8 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "engineer@mssp.local",
-                            password: "admin123"
+                            password: "admin123",
+                            rememberMe: false
                           });
                         }}
                       >
@@ -185,7 +198,8 @@ export default function LoginPage() {
                         onClick={() => {
                           setLocalCredentials({
                             email: "user@mssp.local",
-                            password: "admin123"
+                            password: "admin123",
+                            rememberMe: false
                           });
                         }}
                       >
@@ -225,6 +239,15 @@ export default function LoginPage() {
                     disabled={isLoading}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rememberMe">Remember Me</Label>
+                  <Checkbox
+                    id="rememberMe"
+                    name="rememberMe"
+                    checked={ldapCredentials.rememberMe}
+                    onCheckedChange={(value) => setLdapCredentials(prev => ({ ...prev, rememberMe: value as boolean }))}
+                  />
+                </div>
                 <Button 
                   type="submit" 
                   className="w-full" 
@@ -250,7 +273,8 @@ export default function LoginPage() {
                     onClick={() => {
                       setLdapCredentials({
                         username: "einstein",
-                        password: "password"
+                        password: "password",
+                        rememberMe: false
                       });
                     }}
                   >

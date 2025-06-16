@@ -33,6 +33,7 @@ export const userSettings = pgTable("user_settings", {
   sessionTimeout: boolean("session_timeout").notNull().default(true),
   // System preferences
   darkMode: boolean("dark_mode").notNull().default(false),
+  theme: text("theme").notNull().default("light"), // light, dark, system, or custom theme ID
   timezone: text("timezone").notNull().default("America/New_York"),
   language: text("language").notNull().default("en"),
   currency: text("currency").notNull().default("USD"), // USD, SAR, EUR, GBP, etc.
@@ -1289,3 +1290,63 @@ export const insertSavedQuerySchema = createInsertSchema(savedQueries).omit({
 
 export type InsertSavedQuery = z.infer<typeof insertSavedQuerySchema>;
 export type SavedQuery = typeof savedQueries.$inferSelect;
+
+// Custom widgets table - replaces localStorage storage
+export const customWidgets = pgTable("custom_widgets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  pluginName: text("plugin_name").notNull(),
+  instanceId: text("instance_id").notNull(),
+  queryType: text("query_type").notNull().default("default"), // 'default' | 'custom'
+  queryId: text("query_id"),
+  customQuery: text("custom_query"),
+  queryMethod: text("query_method").notNull().default("GET"),
+  queryParameters: jsonb("query_parameters").notNull().default('{}'),
+  displayType: text("display_type").notNull().default("table"), // 'table' | 'chart' | 'metric' | 'list' | 'gauge'
+  chartType: text("chart_type"), // 'bar' | 'line' | 'pie' | 'area'
+  refreshInterval: integer("refresh_interval").notNull().default(30),
+  placement: text("placement").notNull().default("client-details"), // 'client-details' | 'global-dashboard' | 'custom'
+  styling: jsonb("styling").notNull().default('{"width":"full","height":"medium","showBorder":true,"showHeader":true}'),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_custom_widgets_user").on(table.userId),
+  index("idx_custom_widgets_placement").on(table.placement),
+]);
+
+export const insertCustomWidgetSchema = createInsertSchema(customWidgets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCustomWidget = z.infer<typeof insertCustomWidgetSchema>;
+export type CustomWidget = typeof customWidgets.$inferSelect;
+
+// User preferences table - replaces localStorage for theme, column prefs, etc.
+export const userPreferences = pgTable("user_preferences", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  preferenceType: text("preference_type").notNull(), // 'theme', 'column_visibility', 'onboarding_progress'
+  preferenceKey: text("preference_key").notNull(), // specific key within type (e.g., table name for columns)
+  preferenceValue: jsonb("preference_value").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  // Unique constraint to prevent duplicate preferences
+  unique("user_preference_unique").on(table.userId, table.preferenceType, table.preferenceKey),
+  // Index for performance
+  index("idx_user_preferences_lookup").on(table.userId, table.preferenceType, table.preferenceKey),
+]);
+
+export const insertUserPreferenceSchema = createInsertSchema(userPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertUserPreference = z.infer<typeof insertUserPreferenceSchema>;
+export type UserPreference = typeof userPreferences.$inferSelect;

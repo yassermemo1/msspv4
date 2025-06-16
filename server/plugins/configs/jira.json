@@ -1,0 +1,29 @@
+{
+  "instances": [
+    {
+      "id": "jira-main",
+      "name": "Main Jira Instance",
+      "baseUrl": "https://sd.sic.sitco.sa",
+      "authType": "basic",
+      "authConfig": {
+        "username": "yalmohammed",
+        "password": "0541887111Ysm!!!!!"
+      },
+      "isActive": true,
+      "tags": [
+        "tickets",
+        "project-management"
+      ],
+      "sslConfig": {
+        "rejectUnauthorized": false,
+        "allowSelfSigned": true,
+        "timeout": 30000
+      }
+    }
+  ],
+  "defaultRefreshInterval": 60,
+  "rateLimiting": {
+    "requestsPerMinute": 100,
+    "burstSize": 20
+  }
+}

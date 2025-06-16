@@ -26,6 +26,13 @@ import {
 } from 'lucide-react';
 import { DynamicWidgetBuilder } from './dynamic-widget-builder';
 import { DynamicWidgetRenderer } from './dynamic-widget-renderer';
+import { 
+  getUserCustomWidgets, 
+  createCustomWidget, 
+  updateCustomWidget, 
+  deleteCustomWidget,
+  type CustomWidget as DBCustomWidget
+} from '@/lib/user-preferences';
 
 interface CustomWidget {
   id?: string;
@@ -84,13 +91,35 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
   const loadWidgets = async () => {
     try {
       setLoading(true);
-      // For now, load from localStorage - in production this would be an API call
+      const dbWidgets = await getUserCustomWidgets(placement);
+      // Convert DB widgets to local widget format
+      const localWidgets: CustomWidget[] = dbWidgets.map(w => ({
+        id: w.id.toString(),
+        name: w.name,
+        description: w.description || '',
+        pluginName: w.pluginName,
+        instanceId: w.instanceId,
+        queryType: w.queryType as 'default' | 'custom',
+        queryId: w.queryId,
+        customQuery: w.customQuery,
+        queryMethod: w.queryMethod,
+        queryParameters: w.queryParameters,
+        displayType: w.displayType as 'table' | 'chart' | 'metric' | 'list' | 'gauge',
+        chartType: w.chartType as 'bar' | 'line' | 'pie' | 'area' | undefined,
+        refreshInterval: w.refreshInterval,
+        placement: w.placement as 'client-details' | 'global-dashboard' | 'custom',
+        styling: w.styling as any,
+        createdAt: w.createdAt,
+        updatedAt: w.updatedAt
+      }));
+      setWidgets(localWidgets);
+    } catch (error) {
+      console.error('Failed to load widgets:', error);
+      // Fallback to localStorage for existing widgets
       const savedWidgets = localStorage.getItem('customWidgets');
       if (savedWidgets) {
         setWidgets(JSON.parse(savedWidgets));
       }
-    } catch (error) {
-      console.error('Failed to load widgets:', error);
     } finally {
       setLoading(false);
     }
@@ -98,27 +127,49 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
 
   const saveWidget = async (widget: CustomWidget) => {
     try {
-      const updatedWidgets = [...widgets];
+      let savedWidget: DBCustomWidget;
       
       if (widget.id) {
         // Update existing widget
-        const index = updatedWidgets.findIndex(w => w.id === widget.id);
-        if (index !== -1) {
-          updatedWidgets[index] = { ...widget, updatedAt: new Date().toISOString() };
-        }
+        savedWidget = await updateCustomWidget(parseInt(widget.id), {
+          name: widget.name,
+          description: widget.description,
+          pluginName: widget.pluginName,
+          instanceId: widget.instanceId,
+          queryType: widget.queryType,
+          queryId: widget.queryId,
+          customQuery: widget.customQuery,
+          queryMethod: widget.queryMethod,
+          queryParameters: widget.queryParameters,
+          displayType: widget.displayType,
+          chartType: widget.chartType,
+          refreshInterval: widget.refreshInterval,
+          placement: widget.placement,
+          styling: widget.styling
+        });
       } else {
         // Create new widget
-        const newWidget = {
-          ...widget,
-          id: Date.now().toString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        updatedWidgets.push(newWidget);
+        savedWidget = await createCustomWidget({
+          name: widget.name,
+          description: widget.description,
+          pluginName: widget.pluginName,
+          instanceId: widget.instanceId,
+          queryType: widget.queryType,
+          queryId: widget.queryId,
+          customQuery: widget.customQuery,
+          queryMethod: widget.queryMethod,
+          queryParameters: widget.queryParameters,
+          displayType: widget.displayType,
+          chartType: widget.chartType,
+          refreshInterval: widget.refreshInterval,
+          placement: widget.placement,
+          styling: widget.styling,
+          isActive: true
+        });
       }
 
-      setWidgets(updatedWidgets);
-      localStorage.setItem('customWidgets', JSON.stringify(updatedWidgets));
+      // Reload widgets from database
+      await loadWidgets();
       
       setShowBuilder(false);
       setEditingWidget(undefined);
@@ -134,9 +185,9 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
     }
 
     try {
-      const updatedWidgets = widgets.filter(w => w.id !== widgetId);
-      setWidgets(updatedWidgets);
-      localStorage.setItem('customWidgets', JSON.stringify(updatedWidgets));
+      await deleteCustomWidget(parseInt(widgetId));
+      // Reload widgets from database
+      await loadWidgets();
     } catch (error) {
       console.error('Failed to delete widget:', error);
       alert('Failed to delete widget');

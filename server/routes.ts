@@ -54,7 +54,7 @@ import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
 // External widget routes removed - migrated to plugin system
 import { codebaseAnalyzer } from './services/codebase-analyzer';
-import { pluginRoutes } from './plugins-routes';
+import pluginRoutes from './plugins-routes';
 
 // Import plugins to register them (only working ones for now)
 import './plugins/fortigate-plugin';
@@ -67,10 +67,22 @@ import './plugins/grafana-plugin';
 import { router as dynamicServiceScopeRoutes } from './api/dynamic-service-scopes';
 import poolValidationRoutes from './api/pool-validation';
 import { mockJiraRoutes } from './routes/mock-jira.ts';
+import jiraCountsRoutes from './api/jira-counts';
 import { getPlugin } from "./plugins/plugin-manager";
 import { performRollback } from "./lib/rollback";
 import { applyMappings } from "./lib/data-mapper";
 import { ApiError } from "./lib/api-error";
+// Utility functions for error handling
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function ensureUserId(userId: number | undefined): number {
+  if (userId === undefined) {
+    throw new Error('User ID is required');
+  }
+  return userId;
+}
 
 const scryptAsync = promisify(scrypt);
 
@@ -262,6 +274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ---- Mock data routes for Jira ticket widgets ----
   app.use('/api/mock-jira', mockJiraRoutes);
   
+  // ---- Jira counts API routes ----
+  app.use('/api/jira-counts', requireAuth, jiraCountsRoutes);
+  
   // ---- Pool validation routes ----
   app.use('/api/pools', poolValidationRoutes);
 
@@ -286,7 +301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if uploads directory exists
       const uploadsExists = fs.existsSync(uploadsDir);
       
-      let files = [];
+      let files: string[] = [];
       let permissions = null;
       
       if (uploadsExists) {
@@ -326,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Debug uploads error:", error);
       res.status(500).json({ 
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         uploadsDirectory: path.join(process.cwd(), 'uploads'),
         cwd: process.cwd()
       });
@@ -407,16 +422,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createAuditLog({
           userId: req.user!.id,
           action: 'field_visibility_update',
-          tableName: 'field_visibility_config',
-          recordId: null,
-          oldValues: null,
-          newValues: JSON.stringify({
+          entityType: 'field_visibility_config',
+          description: `Updated field visibility for ${tableName}.${fieldName}`,
+          category: 'system_configuration',
+          severity: 'info',
+          metadata: {
             tableName,
             fieldName,
             isVisible,
             context,
             action: 'update_field_visibility'
-          })
+          }
         });
       } catch (auditError) {
         console.error('Audit log failed (non-critical):', auditError);
@@ -455,15 +471,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createAuditLog({
         userId: req.user!.id,
         action: 'field_visibility_reset',
-        tableName: 'field_visibility_config',
-        recordId: null,
-        oldValues: null,
-        newValues: JSON.stringify({
+        entityType: 'field_visibility_config',
+        description: `Reset field visibility for ${tableName}.${fieldName}`,
+        category: 'system_configuration',
+        severity: 'info',
+        metadata: {
           tableName,
           fieldName,
           context,
           action: 'reset_field_visibility'
-        })
+        }
       });
 
       res.json({ success: true });
@@ -517,7 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { logDataAccess } = await import('./lib/audit');
         await logDataAccess({
-          userId: req.user?.id,
+          userId: req.user?.id || 0,
           entityType: 'client',
           accessType: 'list',
           accessMethod: 'web_ui',
@@ -527,12 +544,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           purpose: 'Archived client list view - administrative review'
         }, req);
       } catch (auditError) {
-        console.error('⚠️ Data access logging failed for archived client list:', auditError.message);
+        console.error('⚠️ Data access logging failed for archived client list:', auditError instanceof Error ? auditError.message : String(auditError));
       }
       
       res.json(archivedClients);
     } catch (error) {
-      console.error("Get archived clients error:", error);
+      console.error("Get archived clients error:", error instanceof Error ? error.message : String(error));
       res.status(500).json({ message: "Failed to fetch archived clients" });
     }
   });
@@ -891,8 +908,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           {
             industry: result.data.industry,
             domain: result.data.domain,
-            contactEmail: result.data.contactEmail,
-            contactPhone: result.data.contactPhone,
             address: result.data.address,
             status: result.data.status || 'active'
           }
@@ -1601,7 +1616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if uploads directory exists
       const uploadsExists = fs.existsSync(uploadsDir);
       
-      let files = [];
+      let files: string[] = [];
       let permissions = null;
       
       if (uploadsExists) {
@@ -1829,7 +1844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { logDataAccess } = await import('./lib/audit');
         await logDataAccess({
-          userId: req.user?.id,
+          userId: req.user?.id || 0,
           entityType: 'client',
           accessType: 'list',
           accessMethod: 'web_ui',
@@ -1839,12 +1854,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           purpose: 'Archived client list view - administrative review'
         }, req);
       } catch (auditError) {
-        console.error('⚠️ Data access logging failed for archived client list:', auditError.message);
+        console.error('⚠️ Data access logging failed for archived client list:', auditError instanceof Error ? auditError.message : String(auditError));
       }
       
       res.json(archivedClients);
     } catch (error) {
-      console.error("Get archived clients error:", error);
+      console.error("Get archived clients error:", error instanceof Error ? error.message : String(error));
       res.status(500).json({ message: "Failed to fetch archived clients" });
     }
   });
@@ -5489,6 +5504,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({ message: "Contract archived successfully", contract: archivedContract });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // CUSTOM WIDGETS ENDPOINTS
+  // ========================================
+
+  // Get user's custom widgets
+  app.get("/api/user/widgets", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { placement } = req.query;
+      const widgets = await storage.getUserCustomWidgets(userId, placement as string);
+      res.json(widgets);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create custom widget
+  app.post("/api/user/widgets", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const widgetData = { ...req.body, userId };
+      const newWidget = await storage.createCustomWidget(widgetData);
+      res.status(201).json(newWidget);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update custom widget
+  app.put("/api/user/widgets/:id", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const id = parseInt(req.params.id);
+      const updatedWidget = await storage.updateCustomWidget(id, req.body);
+      
+      if (!updatedWidget) {
+        return res.status(404).json({ message: "Widget not found" });
+      }
+      
+      res.json(updatedWidget);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete custom widget
+  app.delete("/api/user/widgets/:id", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteCustomWidget(id, userId);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Widget not found or access denied" });
+      }
+      
+      res.json({ message: "Widget deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // USER PREFERENCES ENDPOINTS
+  // ========================================
+
+  // Get user preferences
+  app.get("/api/user/preferences/:type", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { type } = req.params;
+      const { key } = req.query;
+      const preferences = await storage.getUserPreference(userId, type, key as string);
+      res.json(preferences);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Set user preference
+  app.put("/api/user/preferences/:type/:key", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { type, key } = req.params;
+      const { value } = req.body;
+      
+      const preference = await storage.setUserPreference(userId, type, key, value);
+      res.json(preference);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete user preference
+  app.delete("/api/user/preferences/:type/:key?", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { type, key } = req.params;
+      const deleted = await storage.deleteUserPreference(userId, type, key);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Preference not found" });
+      }
+      
+      res.json({ message: "Preference deleted successfully" });
     } catch (error) {
       next(error);
     }

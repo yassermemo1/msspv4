@@ -41,6 +41,7 @@ import {
 import { cn } from '../lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ClientInfoForm } from "@/components/onboarding/client-info-form";
+import { getOnboardingProgress, setOnboardingProgress, markOnboardingStepComplete } from '@/lib/user-preferences';
 
 interface OnboardingStep {
   id: string;
@@ -73,6 +74,16 @@ interface FormData {
   coverage?: string;
 }
 
+interface LicenseStatusItem {
+  total: number;
+  available: number;
+  status: 'healthy' | 'warning' | 'depleted';
+}
+
+interface PoolStatus {
+  licenseStatus?: Record<string, LicenseStatusItem>;
+}
+
 export default function ClientOnboardingPage() {
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
@@ -84,7 +95,7 @@ export default function ClientOnboardingPage() {
   const [formData, setFormData] = useState<FormData>({});
 
   // Fetch pool status for real-time validation
-  const { data: poolStatus } = useQuery({
+  const { data: poolStatus } = useQuery<PoolStatus>({
     queryKey: ['/api/pools/status'],
     refetchInterval: 30000,
   });
@@ -251,22 +262,37 @@ export default function ClientOnboardingPage() {
     }
   };
 
-  // Load progress from localStorage
+  // Load progress from database
   useEffect(() => {
-    const savedProgress = localStorage.getItem('onboarding-progress');
-    if (savedProgress) {
-      const { currentStep: savedStep, completedSteps: savedCompleted } = JSON.parse(savedProgress);
-      setCurrentStep(savedStep);
-      setCompletedSteps(savedCompleted);
-    }
+    const loadProgress = async () => {
+      try {
+        const progress = await getOnboardingProgress();
+        if (typeof progress.currentStep === 'number') {
+          setCurrentStep(progress.currentStep);
+        }
+        if (Array.isArray(progress.completedSteps)) {
+          setCompletedSteps(progress.completedSteps);
+        }
+      } catch (error) {
+        console.warn('Failed to load onboarding progress:', error);
+      }
+    };
+    loadProgress();
   }, []);
 
-  // Save progress to localStorage
+  // Save progress to database
   useEffect(() => {
-    localStorage.setItem('onboarding-progress', JSON.stringify({
-      currentStep,
-      completedSteps
-    }));
+    const saveProgress = async () => {
+      try {
+        await setOnboardingProgress({
+          currentStep: currentStep,
+          completedSteps: completedSteps
+        });
+      } catch (error) {
+        console.warn('Failed to save onboarding progress:', error);
+      }
+    };
+    saveProgress();
   }, [currentStep, completedSteps]);
 
   // Stable client info form element
@@ -352,7 +378,7 @@ export default function ClientOnboardingPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-800 mb-2">📊 Current License Pool Status</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            {Object.entries(poolStatus.licenseStatus || {}).map(([type, status]: [string, any]) => (
+            {Object.entries(poolStatus.licenseStatus || {}).map(([type, status]: [string, LicenseStatusItem]) => (
               <div key={type} className="space-y-1">
                 <div className="font-medium text-gray-700 capitalize">{type}</div>
                 <div className={cn(
@@ -446,7 +472,7 @@ export default function ClientOnboardingPage() {
       title: 'Client Information',
       description: 'Create client record with company details and contacts',
       estimatedTime: '5-10 minutes',
-      icon: <Building className="h-5 w-5" />,
+      icon: <Building className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
       formComponent: clientInfoFormElement,
       checklist: [
@@ -460,9 +486,9 @@ export default function ClientOnboardingPage() {
       title: 'Contract Setup',
       description: 'Create contracts and set up legal framework',
       estimatedTime: '10-15 minutes',
-      icon: <FileText className="h-5 w-5" />,
+      icon: <FileText className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
-      formComponent: <ContractForm />,
+      formComponent: <ContractForm /> as React.ReactNode,
       checklist: [
         'Contract type selection',
         'Start and end dates',
@@ -474,9 +500,9 @@ export default function ClientOnboardingPage() {
       title: 'Service Configuration',
       description: 'Configure services with pool validation',
       estimatedTime: '15-20 minutes',
-      icon: <Shield className="h-5 w-5" />,
+      icon: <Shield className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
-      formComponent: <ServiceForm />,
+      formComponent: <ServiceForm /> as React.ReactNode,
       checklist: [
         'Service type selection',
         'Coverage hours',
@@ -489,7 +515,7 @@ export default function ClientOnboardingPage() {
       title: 'Team Assignment',
       description: 'Assign team members and configure access',
       estimatedTime: '10-15 minutes',
-      icon: <Users className="h-5 w-5" />,
+      icon: <Users className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
       checklist: [
         'Account manager assignment',
@@ -502,7 +528,7 @@ export default function ClientOnboardingPage() {
       title: 'System Integration',
       description: 'Configure integrations and external systems',
       estimatedTime: '15-25 minutes',
-      icon: <Link className="h-5 w-5" />,
+      icon: <Link className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
       checklist: [
         'SIEM integration',
@@ -515,7 +541,7 @@ export default function ClientOnboardingPage() {
       title: 'Go-Live',
       description: 'Final verification and activation',
       estimatedTime: '10-15 minutes',
-      icon: <Zap className="h-5 w-5" />,
+      icon: <Zap className="h-5 w-5" /> as React.ReactNode,
       status: 'pending',
       checklist: [
         'Configuration testing',
@@ -535,7 +561,7 @@ export default function ClientOnboardingPage() {
     if (index === currentStep) return 'in-progress';
     if (step.id === 'service-scopes' && poolStatus) {
       const hasPoolIssues = Object.values(poolStatus.licenseStatus || {}).some(
-        (status: any) => status.status === 'depleted'
+        (status: LicenseStatusItem) => status.status === 'depleted'
       );
       if (hasPoolIssues) return 'warning';
     }
@@ -616,7 +642,7 @@ export default function ClientOnboardingPage() {
         </Card>
 
         {/* Pool Status Alert */}
-        {poolStatus && Object.values(poolStatus.licenseStatus || {}).some((status: any) => status.status === 'depleted') && (
+        {poolStatus && Object.values(poolStatus.licenseStatus || {}).some((status: LicenseStatusItem) => status.status === 'depleted') && (
           <Alert className="border-yellow-200 bg-yellow-50">
             <AlertTriangle className="h-4 w-4 text-yellow-600" />
             <AlertDescription>

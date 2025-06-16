@@ -49,11 +49,13 @@ type AuthContextType = {
 type LoginData = {
   email: string;
   password: string;
+  rememberMe?: boolean;
 };
 
 type LdapLoginData = {
   username: string;
   password: string;
+  rememberMe?: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,13 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const queryClient = useQueryClient();
 
-  const loginMutation = useMutation({
+  const loginMutation = useMutation<User, Error, LoginData>({
     mutationFn: postQueryFn("/api/login"),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      const welcomeMsg = data.rememberMe ? "Welcome back! (Session extended)" : "Welcome back!";
       toast({
         title: "Login successful",
-        description: "Welcome back!",
+        description: welcomeMsg,
       });
     },
     onError: (error: Error) => {
@@ -89,13 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const ldapLoginMutation = useMutation({
+  const ldapLoginMutation = useMutation<User, Error, LdapLoginData>({
     mutationFn: postQueryFn("/api/auth/ldap/login"),
     onSuccess: (data: User) => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      const welcomeMsg = data.rememberMe ? `Welcome back, ${data.firstName || data.username}! (Session extended)` : `Welcome back, ${data.firstName || data.username}!`;
       toast({
         title: "LDAP Login successful",
-        description: `Welcome back, ${data.firstName || data.username}!`,
+        description: welcomeMsg,
       });
     },
     onError: (error: Error) => {
@@ -107,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const logoutMutation = useMutation({
+  const logoutMutation = useMutation<void, Error, void>({
     mutationFn: postQueryFn("/api/logout"),
     onSuccess: () => {
       // Clear all cached data
@@ -130,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const registerMutation = useMutation({
+  const registerMutation = useMutation<User, Error, InsertUser>({
     mutationFn: postQueryFn("/api/register"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });

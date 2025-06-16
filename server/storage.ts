@@ -25,6 +25,8 @@ import {
   documents,
   documentVersions,
   documentAccess,
+  customWidgets,
+  userPreferences,
   // clientExternalMappings, // removed deprecated external integrations
 
   type User,
@@ -77,6 +79,10 @@ import {
   type InsertDocumentVersion,
   type DocumentAccess,
   type InsertDocumentAccess,
+  type CustomWidget,
+  type InsertCustomWidget,
+  type UserPreference,
+  type InsertUserPreference,
   PaginatedResponse,
   PaginationParams,
   ScopeDefinitionTemplateResponse,
@@ -300,6 +306,16 @@ export interface IStorage {
   resetUserDashboardSettings(userId: number): Promise<void>;
   createDefaultDashboardSettings(userId: number): Promise<void>;
 
+  // Custom widgets management
+  getUserCustomWidgets(userId: number, placement?: string): Promise<CustomWidget[]>;
+  createCustomWidget(widget: InsertCustomWidget): Promise<CustomWidget>;
+  updateCustomWidget(id: number, widget: Partial<InsertCustomWidget>): Promise<CustomWidget | undefined>;
+  deleteCustomWidget(id: number, userId: number): Promise<boolean>;
+
+  // User preferences management
+  getUserPreference(userId: number, preferenceType: string, preferenceKey?: string): Promise<UserPreference[]>;
+  setUserPreference(userId: number, preferenceType: string, preferenceKey: string, preferenceValue: any): Promise<UserPreference>;
+  deleteUserPreference(userId: number, preferenceType: string, preferenceKey?: string): Promise<boolean>;
 
 }
 
@@ -1882,6 +1898,126 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error checking field visibility:', error);
       return true; // Default to visible on error
+    }
+  }
+
+  // Custom widgets management
+  async getUserCustomWidgets(userId: number, placement?: string): Promise<CustomWidget[]> {
+    try {
+      const conditions = [eq(customWidgets.userId, userId), eq(customWidgets.isActive, true)];
+      
+      if (placement) {
+        conditions.push(eq(customWidgets.placement, placement));
+      }
+
+      return await db
+        .select()
+        .from(customWidgets)
+        .where(and(...conditions))
+        .orderBy(customWidgets.createdAt);
+    } catch (error) {
+      console.error('Error fetching user custom widgets:', error);
+      return [];
+    }
+  }
+
+  async createCustomWidget(widget: InsertCustomWidget): Promise<CustomWidget> {
+    const [newWidget] = await db
+      .insert(customWidgets)
+      .values({ ...widget, updatedAt: new Date() })
+      .returning();
+    return newWidget;
+  }
+
+  async updateCustomWidget(id: number, widget: Partial<InsertCustomWidget>): Promise<CustomWidget | undefined> {
+    const [updatedWidget] = await db
+      .update(customWidgets)
+      .set({ ...widget, updatedAt: new Date() })
+      .where(eq(customWidgets.id, id))
+      .returning();
+    return updatedWidget || undefined;
+  }
+
+  async deleteCustomWidget(id: number, userId: number): Promise<boolean> {
+    // Soft delete by setting isActive to false, but also verify ownership
+    const [deletedWidget] = await db
+      .update(customWidgets)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(eq(customWidgets.id, id), eq(customWidgets.userId, userId)))
+      .returning();
+    return !!deletedWidget;
+  }
+
+  // User preferences management
+  async getUserPreference(userId: number, preferenceType: string, preferenceKey?: string): Promise<UserPreference[]> {
+    try {
+      const conditions = [
+        eq(userPreferences.userId, userId),
+        eq(userPreferences.preferenceType, preferenceType)
+      ];
+      
+      if (preferenceKey) {
+        conditions.push(eq(userPreferences.preferenceKey, preferenceKey));
+      }
+
+      return await db
+        .select()
+        .from(userPreferences)
+        .where(and(...conditions))
+        .orderBy(userPreferences.preferenceKey);
+    } catch (error) {
+      console.error('Error fetching user preferences:', error);
+      return [];
+    }
+  }
+
+  async setUserPreference(userId: number, preferenceType: string, preferenceKey: string, preferenceValue: any): Promise<UserPreference> {
+    try {
+      // Use INSERT ... ON CONFLICT to handle upsert
+      const [preference] = await db
+        .insert(userPreferences)
+        .values({
+          userId,
+          preferenceType,
+          preferenceKey,
+          preferenceValue: preferenceValue,
+          updatedAt: new Date()
+        })
+        .onConflictDoUpdate({
+          target: [userPreferences.userId, userPreferences.preferenceType, userPreferences.preferenceKey],
+          set: {
+            preferenceValue: preferenceValue,
+            updatedAt: new Date()
+          }
+        })
+        .returning();
+      
+      return preference;
+    } catch (error) {
+      console.error('Error setting user preference:', error);
+      throw error;
+    }
+  }
+
+  async deleteUserPreference(userId: number, preferenceType: string, preferenceKey?: string): Promise<boolean> {
+    try {
+      const conditions = [
+        eq(userPreferences.userId, userId),
+        eq(userPreferences.preferenceType, preferenceType)
+      ];
+      
+      if (preferenceKey) {
+        conditions.push(eq(userPreferences.preferenceKey, preferenceKey));
+      }
+
+      const result = await db
+        .delete(userPreferences)
+        .where(and(...conditions));
+      
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error('Error deleting user preference:', error);
+      return false;
     }
   }
 

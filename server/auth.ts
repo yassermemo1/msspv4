@@ -68,6 +68,11 @@ export async function setupAuth(app: Express) {
   // Determine if we should use secure cookies based on environment and actual usage
   const isSecure = process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true';
   
+  // Session durations
+  const defaultMaxAge = parseInt(process.env.SESSION_MAX_AGE || '86400000'); // 24 hours
+  const rememberMeMaxAge = parseInt(process.env.REMEMBER_ME_MAX_AGE || '2592000000'); // 30 days
+  const rememberMeEnabled = process.env.REMEMBER_ME_ENABLED === 'true';
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "fallback-secret-key-for-development",
     resave: false,
@@ -77,7 +82,7 @@ export async function setupAuth(app: Express) {
     cookie: {
       secure: isSecure, // Only require HTTPS if explicitly enabled
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: defaultMaxAge, // Default session duration
       sameSite: isSecure ? 'strict' : 'lax', // Use 'lax' for HTTP
       path: '/',
       domain: undefined, // Let browser set domain automatically
@@ -89,6 +94,9 @@ export async function setupAuth(app: Express) {
   console.log("Secure cookies:", isSecure);
   console.log("SameSite policy:", sessionSettings.cookie?.sameSite);
   console.log("Environment:", process.env.NODE_ENV);
+  console.log("Default session duration:", defaultMaxAge / 1000 / 60, "minutes");
+  console.log("Remember me duration:", rememberMeMaxAge / 1000 / 60 / 60 / 24, "days");
+  console.log("Remember me enabled:", rememberMeEnabled);
   console.log("==============================");
 
   app.use(session(sessionSettings));
@@ -196,7 +204,16 @@ export async function setupAuth(app: Express) {
     console.log("=== LOGIN SUCCESS ===");
     console.log("User logged in:", req.user?.email);
     console.log("Session ID:", req.sessionID);
+    console.log("Remember me:", req.body.rememberMe);
     console.log("Session before save:", req.session);
+    
+    // Extend session duration if remember me is enabled
+    if (rememberMeEnabled && req.body.rememberMe) {
+      if (req.session.cookie) {
+        req.session.cookie.maxAge = rememberMeMaxAge;
+        console.log("Extended session duration to:", rememberMeMaxAge / 1000 / 60 / 60 / 24, "days");
+      }
+    }
     
     req.session.save((err) => {
       if (err) {
@@ -209,7 +226,11 @@ export async function setupAuth(app: Express) {
       console.log("Is authenticated after save:", req.isAuthenticated());
       console.log("===================");
       
-      res.status(200).json(req.user);
+      res.status(200).json({
+        ...req.user,
+        rememberMe: req.body.rememberMe,
+        sessionDuration: req.session.cookie?.maxAge
+      });
     });
   });
 
@@ -258,6 +279,15 @@ export async function setupAuth(app: Express) {
         console.log("LDAP user logged in:", user.email);
         console.log("Session ID:", req.sessionID);
         console.log("Auth provider:", user.authProvider);
+        console.log("Remember me:", req.body.rememberMe);
+        
+        // Extend session duration if remember me is enabled
+        if (rememberMeEnabled && req.body.rememberMe) {
+          if (req.session.cookie) {
+            req.session.cookie.maxAge = rememberMeMaxAge;
+            console.log("Extended LDAP session duration to:", rememberMeMaxAge / 1000 / 60 / 60 / 24, "days");
+          }
+        }
         
         req.session.save((saveErr) => {
           if (saveErr) {
@@ -269,7 +299,11 @@ export async function setupAuth(app: Express) {
           console.log("Is authenticated after save:", req.isAuthenticated());
           console.log("=========================");
           
-          res.status(200).json(user);
+          res.status(200).json({
+            ...user,
+            rememberMe: req.body.rememberMe,
+            sessionDuration: req.session.cookie?.maxAge
+          });
         });
       });
     })(req, res, next);

@@ -1,12 +1,19 @@
-import { Router } from 'express';
-import { getPlugin, listPlugins, getAllInstances } from './plugins/plugin-manager';
+import express from 'express';
+import { 
+  listPlugins, 
+  getPlugin, 
+  getAllInstances, 
+  updatePluginConfig,
+  PluginInstance,
+  PluginConfig
+} from './plugins/plugin-manager';
 import { db } from './db';
 import { savedQueries } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
-export const pluginRoutes = Router();
+const pluginRoutes = express.Router();
 
-// Middleware for authentication (import from routes.ts if needed)
+// Middleware for authentication
 function requireAuth(req: any, res: any, next: any) {
   if (req.isAuthenticated && req.isAuthenticated()) {
     return next();
@@ -81,6 +88,47 @@ pluginRoutes.get('/:pluginName/instances', (req, res) => {
     res.json({ instances });
   } catch (error) {
     res.status(500).json({ message: 'Failed to get plugin instances' });
+  }
+});
+
+// Test endpoint without authentication (for testing only)
+pluginRoutes.post('/:pluginName/instances/:instanceId/test-query', async (req, res) => {
+  try {
+    const { pluginName, instanceId } = req.params;
+    const { query = '__health_check__' } = req.body;
+    console.log(`🔍 Testing query for plugin: ${pluginName}, instance: ${instanceId}, query: ${query}`);
+    
+    const plugin = getPlugin(pluginName);
+    if (!plugin) {
+      return res.status(404).json({ message: 'Plugin not found' });
+    }
+    
+    const instance = plugin.getInstance(instanceId);
+    if (!instance) {
+      return res.status(404).json({ message: 'Instance not found' });
+    }
+    
+    const startTime = Date.now();
+    const data = await plugin.executeQuery(query, 'GET', instanceId);
+    const responseTime = Date.now() - startTime;
+    
+    res.json({
+      success: true,
+      data,
+      metadata: {
+        query,
+        responseTime: `${responseTime}ms`,
+        dataType: typeof data,
+        recordCount: Array.isArray(data) ? data.length : (data && typeof data === 'object' && 'total' in data) ? (data as any).total : null
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error instanceof Error ? error.message : 'Query execution failed',
+      error: error instanceof Error ? error.name : 'Unknown error'
+    });
   }
 });
 
@@ -251,8 +299,8 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/validate-query', requireAu
     // Basic validation (can be enhanced per plugin type)
     const validation = {
       isValid: true,
-      warnings: [],
-      suggestions: []
+      warnings: [] as string[],
+      suggestions: [] as string[]
     };
     
     // Plugin-specific validation
@@ -332,7 +380,7 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
         method,
         responseTime: `${responseTime}ms`,
         dataType: typeof data,
-        recordCount: Array.isArray(data) ? data.length : (data && typeof data === 'object' && data.total) ? data.total : null,
+        recordCount: Array.isArray(data) ? data.length : (data && typeof data === 'object' && 'total' in data) ? (data as any).total : null,
         instance: {
           id: instance.id,
           name: instance.name
@@ -394,14 +442,18 @@ pluginRoutes.get('/saved-queries', requireAuth, async (req, res) => {
   try {
     const { pluginName, instanceId } = req.query;
     
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    
     let whereClause = eq(savedQueries.userId, req.user.id);
     
     if (pluginName) {
-      whereClause = and(whereClause, eq(savedQueries.pluginName, pluginName as string));
+      whereClause = and(whereClause, eq(savedQueries.pluginName, pluginName as string))!;
     }
     
     if (instanceId) {
-      whereClause = and(whereClause, eq(savedQueries.instanceId, instanceId as string));
+      whereClause = and(whereClause, eq(savedQueries.instanceId, instanceId as string))!;
     }
     
     const queries = await db.select().from(savedQueries).where(whereClause);
@@ -417,6 +469,10 @@ pluginRoutes.post('/saved-queries/:queryId/execute', requireAuth, async (req, re
   try {
     const { queryId } = req.params;
     const { opts = {} } = req.body;
+    
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
     
     const [savedQuery] = await db.select().from(savedQueries)
       .where(and(
@@ -558,7 +614,10 @@ pluginRoutes.put('/instances/:pluginName/:instanceId', (req, res) => {
       id: instanceId // Ensure ID doesn't change
     };
     
-    console.log(`🔧 Updated plugin instance: ${pluginName}/${instanceId}`);
+    // Save the updated configuration to file
+    updatePluginConfig(pluginName, plugin.config);
+    
+    console.log(`🔧 Updated and saved plugin instance: ${pluginName}/${instanceId}`);
     
     res.json({ 
       success: true, 
@@ -566,7 +625,10 @@ pluginRoutes.put('/instances/:pluginName/:instanceId', (req, res) => {
     });
   } catch (error) {
     console.error('Failed to update plugin instance:', error);
-    res.status(500).json({ message: 'Failed to update instance' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update instance' 
+    });
   }
 });
 
@@ -604,8 +666,8 @@ pluginRoutes.post('/instances/:pluginName/:instanceId/test', async (req, res) =>
       res.json({
         success: false,
         connected: false,
-        message: testError.message || 'Connection failed',
-        error: testError.message
+        message: testError instanceof Error ? testError.message : 'Connection failed',
+        error: testError instanceof Error ? testError.message : 'Unknown error'
       });
     }
   } catch (error) {
@@ -633,7 +695,10 @@ pluginRoutes.post('/instances/:pluginName/:instanceId/toggle', (req, res) => {
     // Update the active status
     plugin.config.instances[instanceIndex].isActive = isActive;
     
-    console.log(`🔄 ${isActive ? 'Activated' : 'Deactivated'} plugin instance: ${pluginName}/${instanceId}`);
+    // Save the updated configuration to file
+    updatePluginConfig(pluginName, plugin.config);
+    
+    console.log(`🔄 ${isActive ? 'Activated' : 'Deactivated'} and saved plugin instance: ${pluginName}/${instanceId}`);
     
     res.json({ 
       success: true, 
@@ -641,9 +706,12 @@ pluginRoutes.post('/instances/:pluginName/:instanceId/toggle', (req, res) => {
     });
   } catch (error) {
     console.error('Failed to toggle plugin instance:', error);
-    res.status(500).json({ message: 'Failed to toggle instance' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to toggle instance' 
+    });
   }
-}); 
+});
 
 // ========================================
 // PLUGIN INSTANCE CREATION ENDPOINTS
@@ -700,7 +768,10 @@ pluginRoutes.post('/instances/:pluginName', requireAuth, (req, res) => {
     // Add instance to plugin config
     plugin.config.instances.push(newInstance);
     
-    console.log(`✅ Created new plugin instance: ${pluginName}/${instanceId}`);
+    // Save the updated configuration to file
+    updatePluginConfig(pluginName, plugin.config);
+    
+    console.log(`✅ Created and saved new plugin instance: ${pluginName}/${instanceId}`);
     
     res.json({ 
       success: true, 
@@ -742,7 +813,10 @@ pluginRoutes.delete('/instances/:pluginName/:instanceId', requireAuth, (req, res
     // Remove the instance
     plugin.config.instances.splice(instanceIndex, 1);
     
-    console.log(`🗑️ Deleted plugin instance: ${pluginName}/${instanceId}`);
+    // Save the updated configuration to file
+    updatePluginConfig(pluginName, plugin.config);
+    
+    console.log(`🗑️ Deleted and saved plugin instance: ${pluginName}/${instanceId}`);
     
     res.json({ 
       success: true, 
@@ -782,3 +856,5 @@ pluginRoutes.get('/types', (req, res) => {
     });
   }
 });
+
+export default pluginRoutes;
