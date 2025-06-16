@@ -33,17 +33,22 @@ import { useToast } from '@/hooks/use-toast';
 interface AuditLog {
   id: number;
   userId: number;
-  username?: string;
-  userEmail?: string;
+  userName?: string;
+  userFullName?: string;
+  userFirstName?: string;
+  userLastName?: string;
   action: string;
-  resourceType: string;
-  resourceId?: number;
-  resourceName?: string;
+  entityType: string;
+  entityId?: number;
+  entityName?: string;
+  description: string;
+  category: string;
+  severity: string;
   ipAddress: string;
   userAgent: string;
+  sessionId?: string;
   timestamp: string;
-  details?: any;
-  status: 'success' | 'failure';
+  metadata?: any;
 }
 
 interface SecurityEvent {
@@ -112,12 +117,12 @@ export default function AuditManagementPage() {
     );
   }
 
-  const { data: auditLogs = [], isLoading: loadingAuditLogs, refetch: refetchAuditLogs } = useQuery<AuditLog[]>({
+  const { data: auditLogsResponse = { logs: [], totalCount: 0, hasMore: false }, isLoading: loadingAuditLogs, refetch: refetchAuditLogs } = useQuery<{ logs: AuditLog[], totalCount: number, hasMore: boolean }>({
     queryKey: ['/api/audit-logs', { dateRange, actionFilter, searchTerm }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (dateRange !== 'all') params.append('dateRange', dateRange);
-      if (actionFilter !== 'all') params.append('actionFilter', actionFilter);
+      if (actionFilter !== 'all') params.append('action', actionFilter);
       if (searchTerm) params.append('searchTerm', searchTerm);
       
       const res = await fetch(`/api/audit-logs?${params.toString()}`, {
@@ -130,6 +135,8 @@ export default function AuditManagementPage() {
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnWindowFocus: false,
   });
+  
+  const auditLogs = auditLogsResponse.logs;
 
   const { data: securityEvents = [], isLoading: loadingSecurityEvents, refetch: refetchSecurityEvents } = useQuery<SecurityEvent[]>({
     queryKey: ['/api/security-events', { dateRange, severityFilter, searchTerm }],
@@ -414,10 +421,10 @@ export default function AuditManagementPage() {
                         <TableHead>Timestamp</TableHead>
                         <TableHead>User</TableHead>
                         <TableHead>Action</TableHead>
-                        <TableHead>Resource</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Entity</TableHead>
+                        <TableHead>Description</TableHead>
                         <TableHead>IP Address</TableHead>
-                        <TableHead>Details</TableHead>
+                        <TableHead>Category</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -441,8 +448,8 @@ export default function AuditManagementPage() {
                             </TableCell>
                             <TableCell>
                               <div>
-                                <div className="font-medium">{log.username || 'Unknown'}</div>
-                                <div className="text-sm text-gray-500">{log.userEmail}</div>
+                                <div className="font-medium">{log.userName || 'System'}</div>
+                                <div className="text-sm text-gray-500">{log.userFullName}</div>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -452,29 +459,22 @@ export default function AuditManagementPage() {
                             </TableCell>
                             <TableCell>
                               <div>
-                                <div className="font-medium">{log.resourceType}</div>
-                                {log.resourceName && (
-                                  <div className="text-sm text-gray-500">{log.resourceName}</div>
+                                <div className="font-medium">{log.entityType}</div>
+                                {log.entityName && (
+                                  <div className="text-sm text-gray-500">{log.entityName}</div>
                                 )}
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(log.status)}
-                                <span className={log.status === 'success' ? 'text-green-600' : 'text-red-600'}>
-                                  {log.status}
-                                </span>
-                              </div>
+                              <div className="text-sm">{log.description}</div>
                             </TableCell>
                             <TableCell className="font-mono text-sm">
                               {log.ipAddress}
                             </TableCell>
                             <TableCell>
-                              {log.details && (
-                                <Button variant="outline" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              )}
+                              <Badge className="bg-gray-100 text-gray-800">
+                                {log.category}
+                              </Badge>
                             </TableCell>
                           </TableRow>
                         ))

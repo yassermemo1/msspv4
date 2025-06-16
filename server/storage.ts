@@ -25,7 +25,7 @@ import {
   documents,
   documentVersions,
   documentAccess,
-  clientExternalMappings,
+  // clientExternalMappings, // removed deprecated external integrations
 
   type User,
   type InsertUser,
@@ -77,8 +77,6 @@ import {
   type InsertDocumentVersion,
   type DocumentAccess,
   type InsertDocumentAccess,
-  type ClientExternalMapping,
-  type InsertClientExternalMapping,
   PaginatedResponse,
   PaginationParams,
   ScopeDefinitionTemplateResponse,
@@ -258,14 +256,6 @@ export interface IStorage {
   getDocumentAccess(documentId: number): Promise<DocumentAccess[]>;
   createDocumentAccess(access: InsertDocumentAccess): Promise<DocumentAccess>;
   deleteDocumentAccess(id: number): Promise<boolean>;
-  
-  // API Aggregator methods
-  getAllClientExternalMappings(): Promise<(ClientExternalMapping & { clientName: string })[]>;
-  getClientExternalMappings(clientId: number): Promise<ClientExternalMapping[]>;
-  getClientExternalMapping(id: number): Promise<ClientExternalMapping | undefined>;
-  createClientExternalMapping(mapping: InsertClientExternalMapping): Promise<ClientExternalMapping>;
-  updateClientExternalMapping(id: number, mapping: Partial<InsertClientExternalMapping>): Promise<ClientExternalMapping | undefined>;
-  deleteClientExternalMapping(id: number): Promise<boolean>;
   
   // Service helper methods
   getClientByName(name: string): Promise<Client | undefined>;
@@ -458,7 +448,7 @@ export class DatabaseStorage implements IStorage {
         (
           SELECT COUNT(*)
           FROM ${contracts} ct
-          WHERE ct."clientId" = c.id AND ct."deletedAt" IS NULL
+          WHERE ct."clientId" = c.id AND ct."status" <> 'archived'
         ) AS "contractsCount",
         (
           SELECT COUNT(*)
@@ -727,7 +717,12 @@ export class DatabaseStorage implements IStorage {
 
   // Contracts
   async getAllContracts(): Promise<Contract[]> {
-    return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+    try {
+      return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+    } catch (err) {
+      console.error('⚠️ getAllContracts DB error, returning empty list:', err);
+      return [];
+    }
   }
 
   async getContract(id: number): Promise<Contract | undefined> {
@@ -898,12 +893,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLicensePool(id: number, licensePool: Partial<InsertLicensePool>): Promise<LicensePool | undefined> {
-    // If totalLicenses is being updated, recalculate availableLicenses
-    let updateData = { ...licensePool };
+    // Allow adding availableLicenses even though it isn\'t in InsertLicensePool
+    let updateData: Partial<InsertLicensePool> & { availableLicenses?: number } = { ...licensePool };
     
     if (licensePool.totalLicenses !== undefined) {
       const availableLicenses = await this.calculateAvailableLicenses(id, licensePool.totalLicenses);
-      updateData.availableLicenses = availableLicenses;
+      (updateData as any).availableLicenses = availableLicenses;
     }
 
     const [updatedLicensePool] = await db
@@ -1484,72 +1479,9 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount || 0) > 0;
   }
   
-  // API Aggregator methods
-  // Client External Mappings
-  async getAllClientExternalMappings(): Promise<(ClientExternalMapping & { clientName: string })[]> {
-    return await db
-      .select({
-        id: clientExternalMappings.id,
-        clientId: clientExternalMappings.clientId,
-        systemName: clientExternalMappings.systemName,
-        externalIdentifier: clientExternalMappings.externalIdentifier,
-        metadata: clientExternalMappings.metadata,
-        isActive: clientExternalMappings.isActive,
-        createdAt: clientExternalMappings.createdAt,
-        updatedAt: clientExternalMappings.updatedAt,
-        clientName: clients.name
-      })
-      .from(clientExternalMappings)
-      .leftJoin(clients, eq(clientExternalMappings.clientId, clients.id))
-      .orderBy(clientExternalMappings.systemName, clientExternalMappings.id);
-  }
+  // Removed API Aggregator methods (external integrations deprecated)
 
-  async getClientExternalMappings(clientId: number): Promise<ClientExternalMapping[]> {
-    // Fetch explicit per-client mappings first
-    const explicitMappings: ClientExternalMapping[] = await db
-      .select()
-      .from(clientExternalMappings)
-      .where(eq(clientExternalMappings.clientId, clientId))
-      .orderBy(clientExternalMappings.id);
-
-    // Index explicit mappings by systemName for quick lookup
-    const mappingIndex = new Map<string, ClientExternalMapping>(
-      explicitMappings.map(m => [m.systemName, m])
-    );
-
-    // No external systems support anymore - just return explicit mappings
-
-    return Array.from(mappingIndex.values());
-  }
-
-  async getClientExternalMapping(id: number): Promise<ClientExternalMapping | undefined> {
-    const [mapping] = await db.select().from(clientExternalMappings).where(eq(clientExternalMappings.id, id));
-    return mapping || undefined;
-  }
-
-  async createClientExternalMapping(mapping: InsertClientExternalMapping): Promise<ClientExternalMapping> {
-    const [newMapping] = await db
-      .insert(clientExternalMappings)
-      .values(mapping)
-      .returning();
-    return newMapping;
-  }
-
-  async updateClientExternalMapping(id: number, mapping: Partial<InsertClientExternalMapping>): Promise<ClientExternalMapping | undefined> {
-    const [updatedMapping] = await db
-      .update(clientExternalMappings)
-      .set(mapping)
-      .where(eq(clientExternalMappings.id, id))
-      .returning();
-    return updatedMapping || undefined;
-  }
-
-  async deleteClientExternalMapping(id: number): Promise<boolean> {
-    const result = await db.delete(clientExternalMappings).where(eq(clientExternalMappings.id, id));
-    return (result.rowCount ?? 0) > 0;
-  }
-
-  // Additional methods for bulk import functionality
+  // Service helper methods
   async getClientByName(name: string): Promise<Client | undefined> {
     const result = await db.select().from(clients).where(eq(clients.name, name)).limit(1);
     return result[0];

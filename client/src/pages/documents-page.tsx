@@ -395,6 +395,18 @@ export default function DocumentsPage() {
     return previewableMimes.includes(mimeType);
   };
 
+  // Get file icon based on mime type
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType === 'application/pdf') return '📄';
+    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+    if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
+    if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📊';
+    if (mimeType.includes('zip') || mimeType.includes('compressed')) return '📦';
+    if (mimeType.startsWith('text/')) return '📃';
+    return '📎';
+  };
+
   // Share document handler
   const handleShare = async (doc: Document) => {
     try {

@@ -904,8 +904,6 @@ export const clientExternalMappings = pgTable("client_external_mappings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-
-
 // Advanced Search & Filtering System
 export const savedSearches = pgTable("saved_searches", {
   id: serial("id").primaryKey(),
@@ -1259,8 +1257,6 @@ export const fieldVisibilityConfig = pgTable("field_visibility_config", {
 export const insertFieldVisibilityConfigSchema = createInsertSchema(fieldVisibilityConfig);
 export type InsertFieldVisibilityConfig = z.infer<typeof insertFieldVisibilityConfigSchema>;
 export type FieldVisibilityConfig = typeof fieldVisibilityConfig.$inferSelect;
-
-
 
 // Saved Queries table for user-defined plugin queries
 export const savedQueries = pgTable("saved_queries", {

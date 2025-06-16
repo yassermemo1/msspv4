@@ -50,7 +50,7 @@ const CardPreview: React.FC<{
       Building, Users, FileText, BarChart3, DollarSign, Shield
     };
     const IconComponent = icons[iconName] || Building;
-    return <IconComponent className="h-4 w-4" />;
+    return IconComponent;
   };
 
   const getColorClasses = (color: string) => {
@@ -72,7 +72,10 @@ const CardPreview: React.FC<{
       {/* Top controls */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1">
-          {getIconComponent(card.config.icon || 'Building')}
+          {(() => {
+            const Icon = getIconComponent(card.config.icon || 'Building');
+            return <Icon className="h-4 w-4" />;
+          })()}
           <Badge variant={card.visible ? 'default' : 'secondary'} className="text-xs">
             {card.size}
           </Badge>

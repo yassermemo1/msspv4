@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-06-16T06:36:09.064Z",
+  "timestamp": "2025-06-16T09:44:56.805Z",
   "testSummary": {
-    "total": 54,
-    "passed": 54,
+    "total": 60,
+    "passed": 60,
     "failed": 0,
     "skipped": 0
   },
@@ -18,18 +18,23 @@
       "failed": 0
     },
     "contracts": {
-      "total": 3,
-      "passed": 3,
-      "failed": 0
-    },
-    "services": {
       "total": 4,
       "passed": 4,
       "failed": 0
     },
+    "services": {
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    },
     "service-scopes": {
-      "total": 9,
-      "passed": 9,
+      "total": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "proposals": {
+      "total": 1,
+      "passed": 1,
       "failed": 0
     },
     "license-pools": {
@@ -68,8 +73,8 @@
       "failed": 0
     },
     "permissions": {
-      "total": 1,
-      "passed": 1,
+      "total": 2,
+      "passed": 2,
       "failed": 0
     },
     "search": {
@@ -107,9 +112,9 @@
       "status": 200,
       "success": "admin@mssp.local",
       "error": null,
-      "responseTime": 76,
+      "responseTime": 121,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:09.144Z"
+      "timestamp": "2025-06-16T09:44:56.928Z"
     },
     {
       "name": "Get Current User",
@@ -118,9 +123,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 3,
+      "responseTime": 7,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:09.147Z"
+      "timestamp": "2025-06-16T09:44:56.935Z"
     },
     {
       "name": "Get User Settings",
@@ -131,7 +136,7 @@
       "error": null,
       "responseTime": 3,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:09.201Z"
+      "timestamp": "2025-06-16T09:44:56.989Z"
     },
     {
       "name": "Update User Profile",
@@ -140,9 +145,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 10,
+      "responseTime": 8,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:09.262Z"
+      "timestamp": "2025-06-16T09:44:57.048Z"
     },
     {
       "name": "Test Cookie",
@@ -151,9 +156,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 5,
+      "responseTime": 4,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:09.318Z"
+      "timestamp": "2025-06-16T09:44:57.103Z"
     },
     {
       "name": "Get All Clients",
@@ -162,9 +167,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 10,
+      "responseTime": 11,
       "group": "clients",
-      "timestamp": "2025-06-16T06:36:09.379Z"
+      "timestamp": "2025-06-16T09:44:57.164Z"
     },
     {
       "name": "Get Archived Clients",
@@ -173,9 +178,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 8,
+      "responseTime": 7,
       "group": "clients",
-      "timestamp": "2025-06-16T06:36:09.439Z"
+      "timestamp": "2025-06-16T09:44:57.221Z"
     },
     {
       "name": "Get All Contracts",
@@ -184,9 +189,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 7,
+      "responseTime": 4,
       "group": "contracts",
-      "timestamp": "2025-06-16T06:36:09.497Z"
+      "timestamp": "2025-06-16T09:44:57.275Z"
     },
     {
       "name": "Get All Services",
@@ -195,9 +200,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 8,
+      "responseTime": 5,
       "group": "services",
-      "timestamp": "2025-06-16T06:36:09.556Z"
+      "timestamp": "2025-06-16T09:44:57.330Z"
     },
     {
       "name": "Get Service Categories",
@@ -208,7 +213,7 @@
       "error": null,
       "responseTime": 5,
       "group": "services",
-      "timestamp": "2025-06-16T06:36:09.613Z"
+      "timestamp": "2025-06-16T09:44:57.385Z"
     },
     {
       "name": "Get All Service Scopes",
@@ -217,9 +222,31 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 12,
+      "responseTime": 6,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.676Z"
+      "timestamp": "2025-06-16T09:44:57.441Z"
+    },
+    {
+      "name": "Get Proposals",
+      "method": "GET",
+      "endpoint": "/api/proposals",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "proposals",
+      "timestamp": "2025-06-16T09:44:57.496Z"
+    },
+    {
+      "name": "Get Service Scopes for Contract",
+      "method": "GET",
+      "endpoint": "/api/contracts/1/service-scopes",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 4,
+      "group": "service-scopes",
+      "timestamp": "2025-06-16T09:44:57.551Z"
     },
     {
       "name": "Search Service Scopes",
@@ -228,9 +255,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 7,
+      "responseTime": 8,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.734Z"
+      "timestamp": "2025-06-16T09:44:57.610Z"
     },
     {
       "name": "Dynamic Service Scopes (No Params)",
@@ -239,9 +266,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 8,
+      "responseTime": 5,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.793Z"
+      "timestamp": "2025-06-16T09:44:57.665Z"
     },
     {
       "name": "Dynamic Service Scopes (With Pagination)",
@@ -252,7 +279,7 @@
       "error": null,
       "responseTime": 7,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.851Z"
+      "timestamp": "2025-06-16T09:44:57.723Z"
     },
     {
       "name": "Dynamic Service Scopes (With Sorting)",
@@ -261,9 +288,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 6,
+      "responseTime": 5,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.908Z"
+      "timestamp": "2025-06-16T09:44:57.778Z"
     },
     {
       "name": "Dynamic Service Scopes (With Filters)",
@@ -274,7 +301,7 @@
       "error": null,
       "responseTime": 6,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:09.966Z"
+      "timestamp": "2025-06-16T09:44:57.835Z"
     },
     {
       "name": "Get Variable Definitions",
@@ -285,7 +312,7 @@
       "error": null,
       "responseTime": 5,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:10.022Z"
+      "timestamp": "2025-06-16T09:44:57.889Z"
     },
     {
       "name": "Get Variable Stats",
@@ -294,9 +321,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 11,
+      "responseTime": 4,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:10.085Z"
+      "timestamp": "2025-06-16T09:44:57.943Z"
     },
     {
       "name": "Discover Variables",
@@ -305,9 +332,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 3,
+      "responseTime": 4,
       "group": "service-scopes",
-      "timestamp": "2025-06-16T06:36:10.139Z"
+      "timestamp": "2025-06-16T09:44:57.998Z"
     },
     {
       "name": "Get All License Pools",
@@ -316,9 +343,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 2,
+      "responseTime": 5,
       "group": "license-pools",
-      "timestamp": "2025-06-16T06:36:10.192Z"
+      "timestamp": "2025-06-16T09:44:58.053Z"
     },
     {
       "name": "Get All Hardware Assets",
@@ -327,9 +354,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 5,
       "group": "hardware-assets",
-      "timestamp": "2025-06-16T06:36:10.248Z"
+      "timestamp": "2025-06-16T09:44:58.107Z"
     },
     {
       "name": "Get All Documents",
@@ -338,9 +365,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 5,
       "group": "documents",
-      "timestamp": "2025-06-16T06:36:10.303Z"
+      "timestamp": "2025-06-16T09:44:58.162Z"
     },
     {
       "name": "Get Recent Activity",
@@ -349,9 +376,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 5,
+      "responseTime": 4,
       "group": "dashboard",
-      "timestamp": "2025-06-16T06:36:10.359Z"
+      "timestamp": "2025-06-16T09:44:58.217Z"
     },
     {
       "name": "Get Dashboard Statistics",
@@ -360,9 +387,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 7,
+      "responseTime": 8,
       "group": "dashboard",
-      "timestamp": "2025-06-16T06:36:10.417Z"
+      "timestamp": "2025-06-16T09:44:58.276Z"
     },
     {
       "name": "Get Certificates of Compliance",
@@ -373,7 +400,7 @@
       "error": null,
       "responseTime": 5,
       "group": "compliance",
-      "timestamp": "2025-06-16T06:36:10.473Z"
+      "timestamp": "2025-06-16T09:44:58.331Z"
     },
     {
       "name": "Get Individual Licenses",
@@ -382,9 +409,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 5,
       "group": "licenses",
-      "timestamp": "2025-06-16T06:36:10.529Z"
+      "timestamp": "2025-06-16T09:44:58.386Z"
     },
     {
       "name": "Get Field Visibility",
@@ -393,9 +420,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 6,
+      "responseTime": 4,
       "group": "system",
-      "timestamp": "2025-06-16T06:36:10.586Z"
+      "timestamp": "2025-06-16T09:44:58.440Z"
     },
     {
       "name": "Health Check",
@@ -404,9 +431,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 3,
+      "responseTime": 5,
       "group": "system",
-      "timestamp": "2025-06-16T06:36:10.640Z"
+      "timestamp": "2025-06-16T09:44:58.496Z"
     },
     {
       "name": "Version Info",
@@ -417,7 +444,7 @@
       "error": null,
       "responseTime": 3,
       "group": "system",
-      "timestamp": "2025-06-16T06:36:10.694Z"
+      "timestamp": "2025-06-16T09:44:58.549Z"
     },
     {
       "name": "Entity Relations Types",
@@ -426,9 +453,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "system",
-      "timestamp": "2025-06-16T06:36:10.750Z"
+      "timestamp": "2025-06-16T09:44:58.603Z"
     },
     {
       "name": "Get Page Permissions",
@@ -437,9 +464,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 6,
+      "responseTime": 4,
       "group": "permissions",
-      "timestamp": "2025-06-16T06:36:10.807Z"
+      "timestamp": "2025-06-16T09:44:58.658Z"
     },
     {
       "name": "Execute Search",
@@ -448,9 +475,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 3,
+      "responseTime": 4,
       "group": "search",
-      "timestamp": "2025-06-16T06:36:10.861Z"
+      "timestamp": "2025-06-16T09:44:58.713Z"
     },
     {
       "name": "Get Search History",
@@ -459,9 +486,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 5,
+      "responseTime": 4,
       "group": "search",
-      "timestamp": "2025-06-16T06:36:10.918Z"
+      "timestamp": "2025-06-16T09:44:58.767Z"
     },
     {
       "name": "Get Saved Searches",
@@ -470,9 +497,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 5,
+      "responseTime": 4,
       "group": "search",
-      "timestamp": "2025-06-16T06:36:10.974Z"
+      "timestamp": "2025-06-16T09:44:58.821Z"
     },
     {
       "name": "Get Audit Logs",
@@ -483,7 +510,7 @@
       "error": null,
       "responseTime": 3,
       "group": "audit",
-      "timestamp": "2025-06-16T06:36:11.028Z"
+      "timestamp": "2025-06-16T09:44:58.875Z"
     },
     {
       "name": "Get Team Assignments",
@@ -492,9 +519,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "teams",
-      "timestamp": "2025-06-16T06:36:11.084Z"
+      "timestamp": "2025-06-16T09:44:58.928Z"
     },
     {
       "name": "Get Change History",
@@ -503,9 +530,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "audit",
-      "timestamp": "2025-06-16T06:36:11.139Z"
+      "timestamp": "2025-06-16T09:44:58.982Z"
     },
     {
       "name": "Get Security Events",
@@ -514,9 +541,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "security",
-      "timestamp": "2025-06-16T06:36:11.194Z"
+      "timestamp": "2025-06-16T09:44:59.035Z"
     },
     {
       "name": "Get Data Access Logs",
@@ -525,9 +552,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 3,
+      "responseTime": 4,
       "group": "security",
-      "timestamp": "2025-06-16T06:36:11.248Z"
+      "timestamp": "2025-06-16T09:44:59.089Z"
     },
     {
       "name": "Create Client",
@@ -536,9 +563,9 @@
       "status": 201,
       "success": true,
       "error": null,
-      "responseTime": 10,
+      "responseTime": 8,
       "group": "clients",
-      "timestamp": "2025-06-16T06:36:11.310Z"
+      "timestamp": "2025-06-16T09:44:59.148Z"
     },
     {
       "name": "Create Service",
@@ -547,9 +574,9 @@
       "status": 201,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "services",
-      "timestamp": "2025-06-16T06:36:11.314Z"
+      "timestamp": "2025-06-16T09:44:59.151Z"
     },
     {
       "name": "Create Contract",
@@ -558,9 +585,9 @@
       "status": 201,
       "success": true,
       "error": null,
-      "responseTime": 15,
+      "responseTime": 8,
       "group": "contracts",
-      "timestamp": "2025-06-16T06:36:11.329Z"
+      "timestamp": "2025-06-16T09:44:59.159Z"
     },
     {
       "name": "Create Hardware Asset",
@@ -569,75 +596,108 @@
       "status": 201,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 3,
       "group": "hardware-assets",
-      "timestamp": "2025-06-16T06:36:11.333Z"
+      "timestamp": "2025-06-16T09:44:59.162Z"
     },
     {
       "name": "Update Client",
       "method": "PUT",
-      "endpoint": "/api/clients/61",
-      "status": 200,
-      "success": true,
-      "error": null,
-      "responseTime": 4,
-      "group": "clients",
-      "timestamp": "2025-06-16T06:36:11.337Z"
-    },
-    {
-      "name": "Update Contract",
-      "method": "PUT",
-      "endpoint": "/api/contracts/35",
+      "endpoint": "/api/clients/4",
       "status": 200,
       "success": true,
       "error": null,
       "responseTime": 5,
-      "group": "contracts",
-      "timestamp": "2025-06-16T06:36:11.345Z"
+      "group": "clients",
+      "timestamp": "2025-06-16T09:44:59.167Z"
     },
     {
-      "name": "Update Hardware Asset",
+      "name": "Update Service",
       "method": "PUT",
-      "endpoint": "/api/hardware-assets/20",
+      "endpoint": "/api/services/4",
       "status": 200,
       "success": true,
       "error": null,
       "responseTime": 2,
-      "group": "hardware-assets",
-      "timestamp": "2025-06-16T06:36:11.347Z"
+      "group": "services",
+      "timestamp": "2025-06-16T09:44:59.171Z"
     },
     {
-      "name": "Archive Hardware Asset",
-      "method": "DELETE",
-      "endpoint": "/api/hardware-assets/20",
-      "status": 200,
-      "success": true,
-      "error": null,
-      "responseTime": 2,
-      "group": "hardware-assets",
-      "timestamp": "2025-06-16T06:36:11.350Z"
-    },
-    {
-      "name": "Archive Service",
-      "method": "DELETE",
-      "endpoint": "/api/services/40",
+      "name": "Patch Service",
+      "method": "PATCH",
+      "endpoint": "/api/services/4",
       "status": 200,
       "success": true,
       "error": null,
       "responseTime": 3,
       "group": "services",
-      "timestamp": "2025-06-16T06:36:11.353Z"
+      "timestamp": "2025-06-16T09:44:59.174Z"
+    },
+    {
+      "name": "Update Contract",
+      "method": "PUT",
+      "endpoint": "/api/contracts/4",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "contracts",
+      "timestamp": "2025-06-16T09:44:59.180Z"
+    },
+    {
+      "name": "Update Hardware Asset",
+      "method": "PUT",
+      "endpoint": "/api/hardware-assets/1",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T09:44:59.183Z"
+    },
+    {
+      "name": "Archive Hardware Asset",
+      "method": "DELETE",
+      "endpoint": "/api/hardware-assets/1",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 3,
+      "group": "hardware-assets",
+      "timestamp": "2025-06-16T09:44:59.186Z"
+    },
+    {
+      "name": "Archive Service",
+      "method": "DELETE",
+      "endpoint": "/api/services/4",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 2,
+      "group": "services",
+      "timestamp": "2025-06-16T09:44:59.188Z"
+    },
+    {
+      "name": "Archive Contract",
+      "method": "DELETE",
+      "endpoint": "/api/contracts/4",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 6,
+      "group": "contracts",
+      "timestamp": "2025-06-16T09:44:59.196Z"
     },
     {
       "name": "Archive Client",
       "method": "DELETE",
-      "endpoint": "/api/clients/61",
-      "status": 400,
+      "endpoint": "/api/clients/4",
+      "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 5,
+      "responseTime": 7,
       "group": "clients",
-      "timestamp": "2025-06-16T06:36:11.361Z"
+      "timestamp": "2025-06-16T09:44:59.203Z"
     },
     {
       "name": "Get Non-existent Client",
@@ -648,7 +708,7 @@
       "error": null,
       "responseTime": 2,
       "group": "error-scenarios",
-      "timestamp": "2025-06-16T06:36:11.363Z"
+      "timestamp": "2025-06-16T09:44:59.205Z"
     },
     {
       "name": "Get Non-existent Service",
@@ -659,7 +719,7 @@
       "error": null,
       "responseTime": 2,
       "group": "error-scenarios",
-      "timestamp": "2025-06-16T06:36:11.365Z"
+      "timestamp": "2025-06-16T09:44:59.207Z"
     },
     {
       "name": "Create Client with Invalid Data",
@@ -668,9 +728,9 @@
       "status": 201,
       "success": true,
       "error": null,
-      "responseTime": 4,
+      "responseTime": 5,
       "group": "error-scenarios",
-      "timestamp": "2025-06-16T06:36:11.369Z"
+      "timestamp": "2025-06-16T09:44:59.212Z"
     },
     {
       "name": "Search with Empty Query",
@@ -679,9 +739,20 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 1,
+      "responseTime": 2,
       "group": "error-scenarios",
-      "timestamp": "2025-06-16T06:36:11.370Z"
+      "timestamp": "2025-06-16T09:44:59.214Z"
+    },
+    {
+      "name": "Reorder Page Permissions",
+      "method": "PUT",
+      "endpoint": "/api/page-permissions/reorder",
+      "status": 200,
+      "success": true,
+      "error": null,
+      "responseTime": 8,
+      "group": "permissions",
+      "timestamp": "2025-06-16T09:44:59.225Z"
     },
     {
       "name": "Logout",
@@ -690,9 +761,9 @@
       "status": 200,
       "success": true,
       "error": null,
-      "responseTime": 2,
+      "responseTime": 3,
       "group": "authentication",
-      "timestamp": "2025-06-16T06:36:11.372Z"
+      "timestamp": "2025-06-16T09:44:59.228Z"
     }
   ]
 }

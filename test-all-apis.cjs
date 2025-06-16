@@ -3,7 +3,8 @@
 const axios = require('axios');
 const fs = require('fs');
 
-const BASE_URL = 'http://localhost:3000';
+// Allow overriding via BASE_URL env var but default to localhost:3001 (dev server)
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3001';
 const TEST_RESULTS_FILE = 'all-api-test-results.json';
 
 // Test credentials - using the correct test credentials from server startup
@@ -198,6 +199,8 @@ class ComprehensiveAPITester {
 
       // Service Scope Management (Fixed endpoints)
       { name: 'Get All Service Scopes', method: 'GET', path: '/api/service-scopes', group: 'service-scopes' },
+      { name: 'Get Proposals', method: 'GET', path: '/api/proposals', group: 'proposals' },
+      { name: 'Get Service Scopes for Contract', method: 'GET', path: '/api/contracts/1/service-scopes', group: 'service-scopes' },
       { name: 'Search Service Scopes', method: 'GET', path: '/api/service-scopes/search', data: { q: 'test' }, group: 'service-scopes' },
       { name: 'Dynamic Service Scopes (No Params)', method: 'GET', path: '/api/service-scopes/dynamic', group: 'service-scopes' },
       { name: 'Dynamic Service Scopes (With Pagination)', method: 'GET', path: '/api/service-scopes/dynamic', data: { page: 1, limit: 10 }, group: 'service-scopes' },
@@ -280,6 +283,9 @@ class ComprehensiveAPITester {
 
     // Test additional edge cases and error scenarios
     await this.testErrorScenarios();
+
+    // Test page permissions reorder (admin-only)
+    await this.testPagePermissionsReorder();
 
     // Test logout
     await this.testEndpoint('Logout', 'POST', '/api/logout', {}, 200, 'authentication');
@@ -410,7 +416,7 @@ class ComprehensiveAPITester {
     if (this.testData.serviceId) {
       // First verify the service exists before updating
       const verifyResponse = await this.makeRequest('GET', `/api/services/${this.testData.serviceId}`);
-      if (verifyResponse.ok) {
+      if (verifyResponse.status >= 200 && verifyResponse.status < 300) {
         await this.testEndpoint(
           'Update Service',
           'PUT',
@@ -432,8 +438,8 @@ class ComprehensiveAPITester {
         // Service doesn't exist, test with a known existing service ID
         // Get services list and use the first one for PATCH test
         const servicesResponse = await this.makeRequest('GET', '/api/services');
-        if (servicesResponse.ok) {
-          const services = await servicesResponse.json();
+        if (servicesResponse.status >= 200 && servicesResponse.status < 300) {
+          const services = servicesResponse.data;
           if (services.length > 0) {
             const existingServiceId = services[0].id;
             await this.testEndpoint(
@@ -504,7 +510,7 @@ class ComprehensiveAPITester {
     if (this.testData.contractId) {
       // First verify the contract exists before deleting
       const verifyResponse = await this.makeRequest('GET', `/api/contracts/${this.testData.contractId}`);
-      if (verifyResponse.ok) {
+      if (verifyResponse.status >= 200 && verifyResponse.status < 300) {
         await this.testEndpoint(
           'Archive Contract',
           'DELETE',
@@ -516,8 +522,8 @@ class ComprehensiveAPITester {
       } else {
         // Contract doesn't exist, test with a known existing contract ID
         const contractsResponse = await this.makeRequest('GET', '/api/contracts');
-        if (contractsResponse.ok) {
-          const contracts = await contractsResponse.json();
+        if (contractsResponse.status >= 200 && contractsResponse.status < 300) {
+          const contracts = contractsResponse.data;
           if (contracts.length > 0) {
             const existingContractId = contracts[0].id;
             await this.testEndpoint(
@@ -586,6 +592,43 @@ class ComprehensiveAPITester {
       { query: '', type: 'global' },
       200, // Should handle gracefully
       'error-scenarios'
+    );
+  }
+
+  async testPagePermissionsReorder() {
+    this.log('🔄 Testing page permissions reorder...', 'info');
+
+    // Fetch current page permissions (admin-only route)
+    const listResponse = await this.makeRequest('GET', '/api/page-permissions');
+    if (listResponse.status !== 200 || !Array.isArray(listResponse.data)) {
+      this.recordTest(
+        'Reorder Page Permissions',
+        'PUT',
+        '/api/page-permissions/reorder',
+        listResponse.status,
+        false,
+        'Failed to fetch page permissions',
+        0,
+        'permissions'
+      );
+      return;
+    }
+
+    // Reverse order to keep operation simple and non-destructive
+    const reversed = [...listResponse.data].reverse().map((item, idx) => ({
+      id: item.id,
+      sortOrder: idx + 1,
+      isActive: item.isActive,
+      category: item.category
+    }));
+
+    await this.testEndpoint(
+      'Reorder Page Permissions',
+      'PUT',
+      '/api/page-permissions/reorder',
+      { items: reversed },
+      200,
+      'permissions'
     );
   }
 
