@@ -189,7 +189,7 @@ export const contracts = pgTable("contracts", {
 });
 
 // Service scopes for each service within a contract
-export const serviceScopes = pgTable("service_scopes", {
+export const serviceScopes: any = pgTable("service_scopes", {
   id: serial("id").primaryKey(),
   contractId: integer("contract_id").notNull().references(() => contracts.id),
   serviceId: integer("service_id").references(() => services.id),
@@ -319,7 +319,7 @@ export const individualLicenses = pgTable("individual_licenses", {
 });
 
 // Service Authorization Forms (SAF)
-export const serviceAuthorizationForms = pgTable("service_authorization_forms", {
+export const serviceAuthorizationForms: any = pgTable("service_authorization_forms", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => clients.id).notNull(),
   contractId: integer("contract_id").references(() => contracts.id).notNull(),

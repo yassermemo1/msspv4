@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db } from '@/lib/db';
+import { db } from '../../db.js';
 import { 
   clients, 
   contracts, 
@@ -14,12 +14,8 @@ import {
   customFields,
   documents,
   serviceAuthorizationForms,
-  certificatesOfCompliance,
-  dataSources,
-  integratedData,
-  // externalSystems removed - deprecated
-  clientExternalMappings
-} from '@/lib/schema';
+  certificatesOfCompliance
+} from '../../../shared/schema.js';
 import { sql, count, sum, avg, max, min, and, eq, like, gte, lte, ne, isNull, isNotNull } from 'drizzle-orm';
 
 // Enhanced table mapping with all schema tables
@@ -44,11 +40,7 @@ const TABLE_MAP = {
   users,
   custom_fields: customFields,
   
-  // Integration and external system tables
-  data_sources: dataSources,
-  integrated_data: integratedData,
-      // external_systems removed - deprecated
-  client_external_mappings: clientExternalMappings,
+  // Integration and external system tables (removed)
 };
 
 // Comparison data processing
@@ -412,18 +404,19 @@ async function getEnhancedMetadata(table: string, tableSchema: any, whereClause:
         // License utilization
         const utilizationData = await db
           .select({
-            poolType: licensePools.poolType,
+            licenseType: licensePools.licenseType,
             totalLicenses: sum(licensePools.totalLicenses),
-            usedLicenses: sum(licensePools.usedLicenses)
+            availableLicenses: sum(licensePools.availableLicenses)
           })
           .from(licensePools)
-          .groupBy(licensePools.poolType);
+          .groupBy(licensePools.licenseType);
         
         metadata.utilizationByType = utilizationData.map(pool => ({
-          type: pool.poolType,
-          total: pool.totalLicenses,
-          used: pool.usedLicenses,
-          utilization: pool.totalLicenses ? ((pool.usedLicenses / pool.totalLicenses) * 100).toFixed(1) : '0'
+          type: pool.licenseType,
+          total: Number(pool.totalLicenses) || 0,
+          available: Number(pool.availableLicenses) || 0,
+          used: (Number(pool.totalLicenses) || 0) - (Number(pool.availableLicenses) || 0),
+          utilization: pool.totalLicenses ? (((Number(pool.totalLicenses) - Number(pool.availableLicenses)) / Number(pool.totalLicenses)) * 100).toFixed(1) : '0'
         }));
         break;
 
@@ -433,17 +426,8 @@ async function getEnhancedMetadata(table: string, tableSchema: any, whereClause:
         break;
 
       case 'integrated_data':
-        // Data freshness
-        const dataFreshness = await db
-          .select({
-            dataSourceId: integratedData.dataSourceId,
-            lastSync: max(integratedData.syncedAt),
-            recordCount: count()
-          })
-          .from(integratedData)
-          .groupBy(integratedData.dataSourceId);
-        
-        metadata.dataFreshness = dataFreshness;
+        // Integrated data removed - deprecated
+        metadata.dataFreshness = [];
         break;
     }
   } catch (error) {

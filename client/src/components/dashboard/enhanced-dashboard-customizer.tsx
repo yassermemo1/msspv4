@@ -678,8 +678,8 @@ function CardCreatorForm({
             <div>
               <Label htmlFor="aggregation">Aggregation</Label>
               <Select 
-                value={card.config?.aggregation || 'count'} 
-                onValueChange={(value) => updateConfig({ aggregation: value as 'count' | 'sum' | 'average' | 'max' | 'min' | { function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX'; field?: string; } })}
+                value={typeof card.config?.aggregation === 'string' ? card.config.aggregation : 'count'} 
+                onValueChange={(value) => updateConfig({ aggregation: value as 'count' | 'sum' | 'average' | 'max' | 'min' })}
               >
                 <SelectTrigger id="aggregation">
                   <SelectValue />

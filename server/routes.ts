@@ -4174,8 +4174,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get documents
   app.get("/api/documents", requireAuth, async (req, res, next) => {
     try {
-      // Return empty array for now - documents would need to be implemented
-      res.json([]);
+      const { clientId, documentType } = req.query;
+      
+      let whereConditions: any[] = [eq(documents.isActive, true)];
+      if (clientId) {
+        whereConditions.push(eq(documents.clientId, parseInt(clientId as string)));
+      }
+      if (documentType && documentType !== 'all') {
+        whereConditions.push(eq(documents.documentType, documentType as string));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const docs = await db
+        .select({
+          id: documents.id,
+          name: documents.name,
+          description: documents.description,
+          documentType: documents.documentType,
+          fileName: documents.fileName,
+          filePath: documents.filePath,
+          fileSize: documents.fileSize,
+          mimeType: documents.mimeType,
+          version: documents.version,
+          isActive: documents.isActive,
+          clientId: documents.clientId,
+          contractId: documents.contractId,
+          tags: documents.tags,
+          expirationDate: documents.expirationDate,
+          complianceType: documents.complianceType,
+          uploadedBy: documents.uploadedBy,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          clientName: clients.name,
+          contractName: contracts.name
+        })
+        .from(documents)
+        .leftJoin(clients, eq(documents.clientId, clients.id))
+        .leftJoin(contracts, eq(documents.contractId, contracts.id))
+        .where(whereClause)
+        .orderBy(desc(documents.createdAt));
+
+      res.json(docs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get document by ID
+  app.get("/api/documents/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      res.json(document);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Upload document
+  app.post("/api/documents/upload", requireAuth, upload.single('file'), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const { name, documentType = 'general', clientId, contractId, description, tags } = req.body;
+      
+      const documentData = {
+        name: name || req.file.originalname,
+        description: description || null,
+        documentType,
+        fileName: req.file.filename,
+        filePath: req.file.path,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        version: 1,
+        isActive: true,
+        clientId: clientId ? parseInt(clientId) : null,
+        contractId: contractId ? parseInt(contractId) : null,
+        tags: tags ? (Array.isArray(tags) ? tags : [tags]) : null,
+        uploadedBy: req.user?.id || 1,
+      };
+
+      const [newDocument] = await db
+        .insert(documents)
+        .values(documentData)
+        .returning();
+
+      res.status(201).json({
+        id: newDocument.id,
+        fileName: newDocument.fileName,
+        fileUrl: `/uploads/${newDocument.fileName}`,
+        fileSize: newDocument.fileSize,
+        message: "Document uploaded successfully"
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Download document
+  app.get("/api/documents/:id/download", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const filePath = path.join(process.cwd(), 'uploads', document.fileName);
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on disk" });
+      }
+
+      res.download(filePath, document.name || document.fileName);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete document
+  app.delete("/api/documents/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Soft delete by setting isActive to false
+      await db
+        .update(documents)
+        .set({ 
+          isActive: false, 
+          updatedAt: new Date() 
+        })
+        .where(eq(documents.id, id));
+
+      res.json({ message: "Document deleted successfully" });
     } catch (error) {
       next(error);
     }

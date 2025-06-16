@@ -9,9 +9,23 @@ function buildUrl(base: string, path: string) {
 
 const confluencePlugin: QueryPlugin = {
   systemName: 'confluence',
-  async executeQuery(query: string, method = 'GET', instance: any, opts) {
+  config: { instances: [] },
+  
+  getInstances() {
+    return this.config.instances;
+  },
+  
+  getInstance(instanceId: string) {
+    return this.config.instances.find(instance => instance.id === instanceId);
+  },
+  
+  async executeQuery(query: string, method = 'GET', instanceId: string, opts) {
+    const instance = this.getInstance(instanceId);
+    if (!instance) {
+      throw new Error(`Instance ${instanceId} not found`);
+    }
     // In Confluence Cloud the API base is /wiki/rest/api
-    const base = instance.baseUrl || instance.host || '';
+    const base = instance.baseUrl || '';
     const url = buildUrl(base, query);
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
