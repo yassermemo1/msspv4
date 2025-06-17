@@ -13,6 +13,49 @@ import { eq, and, desc } from 'drizzle-orm';
 
 const pluginRoutes = express.Router();
 
+// JQL validation helper function
+function validateJQLQuery(query: string): { warnings: string[], suggestions: string[] } {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+  
+  // Check common field name issues
+  if (/\bProject\s*=/i.test(query) && !/\bproject\s*=/i.test(query)) {
+    warnings.push("Field names should be lowercase: 'Project' should be 'project'");
+    suggestions.push(`Try: "${query.replace(/\bProject\s*=/gi, 'project =')}" instead`);
+  }
+  
+  if (/\bStatus\s*=/i.test(query) && !/\bstatus\s*=/i.test(query)) {
+    warnings.push("Field names should be lowercase: 'Status' should be 'status'");
+    suggestions.push(`Try: "${query.replace(/\bStatus\s*=/gi, 'status =')}" instead`);
+  }
+  
+  // Check for unquoted values
+  if (/=\s*[A-Za-z][A-Za-z0-9_]*\s*(?![A-Za-z0-9_()])/g.test(query)) {
+    warnings.push("String values should be quoted");
+    suggestions.push("Try adding quotes around values: project = \"DEP\" instead of project = DEP");
+  }
+  
+  // Check for invalid sort fields
+  if (/ORDER\s+BY\s+priority/i.test(query)) {
+    warnings.push("'priority' is not a valid sort field in Jira");
+    suggestions.push("Use valid sort fields like 'created', 'updated', 'key', or 'status' instead");
+  }
+  
+  // Check for project existence hints
+  if (/project\s*=\s*["\']?(DEP|MD)["\']?/i.test(query)) {
+    warnings.push("Projects 'DEP' and 'MD' may not exist in your Jira instance");
+    suggestions.push("Use your actual project keys. Check /rest/api/2/project to see available projects");
+  }
+  
+  // Check for common syntax patterns
+  if (/project\s+in\s*\(/i.test(query) && !/project\s+in\s*\(\s*["\'][^"\']*["\']/.test(query)) {
+    warnings.push("Values in IN clauses should be quoted");
+    suggestions.push('Use: project in ("KEY1", "KEY2") instead of project in (KEY1, KEY2)');
+  }
+  
+  return { warnings, suggestions };
+}
+
 // Middleware for authentication
 function requireAuth(req: any, res: any, next: any) {
   if (req.isAuthenticated && req.isAuthenticated()) {
@@ -305,6 +348,11 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/validate-query', requireAu
     
     // Plugin-specific validation
     if (pluginName === 'jira') {
+      // Enhanced JQL validation with auto-fix suggestions
+      const jqlIssues = validateJQLQuery(query);
+      validation.warnings.push(...jqlIssues.warnings);
+      validation.suggestions.push(...jqlIssues.suggestions);
+      
       if (!query.includes('project') && !query.includes('assignee')) {
         validation.warnings.push('Consider adding project or assignee filters for better performance');
       }

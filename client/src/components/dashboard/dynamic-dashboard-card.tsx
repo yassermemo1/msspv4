@@ -24,7 +24,139 @@ import {
 } from "lucide-react";
 import { DashboardCard } from "@/hooks/use-dashboard-settings";
 import { apiRequest } from "@/lib/api";
+import { DynamicWidgetRenderer } from "@/components/widgets/dynamic-widget-renderer";
 // IntegrationEngineWidget removed - integration engine deprecated
+
+// Import CustomWidget interface for type safety
+interface CustomWidget {
+  id?: string;
+  name: string;
+  description: string;
+  pluginName: string;
+  instanceId: string;
+  queryType: 'default' | 'custom';
+  queryId?: string;
+  customQuery?: string;
+  queryMethod: string;
+  queryParameters: Record<string, any>;
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
+               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic';
+  chartType?: 'bar' | 'line' | 'pie' | 'area';
+  refreshInterval: number;
+  placement: 'client-details' | 'global-dashboard' | 'custom';
+  styling: {
+    width: 'full' | 'half' | 'third' | 'quarter';
+    height: 'small' | 'medium' | 'large';
+    showBorder: boolean;
+    showHeader: boolean;
+  };
+  filters?: Array<{
+    field: string;
+    operator: string;
+    value: any;
+  }>;
+  aggregation?: {
+    function: 'count' | 'sum' | 'avg' | 'min' | 'max';
+    field?: string;
+  };
+  enabled?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Widget Card Renderer Component
+interface WidgetCardRendererProps {
+  card: DashboardCard;
+}
+
+function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
+  const { data: widget, isLoading, error, refetch } = useQuery({
+    queryKey: ['widget', card.config.widgetId],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/widgets/manage/${card.config.widgetId}`);
+      return response.json();
+    },
+    enabled: !!card.config.widgetId,
+    staleTime: 1 * 60 * 1000, // 1 minute (reduced from 5 to get fresh data more often)
+    refetchInterval: 2 * 60 * 1000, // 2 minutes - auto refresh widget config
+    refetchOnWindowFocus: true, // Refresh when window gets focus
+  });
+
+  if (isLoading) {
+    return (
+      <div className={getSizeClasses(card.size)}>
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 w-32" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error || !widget) {
+    return (
+      <div className={getSizeClasses(card.size)}>
+        <Card className="h-full border-red-200">
+          <CardContent className="flex items-center justify-center h-full">
+            <div className="text-center text-red-600">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+              <p className="text-sm">Widget not found</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Convert the API widget data to the format expected by DynamicWidgetRenderer
+  const widgetConfig: CustomWidget = {
+    id: widget.id,
+    name: widget.name,
+    description: widget.description || '',
+    pluginName: widget.pluginName,
+    instanceId: `${widget.pluginName}-main`, // This should match the plugin instance configuration
+    queryType: 'custom' as const,
+    customQuery: widget.query,
+    queryMethod: widget.method || 'GET',
+    queryParameters: widget.parameters || {},
+    displayType: widget.widgetType as 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
+                                    'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic',
+    chartType: widget.chartType as 'bar' | 'line' | 'pie' | 'area' | undefined,
+    refreshInterval: widget.refreshInterval || 30,
+    placement: 'global-dashboard' as const,
+    styling: {
+      width: (widget.displayConfig?.width as 'full' | 'half' | 'third' | 'quarter') || 'full',
+      height: (widget.displayConfig?.height as 'small' | 'medium' | 'large') || 'medium',
+      showBorder: widget.displayConfig?.showBorder !== false,
+      showHeader: widget.displayConfig?.showHeader !== false
+    },
+    enabled: widget.isActive !== false,
+    // Add debugging info
+    updatedAt: widget.updatedAt
+  };
+
+  return (
+    <div className={getSizeClasses(card.size)}>
+      <DynamicWidgetRenderer
+        key={`widget-${widget.id}-${widget.query}-${widget.updatedAt || Date.now()}`}
+        widget={widgetConfig}
+        className="h-full"
+        onRefresh={() => refetch()}
+      />
+    </div>
+  );
+}
 
 const AVAILABLE_ICONS = {
   Building,
@@ -48,8 +180,29 @@ interface DynamicDashboardCardProps {
   onClick?: () => void;
 }
 
+// Size class helper function
+const getSizeClasses = (size: string) => {
+  switch (size) {
+    case 'small':
+      return "col-span-1";
+    case 'medium':
+      return "col-span-1 md:col-span-2";
+    case 'large':
+      return "col-span-1 md:col-span-2 lg:col-span-3";
+    case 'xlarge':
+      return "col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4";
+    default:
+      return "col-span-1";
+  }
+};
+
 export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProps) {
   // Integration Engine widget support removed - deprecated
+
+  // Handle widget cards differently from regular dashboard cards
+  if (card.type === 'widget' && card.config.widgetId) {
+    return <WidgetCardRenderer card={card} />;
+  }
 
   // Create stable config object to prevent infinite re-renders
   const stableConfig = React.useMemo(() => {
@@ -166,20 +319,7 @@ export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProp
     }
   };
 
-  const getSizeClasses = (size: string) => {
-    switch (size) {
-      case 'small':
-        return "col-span-1";
-      case 'medium':
-        return "col-span-1 md:col-span-2";
-      case 'large':
-        return "col-span-1 md:col-span-2 lg:col-span-3";
-      case 'xlarge':
-        return "col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4";
-      default:
-        return "col-span-1";
-    }
-  };
+
 
   const calculateTrend = (current: number) => {
     // Mock trend calculation - in real implementation you'd compare with previous period

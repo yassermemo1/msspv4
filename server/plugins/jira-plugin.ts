@@ -2,6 +2,101 @@ import { QueryPlugin, registerPlugin, PluginInstance, PluginConfig } from './plu
 import { buildBasicHeaders, buildFetchOptions } from './plugin-utils';
 import fetch from 'node-fetch';
 
+// Helper function to auto-fix common JQL formatting issues
+function autoFixJQLQuery(query: string): string {
+  let fixed = query;
+  
+  // Fix 1: Ensure field names are lowercase
+  fixed = fixed.replace(/\bProject\s*=/gi, 'project =');
+  fixed = fixed.replace(/\bProject\s+in\s*\(/gi, 'project in (');
+  fixed = fixed.replace(/\bStatus\s*=/gi, 'status =');
+  fixed = fixed.replace(/\bAssignee\s*=/gi, 'assignee =');
+  fixed = fixed.replace(/\bReporter\s*=/gi, 'reporter =');
+  fixed = fixed.replace(/\bPriority\s*=/gi, 'priority =');
+  fixed = fixed.replace(/\bType\s*=/gi, 'type =');
+  fixed = fixed.replace(/\bResolution\s*=/gi, 'resolution =');
+  
+  // Fix 2: Add quotes around unquoted string values (but not for functions/operators)
+  fixed = fixed.replace(/=\s*([A-Za-z][A-Za-z0-9_]*)\s*(?![A-Za-z0-9_()])/g, '= "$1"');
+  fixed = fixed.replace(/!=\s*([A-Za-z][A-Za-z0-9_]*)\s*(?![A-Za-z0-9_()])/g, '!= "$1"');
+  
+  // Fix 3: Fix IN clauses - properly quote unquoted values
+  fixed = fixed.replace(/\s+in\s+\(/gi, ' in (');
+  
+  // Fix IN clause values - quote individual unquoted values
+  fixed = fixed.replace(/in\s*\(\s*([^)]+)\s*\)/gi, (match, values) => {
+    // Split values and quote unquoted ones
+    const fixedValues = values.split(',').map((value: string) => {
+      const trimmed = value.trim();
+      // If already quoted, keep as is
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
+          (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed;
+      }
+      // Quote unquoted values (only if they're not empty and not functions)
+      if (trimmed && !trimmed.includes('(') && !trimmed.includes(')')) {
+        return `"${trimmed}"`;
+      }
+      return trimmed;
+    }).join(', ');
+    
+    return `in (${fixedValues})`;
+  });
+  
+  // Fix 4: Fix ORDER BY issues - replace invalid sort fields
+  fixed = fixed.replace(/ORDER\s+BY\s+priority\s*(DESC|ASC)?/gi, 'ORDER BY created $1');
+  fixed = fixed.replace(/ORDER\s+BY\s+([^"'\s]+)\s*(DESC|ASC)?/gi, (match, field, direction) => {
+    const validSortFields = ['created', 'updated', 'key', 'priority', 'status', 'assignee'];
+    const lowerField = field.toLowerCase();
+    if (!validSortFields.includes(lowerField)) {
+      return `ORDER BY created ${direction || ''}`;
+    }
+    return `ORDER BY ${lowerField} ${direction || ''}`;
+  });
+  
+  // Fix 5: Clean up extra spaces
+  fixed = fixed.replace(/\s+/g, ' ').trim();
+  
+  console.log(`🔧 JQL Auto-fix: "${query}" → "${fixed}"`);
+  return fixed;
+}
+
+// Helper function to validate JQL syntax
+function validateJQLSyntax(query: string): void {
+  // Check for incomplete operators
+  if (query.endsWith('=') || query.endsWith('AND') || query.endsWith('OR') || query.endsWith('!')) {
+    throw new Error('Invalid JQL syntax: query ends with an incomplete operator');
+  }
+  
+  // Check for unmatched quotes
+  const singleQuotes = (query.match(/'/g) || []).length;
+  const doubleQuotes = (query.match(/"/g) || []).length;
+  if (singleQuotes % 2 !== 0 || doubleQuotes % 2 !== 0) {
+    throw new Error('Invalid JQL syntax: unmatched quotes');
+  }
+  
+  // Check for unmatched parentheses
+  const openParens = (query.match(/\(/g) || []).length;
+  const closeParens = (query.match(/\)/g) || []).length;
+  if (openParens !== closeParens) {
+    throw new Error('Invalid JQL syntax: unmatched parentheses');
+  }
+  
+  // Check for basic field validation
+  const invalidPatterns = [
+    { pattern: /\s=\s*$/, message: 'Empty value after equals sign' },
+    { pattern: /\s(AND|OR)\s*$/, message: 'Query ends with logical operator' },
+    { pattern: /^\s*(AND|OR)/, message: 'Query starts with logical operator' },
+    { pattern: /\s(AND|OR)\s+(AND|OR)/, message: 'Consecutive logical operators' }
+  ];
+  
+  for (const { pattern, message } of invalidPatterns) {
+    if (pattern.test(query)) {
+      throw new Error(`Invalid JQL syntax: ${message}`);
+    }
+  }
+}
+
 // Plugin Configuration - Self-Contained
 console.log('🔧 Jira Plugin Environment Variables:');
 console.log(`  JIRA_AUTH_TYPE: ${process.env.JIRA_AUTH_TYPE}`);
@@ -59,20 +154,17 @@ const jiraPlugin: QueryPlugin = {
       throw new Error('Query cannot be empty');
     }
 
-    // Basic JQL syntax validation
+    // Enhanced JQL syntax validation and formatting
     const trimmedQuery = query.trim();
     if (trimmedQuery !== '__health_check__') {
-      // Check for common JQL syntax issues
-      if (trimmedQuery.endsWith('=') || trimmedQuery.endsWith('AND') || trimmedQuery.endsWith('OR')) {
-        throw new Error('Invalid JQL syntax: query ends with an incomplete operator');
-      }
+      // Step 1: Auto-fix common JQL formatting issues
+      let fixedQuery = autoFixJQLQuery(trimmedQuery);
       
-      // Check for unmatched quotes
-      const singleQuotes = (trimmedQuery.match(/'/g) || []).length;
-      const doubleQuotes = (trimmedQuery.match(/"/g) || []).length;
-      if (singleQuotes % 2 !== 0 || doubleQuotes % 2 !== 0) {
-        throw new Error('Invalid JQL syntax: unmatched quotes');
-      }
+      // Step 2: Validate the fixed query
+      validateJQLSyntax(fixedQuery);
+      
+      // Use the fixed query for execution
+      query = fixedQuery;
     }
     
     const base = instance.baseUrl.replace(/\/$/, '');
@@ -137,7 +229,7 @@ const jiraPlugin: QueryPlugin = {
         };
         
       } catch (error) {
-        console.error(`❌ Jira Health Check Error:`, error.message);
+        console.error(`❌ Jira Health Check Error:`, error instanceof Error ? error.message : String(error));
         throw error;
       }
     }
@@ -179,10 +271,35 @@ const jiraPlugin: QueryPlugin = {
         throw new Error(`Jira returned invalid JSON for query "${query}": ${responseText.substring(0, 200)}`);
       }
       
+      // Add sample data for display purposes (limit to 10 issues for testing)
+      if (data.issues && Array.isArray(data.issues)) {
+        const sampleIssues = data.issues.slice(0, 10).map((issue: any) => ({
+          key: issue.key,
+          summary: issue.fields?.summary || 'No summary',
+          status: issue.fields?.status?.name || 'Unknown',
+          priority: issue.fields?.priority?.name || 'Unassigned',
+          assignee: issue.fields?.assignee?.displayName || 'Unassigned',
+          created: issue.fields?.created || null,
+          updated: issue.fields?.updated || null,
+          project: issue.fields?.project?.name || issue.fields?.project?.key || 'Unknown',
+          issueType: issue.fields?.issuetype?.name || 'Unknown',
+          reporter: issue.fields?.reporter?.displayName || 'Unknown'
+        }));
+        
+        // Return enhanced data with sample for testing
+        return {
+          ...data,
+          sampleData: sampleIssues,
+          totalResults: data.total || 0,
+          displayedSample: sampleIssues.length,
+          query: query
+        };
+      }
+      
       return data;
       
     } catch (error) {
-      console.error(`❌ Jira Query Error for "${query}":`, error.message);
+      console.error(`❌ Jira Query Error for "${query}":`, error instanceof Error ? error.message : String(error));
       throw error;
     }
   },

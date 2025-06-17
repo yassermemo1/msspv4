@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DynamicWidgetRenderer } from './dynamic-widget-renderer';
 import { 
   Plus, 
   Save, 
@@ -27,7 +28,9 @@ import {
   Loader2,
   Trash2,
   Copy,
-  RefreshCw
+  RefreshCw,
+  Activity,
+  TrendingUp
 } from 'lucide-react';
 
 interface Plugin {
@@ -66,7 +69,8 @@ interface CustomWidget {
   customQuery?: string; // For custom queries
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
+               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number; // seconds
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -186,7 +190,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
           body = { parameters: queryParams };
         }
       } else if (widget.queryType === 'custom' && widget.customQuery) {
-        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/custom-query`;
+        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/query`;
         body = {
           query: widget.customQuery,
           method: widget.queryMethod,
@@ -321,13 +325,46 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
     };
   };
 
+  // Helper function to provide context-sensitive descriptions
+  const getDisplayTypeDescription = (displayType: string, aggregationFunction?: string) => {
+    const aggDesc = aggregationFunction ? ` with ${aggregationFunction}` : '';
+    
+    switch (displayType) {
+      case 'number':
+        return `Large number display${aggDesc}. Perfect for counts and totals.`;
+      case 'percentage':
+        return `Percentage display${aggDesc}. Shows values as percentages with % symbol.`;
+      case 'progress':
+        return `Progress bar${aggDesc}. Shows completion or ratio as a filled bar.`;
+      case 'gauge':
+        return `Circular gauge${aggDesc}. Shows value within a range.`;
+      case 'trend':
+        return `Trend indicator${aggDesc}. Shows up/down direction with arrows.`;
+      case 'statistic':
+        return `Statistical summary${aggDesc}. Perfect for min/max/average displays.`;
+      case 'summary':
+        return `Summary card${aggDesc}. Combines multiple metrics in one card.`;
+      case 'table':
+        return 'Tabular data display. Best for detailed raw data viewing.';
+      case 'chart':
+        return 'Graphical chart display. Visualizes data patterns and trends.';
+      case 'list':
+        return 'Simple list format. Good for key-value pairs and simple data.';
+      case 'query':
+        return 'Raw query results. Shows unprocessed data from the system.';
+      default:
+        return 'Choose the best display format for your data type.';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="basic">Basic Info</TabsTrigger>
           <TabsTrigger value="query">Query Config</TabsTrigger>
           <TabsTrigger value="display">Display Options</TabsTrigger>
+          <TabsTrigger value="aggregation">Aggregation</TabsTrigger>
           <TabsTrigger value="preview">Preview & Test</TabsTrigger>
         </TabsList>
 
@@ -614,22 +651,11 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Raw Data Displays */}
                       <SelectItem value="table">
                         <div className="flex items-center">
                           <Table className="h-4 w-4 mr-2" />
                           Table
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="chart">
-                        <div className="flex items-center">
-                          <BarChart3 className="h-4 w-4 mr-2" />
-                          Chart
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="metric">
-                        <div className="flex items-center">
-                          <Gauge className="h-4 w-4 mr-2" />
-                          Metric/KPI
                         </div>
                       </SelectItem>
                       <SelectItem value="list">
@@ -644,8 +670,71 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                           Raw Query Results
                         </div>
                       </SelectItem>
+                      
+                      {/* Chart Displays */}
+                      <SelectItem value="chart">
+                        <div className="flex items-center">
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Chart
+                        </div>
+                      </SelectItem>
+                      
+                      {/* Aggregation-Specific Displays */}
+                      <SelectItem value="number">
+                        <div className="flex items-center">
+                          <span className="h-4 w-4 mr-2 text-center font-bold text-blue-600">#</span>
+                          Number Display (Count/Sum)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="percentage">
+                        <div className="flex items-center">
+                          <span className="h-4 w-4 mr-2 text-center font-bold text-green-600">%</span>
+                          Percentage (Average)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="progress">
+                        <div className="flex items-center">
+                          <Activity className="h-4 w-4 mr-2" />
+                          Progress Bar
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="gauge">
+                        <div className="flex items-center">
+                          <Gauge className="h-4 w-4 mr-2" />
+                          Gauge/Meter
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="trend">
+                        <div className="flex items-center">
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          Trend Indicator
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="statistic">
+                        <div className="flex items-center">
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Statistic Card (Min/Max/Avg)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="summary">
+                        <div className="flex items-center">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Summary Card
+                        </div>
+                      </SelectItem>
+                      
+                      {/* Legacy - keep for compatibility */}
+                      <SelectItem value="metric">
+                        <div className="flex items-center">
+                          <Gauge className="h-4 w-4 mr-2" />
+                          Legacy Metric/KPI
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {getDisplayTypeDescription(widget.displayType, widget.aggregation?.function)}
+                  </p>
                 </div>
 
                 {widget.displayType === 'chart' && (
@@ -743,6 +832,183 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
           </Card>
         </TabsContent>
 
+        <TabsContent value="aggregation" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Data Aggregation & Processing</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="aggregation-function">Aggregation Function</Label>
+                <Select
+                  value={widget.aggregation?.function || 'none'}
+                  onValueChange={(value) => {
+                    if (value === 'none') {
+                      setWidget({ ...widget, aggregation: undefined });
+                    } else {
+                      setWidget({
+                        ...widget,
+                        aggregation: {
+                          function: value as 'count' | 'sum' | 'avg' | 'min' | 'max',
+                          field: widget.aggregation?.field || ''
+                        }
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select aggregation function" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Aggregation</SelectItem>
+                    <SelectItem value="count">Count</SelectItem>
+                    <SelectItem value="sum">Sum</SelectItem>
+                    <SelectItem value="avg">Average</SelectItem>
+                    <SelectItem value="min">Minimum</SelectItem>
+                    <SelectItem value="max">Maximum</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Apply mathematical functions to aggregate the data (useful for metrics and charts)
+                </p>
+              </div>
+
+              {widget.aggregation && widget.aggregation.function !== 'count' && (
+                <div>
+                  <Label htmlFor="aggregation-field">Aggregation Field</Label>
+                  <Input
+                    id="aggregation-field"
+                    value={widget.aggregation.field || ''}
+                    onChange={(e) => setWidget({
+                      ...widget,
+                      aggregation: {
+                        ...widget.aggregation!,
+                        field: e.target.value
+                      }
+                    })}
+                    placeholder="Field name to aggregate (e.g., 'priority', 'status')"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Specify the field name to perform {widget.aggregation.function} operation on
+                  </p>
+                </div>
+              )}
+
+              <Separator />
+
+              <div>
+                <Label>Data Filters</Label>
+                <div className="space-y-2 mt-2">
+                  {widget.filters?.map((filter, index) => (
+                    <div key={index} className="flex space-x-2 items-center">
+                      <Input
+                        placeholder="Field name"
+                        value={filter.field}
+                        onChange={(e) => {
+                          const newFilters = [...(widget.filters || [])];
+                          newFilters[index] = { ...filter, field: e.target.value };
+                          setWidget({ ...widget, filters: newFilters });
+                        }}
+                        className="flex-1"
+                      />
+                      <Select
+                        value={filter.operator}
+                        onValueChange={(value) => {
+                          const newFilters = [...(widget.filters || [])];
+                          newFilters[index] = { ...filter, operator: value };
+                          setWidget({ ...widget, filters: newFilters });
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="equals">Equals</SelectItem>
+                          <SelectItem value="not_equals">Not Equals</SelectItem>
+                          <SelectItem value="contains">Contains</SelectItem>
+                          <SelectItem value="greater_than">Greater Than</SelectItem>
+                          <SelectItem value="less_than">Less Than</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        placeholder="Value"
+                        value={filter.value}
+                        onChange={(e) => {
+                          const newFilters = [...(widget.filters || [])];
+                          newFilters[index] = { ...filter, value: e.target.value };
+                          setWidget({ ...widget, filters: newFilters });
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newFilters = (widget.filters || []).filter((_, i) => i !== index);
+                          setWidget({ ...widget, filters: newFilters });
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newFilters = [...(widget.filters || []), { field: '', operator: 'equals', value: '' }];
+                      setWidget({ ...widget, filters: newFilters });
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Filter
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Add filters to process and refine the data before display
+                </p>
+              </div>
+
+              <Separator />
+
+              <div>
+                <Label htmlFor="refresh-interval">Refresh Interval (seconds)</Label>
+                <Input
+                  id="refresh-interval"
+                  type="number"
+                  min="10"
+                  max="3600"
+                  value={widget.refreshInterval}
+                  onChange={(e) => setWidget({ ...widget, refreshInterval: parseInt(e.target.value) || 30 })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  How often the widget data should be refreshed (minimum 10 seconds)
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="widget-placement">Dashboard Placement</Label>
+                <Select
+                  value={widget.placement}
+                  onValueChange={(value: any) => setWidget({ ...widget, placement: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client-details">Client Detail Pages</SelectItem>
+                    <SelectItem value="global-dashboard">Global Dashboard</SelectItem>
+                    <SelectItem value="custom">Custom Placement</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Where this widget will appear in the dashboard
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="preview" className="space-y-4">
           <Card>
             <CardHeader>
@@ -778,11 +1044,49 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                   </div>
 
                   {testResult.success && testResult.data && (
-                    <div>
-                      <Label>Query Results</Label>
-                      <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-64 mt-2">
-                        {JSON.stringify(testResult.data, null, 2)}
-                      </pre>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Query Results Summary</Label>
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mt-2">
+                          <div className="flex items-center space-x-4 text-sm">
+                            <span><strong>Total Results:</strong> {testResult.data.totalResults || testResult.data.total || 'Unknown'}</span>
+                            {testResult.data.displayedSample && (
+                              <span><strong>Sample Shown:</strong> {testResult.data.displayedSample} records</span>
+                            )}
+                            {testResult.metadata?.responseTime && (
+                              <span><strong>Response Time:</strong> {testResult.metadata.responseTime}</span>
+                            )}
+                            <span><strong>Display Type:</strong> {widget.displayType}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Preview Widget with Selected Display Type */}
+                      <div>
+                        <Label>Widget Preview ({widget.displayType})</Label>
+                        <div className="border rounded-lg mt-2 p-4 bg-white min-h-64">
+                          <DynamicWidgetRenderer
+                            widget={{
+                              ...widget,
+                              id: 'preview',
+                              name: `Preview: ${widget.name || 'Test Widget'}`,
+                            }}
+                            clientShortName={clientContext?.clientShortName}
+                            className="shadow-none border-0"
+                            previewData={testResult.data.sampleData || testResult.data.issues || testResult.data}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Raw JSON for debugging */}
+                      <details className="border rounded-lg">
+                        <summary className="px-3 py-2 bg-gray-50 cursor-pointer text-sm font-medium">Raw Response Data</summary>
+                        <div className="p-3">
+                          <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-64">
+                            {JSON.stringify(testResult.data, null, 2)}
+                          </pre>
+                        </div>
+                      </details>
                     </div>
                   )}
                 </div>

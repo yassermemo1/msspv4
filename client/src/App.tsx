@@ -38,26 +38,11 @@ import FieldVisibilityManagerPage from "@/pages/field-visibility-manager";
 import ServiceScopesPage from "@/pages/service-scopes-page";
 import ProposalsPage from "@/pages/proposals-page";
 
-
-import TestDashboardPage from "@/pages/test-dashboard-page";
-import RbacManagementPage from "@/pages/rbac-management-page";
-import UserManagementPage from "@/pages/admin/user-management-page";
-import AuditManagementPage from "@/pages/admin/audit-management-page";
-import NavigationManagerPage from "@/pages/admin/navigation-manager-page";
-import EntityNavigationDemo from "@/pages/entity-navigation-demo";
-import { ServiceEditPage } from "@/components/admin/services/service-edit-page";
-import CreateSafPage from "@/pages/create-saf-page";
-import CreateCocPage from "@/pages/create-coc-page";
-import LicensePoolsPage from "@/pages/license-pools-page";
-import AdminDashboardPage from "@/pages/admin-dashboard-page";
-import ProfilePage from "@/pages/profile-page";
-import TestErrorPage from "@/pages/test-error-page";
-import NotFound from "@/pages/not-found";
-import ClientOnboardingPage from "@/pages/client-onboarding-page";
-import TestingPage from "@/pages/testing-page";
-import PluginsPage from "@/pages/plugins-page";
-import GlobalWidgetsPage from "@/pages/global-widgets-page";
 import WidgetManagerPage from "@/pages/widget-manager-page";
+import GlobalWidgetsPage from "@/pages/global-widgets-page";
+import HomePage from "@/pages/home-page";
+import EntityNavigationDemo from "@/pages/entity-navigation-demo";
+import CreateSafPage from "@/pages/create-saf-page";
 
 // Component that provides the query client with error handling
 function QueryClientWrapper({ children }: { children: React.ReactNode }) {
@@ -108,7 +93,7 @@ function App() {
                   <Route path="/onboarding" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/onboarding">
-                        <ClientOnboardingPage />
+                        <HomePage />
                       </PageGuard>
                     </AuthGuard>
                   )} />
@@ -133,13 +118,7 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/services/:serviceId/edit" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/services">
-                        <ServiceEditPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+                  {/* Service edit route removed - use services page instead */}
                   <Route path="/service-scopes" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/service-scopes">
@@ -161,13 +140,7 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/license-pools" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/assets">
-                        <LicensePoolsPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+                  {/* License pool management integrated into assets page */}
                   <Route path="/license-pools/:id" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/assets">
@@ -196,10 +169,6 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-
-
-
-
 
                   <Route path="/comprehensive-bulk-import" component={() => (
                     <AuthGuard>
@@ -230,62 +199,7 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/admin" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/admin">
-                        <AdminDashboardPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/profile" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/profile">
-                        <ProfilePage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/admin/rbac" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/admin/rbac">
-                        <RbacManagementPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/admin/users" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/admin/users">
-                        <UserManagementPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/admin/audit" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/admin/audit">
-                        <AuditManagementPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/admin/navigation" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/admin/navigation">
-                        <NavigationManagerPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/test-dashboard" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/test-dashboard">
-                        <TestDashboardPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/testing" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/testing">
-                        <TestingPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+                  {/* Admin and testing routes removed - use settings page for admin functions */}
                   <Route path="/entity-navigation-demo" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/entity-navigation-demo">
@@ -300,25 +214,7 @@ function App() {
                       </PageGuard>
                     </AuthGuard>
                   )} />
-                  <Route path="/create-coc" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/create-coc">
-                        <CreateCocPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
-                  <Route path="/test-error" component={() => (
-                    <AuthGuard>
-                      <TestErrorPage />
-                    </AuthGuard>
-                  )} />
-                  <Route path="/plugins" component={() => (
-                    <AuthGuard>
-                      <PageGuard pageUrl="/plugins">
-                        <PluginsPage />
-                      </PageGuard>
-                    </AuthGuard>
-                  )} />
+                  {/* Additional routes removed - functionality consolidated */}
                   <Route path="/global-widgets" component={() => (
                     <AuthGuard>
                       <PageGuard pageUrl="/global-widgets">
@@ -334,8 +230,12 @@ function App() {
                     </AuthGuard>
                   )} />
                   
-                  {/* 404 Not Found - This should be the last route */}
-                  <Route path="*" component={NotFound} />
+                  {/* 404 Not Found - Redirect to main dashboard */}
+                  <Route path="*" component={() => (
+                    <AuthGuard>
+                      <MainDashboardPage />
+                    </AuthGuard>
+                  )} />
                 </Switch>
               </div>
               <Toaster />

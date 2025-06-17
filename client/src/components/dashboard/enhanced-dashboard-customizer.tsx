@@ -27,7 +27,14 @@ import {
   Database,
   Zap,
   ExternalLink,
-  RotateCcw
+  RotateCcw,
+  Import,
+  Eye,
+  Grid,
+  Table as TableIcon,
+  Gauge,
+  List,
+  Code
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -37,8 +44,8 @@ import { apiRequest } from '@/lib/api';
 export interface EnhancedDashboardCard {
   id: string;
   title: string;
-  type: 'metric' | 'chart' | 'comparison' | 'pool-comparison';
-  category: 'dashboard' | 'kpi' | 'comparison';
+  type: 'metric' | 'chart' | 'comparison' | 'pool-comparison' | 'widget';
+  category: 'dashboard' | 'kpi' | 'comparison' | 'widget';
   dataSource: string;
   size: 'small' | 'medium' | 'large' | 'xlarge';
   visible: boolean;
@@ -79,7 +86,11 @@ export interface EnhancedDashboardCard {
     enableDrillDown?: boolean;
     customColors?: string[];
     colors?: string[]; // alias for custom colors array
-
+    // Widget import configuration
+    widgetId?: string; // ID of the imported widget
+    widgetType?: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+    pluginName?: string;
+    instanceId?: string;
   };
   isBuiltIn: boolean;
   isRemovable: boolean;
@@ -146,6 +157,28 @@ const TIME_RANGES = [
   { value: 'yearly', label: 'Yearly' }
 ];
 
+interface GlobalWidget {
+  id: string;
+  systemId: number;
+  systemName: string;
+  pluginName: string;
+  name: string;
+  description: string;
+  widgetType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+  chartType?: 'bar' | 'line' | 'pie' | 'area';
+  query: string;
+  method: string;
+  parameters: Record<string, any>;
+  displayConfig: Record<string, any>;
+  refreshInterval: number;
+  isActive: boolean;
+  isGlobal: boolean;
+  position: number;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface EnhancedDashboardCustomizerProps {
   cards: EnhancedDashboardCard[];
   onCardsChange: (cards: EnhancedDashboardCard[]) => void;
@@ -156,6 +189,8 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
   const { toast } = useToast();
   const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
   const [showAddCard, setShowAddCard] = useState(false);
+  const [showWidgetImport, setShowWidgetImport] = useState(false);
+  const [selectedWidget, setSelectedWidget] = useState<GlobalWidget | null>(null);
 
   const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
   const [newCard, setNewCard] = useState<Partial<EnhancedDashboardCard>>({
@@ -179,6 +214,21 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     },
     isBuiltIn: false,
     isRemovable: true
+  });
+
+  // Fetch available widgets for import
+  const { data: availableWidgets = [], isLoading: widgetsLoading } = useQuery<GlobalWidget[]>({
+    queryKey: ['global-widgets'],
+    queryFn: async () => {
+      const response = await fetch('/api/widgets/manage', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch widgets');
+      }
+      return response.json();
+    },
+    staleTime: 30000, // 30 seconds
   });
 
   // External systems functionality has been disabled
@@ -295,6 +345,95 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     });
   };
 
+  const handleImportWidget = () => {
+    if (!selectedWidget) {
+      toast({
+        title: "Error",
+        description: "Please select a widget to import",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Use the widget's existing configuration instead of overriding with defaults
+    const widgetCard: EnhancedDashboardCard = {
+      id: `widget-${selectedWidget.id}`,
+      title: selectedWidget.name,
+      type: selectedWidget.widgetType as 'metric' | 'chart' | 'comparison' | 'pool-comparison' | 'widget', // Use actual widget type
+      category: 'widget',
+      dataSource: 'widget', // Special data source for widget cards
+      size: getSizeFromDisplayConfig(selectedWidget.displayConfig), // Use widget's size configuration
+      visible: true,
+      position: cards.length,
+      config: {
+        icon: getWidgetIcon(selectedWidget.widgetType),
+        color: 'blue',
+        format: 'number',
+        // Use widget's existing chart type if available
+        chartType: selectedWidget.chartType || getDefaultChartType(selectedWidget.widgetType),
+        // Import all widget-specific configuration without overriding
+        widgetId: selectedWidget.id,
+        widgetType: selectedWidget.widgetType,
+        pluginName: selectedWidget.pluginName,
+        instanceId: selectedWidget.systemId.toString(),
+        refreshInterval: selectedWidget.refreshInterval || 30,
+        // Preserve the widget's display configuration
+        ...selectedWidget.displayConfig,
+        // Ensure these critical fields are preserved
+        name: selectedWidget.name,
+        showLegend: selectedWidget.displayConfig?.showLegend ?? true,
+        showDataLabels: selectedWidget.displayConfig?.showDataLabels ?? false,
+        enableDrillDown: selectedWidget.displayConfig?.enableDrillDown ?? true
+      },
+      isBuiltIn: false,
+      isRemovable: true
+    };
+
+    onCardsChange([...cards, widgetCard]);
+    setShowWidgetImport(false);
+    setSelectedWidget(null);
+    
+    toast({
+      title: "Success",
+      description: `Widget "${selectedWidget.name}" imported with its existing configuration`
+    });
+  };
+
+  const getWidgetIcon = (widgetType: string): string => {
+    switch (widgetType) {
+      case 'table': return 'Table';
+      case 'chart': return 'BarChart3';
+      case 'metric': return 'Gauge';
+      case 'list': return 'List';
+      case 'gauge': return 'Gauge';
+      case 'query': return 'Code';
+      default: return 'Database';
+    }
+  };
+
+  const getSizeFromDisplayConfig = (displayConfig: Record<string, any> | undefined): 'small' | 'medium' | 'large' | 'xlarge' => {
+    const width = displayConfig?.width || 'medium';
+    switch (width) {
+      case 'quarter': return 'small';
+      case 'third': return 'medium';
+      case 'half': return 'large';
+      case 'full': return 'xlarge';
+      default: return 'medium';
+    }
+  };
+
+  const getDefaultChartType = (widgetType: string): 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter' => {
+    switch (widgetType) {
+      case 'chart': return 'bar';
+      case 'metric': return 'doughnut';
+      case 'table': return 'bar';
+      case 'list': return 'bar';
+      case 'gauge': return 'doughnut';
+      case 'query': return 'bar';
+      default: return 'bar';
+    }
+  };
+
   const resetToDefaults = () => {
     // Reset to basic default cards
     const defaultCards: EnhancedDashboardCard[] = [
@@ -341,6 +480,11 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
           <Button variant="outline" onClick={resetToDefaults}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
+          </Button>
+          
+          <Button variant="outline" onClick={() => setShowWidgetImport(true)}>
+            <Import className="h-4 w-4 mr-2" />
+            Import Widget
           </Button>
 
           <Button onClick={() => setShowAddCard(true)}>
@@ -542,6 +686,16 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
         </DialogContent>
       </Dialog>
 
+      {/* Widget Import Dialog */}
+      <WidgetImportDialog
+        showWidgetImport={showWidgetImport}
+        setShowWidgetImport={setShowWidgetImport}
+        availableWidgets={availableWidgets}
+        widgetsLoading={widgetsLoading}
+        selectedWidget={selectedWidget}
+        setSelectedWidget={setSelectedWidget}
+        handleImportWidget={handleImportWidget}
+      />
 
     </div>
   );
@@ -610,6 +764,7 @@ function CardCreatorForm({
                   <SelectItem value="chart">Chart</SelectItem>
                   <SelectItem value="comparison">Comparison</SelectItem>
                   <SelectItem value="pool-comparison">Pool Comparison</SelectItem>
+                  <SelectItem value="widget">Widget (Imported)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -871,6 +1026,138 @@ function CardCreatorForm({
           {isEditing ? 'Update Card' : 'Add Card'}
         </Button>
       </div>
+      
     </div>
   );
-} 
+}
+
+// Additional Widget Import Dialog component at the end of file
+export const WidgetImportDialog: React.FC<{
+  showWidgetImport: boolean;
+  setShowWidgetImport: (show: boolean) => void;
+  availableWidgets: GlobalWidget[];
+  widgetsLoading: boolean;
+  selectedWidget: GlobalWidget | null;
+  setSelectedWidget: (widget: GlobalWidget | null) => void;
+  handleImportWidget: () => void;
+}> = ({
+  showWidgetImport,
+  setShowWidgetImport,
+  availableWidgets,
+  widgetsLoading,
+  selectedWidget,
+  setSelectedWidget,
+  handleImportWidget
+}) => (
+  <Dialog open={showWidgetImport} onOpenChange={setShowWidgetImport}>
+    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Import Widget to Dashboard</DialogTitle>
+        <DialogDescription>
+          Select a widget from your available widgets to add as a dashboard card
+        </DialogDescription>
+      </DialogHeader>
+      
+      <div className="space-y-4">
+        {widgetsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : availableWidgets.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-8">
+              <Grid className="w-12 h-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Widgets Available</h3>
+              <p className="text-gray-600 text-center mb-4">
+                You haven't created any widgets yet. Create widgets in the Widget Manager first.
+              </p>
+              <Button variant="outline" onClick={() => setShowWidgetImport(false)}>
+                Close
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+            {availableWidgets.filter((widget: GlobalWidget) => widget.isActive).map((widget: GlobalWidget) => (
+              <Card 
+                key={widget.id} 
+                className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                  selectedWidget?.id === widget.id 
+                    ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' 
+                    : 'hover:bg-gray-50'
+                }`}
+                onClick={() => setSelectedWidget(widget)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      {widget.widgetType === 'table' && <TableIcon className="h-5 w-5 text-blue-600" />}
+                      {widget.widgetType === 'chart' && <BarChart3 className="h-5 w-5 text-green-600" />}
+                      {widget.widgetType === 'metric' && <Gauge className="h-5 w-5 text-purple-600" />}
+                      {widget.widgetType === 'list' && <List className="h-5 w-5 text-orange-600" />}
+                      {widget.widgetType === 'gauge' && <Gauge className="h-5 w-5 text-indigo-600" />}
+                      {widget.widgetType === 'query' && <Code className="h-5 w-5 text-red-600" />}
+                      <CardTitle className="text-base">{widget.name}</CardTitle>
+                    </div>
+                    <Badge variant={widget.isGlobal ? "default" : "secondary"}>
+                      {widget.isGlobal ? "Global" : "Personal"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-sm text-gray-600 mb-3">{widget.description}</p>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span className="flex items-center space-x-1">
+                      <Database className="h-3 w-3" />
+                      <span>{widget.pluginName}</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <span>Refresh: {widget.refreshInterval}s</span>
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        
+        {selectedWidget && (
+          <Card className="mt-4 bg-blue-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-sm text-blue-800">Selected Widget</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="font-medium">Name:</span> {selectedWidget.name}
+                </div>
+                <div>
+                  <span className="font-medium">Type:</span> {selectedWidget.widgetType}
+                </div>
+                <div>
+                  <span className="font-medium">Plugin:</span> {selectedWidget.pluginName}
+                </div>
+                <div>
+                  <span className="font-medium">System:</span> {selectedWidget.systemName}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+      
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button variant="outline" onClick={() => setShowWidgetImport(false)}>
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleImportWidget}
+          disabled={!selectedWidget}
+        >
+          <Import className="h-4 w-4 mr-2" />
+          Import Widget
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+);

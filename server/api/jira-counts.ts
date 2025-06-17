@@ -23,12 +23,12 @@ const PROJECTS = [
   {
     key: 'DEP',
     name: 'Development & Planning',
-    query: 'Project = DEP'
+    query: 'project = "DEP"'
   },
   {
     key: 'MD', 
     name: 'Managed Detection & Response',
-    query: 'Project = MD'
+    query: 'project = "MD"'
   }
 ];
 

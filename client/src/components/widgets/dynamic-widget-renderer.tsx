@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { apiRequest } from '@/lib/api';
 import { 
   RefreshCw, 
   AlertCircle, 
@@ -16,7 +17,10 @@ import {
   Gauge,
   TrendingUp,
   TrendingDown,
-  Activity
+  Activity,
+  Hash,
+  Percent,
+  Target
 } from 'lucide-react';
 import {
   BarChart,
@@ -46,7 +50,8 @@ interface CustomWidget {
   customQuery?: string;
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
+               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number;
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -75,7 +80,9 @@ interface DynamicWidgetRendererProps {
   clientShortName?: string; // For client-specific widgets
   onEdit?: (widget: CustomWidget) => void;
   onDelete?: (widgetId: string) => void;
+  onRefresh?: () => void; // For external refresh requests
   className?: string;
+  previewData?: any; // For preview mode with test data
 }
 
 export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
@@ -83,7 +90,9 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   clientShortName,
   onEdit,
   onDelete,
-  className = ''
+  onRefresh,
+  className = '',
+  previewData
 }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -91,14 +100,22 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
+    // If we have preview data, use it directly
+    if (previewData) {
+      setData(previewData);
+      setLastUpdate(new Date());
+      setLoading(false);
+      return;
+    }
+    
     fetchData();
     
-    // Set up auto-refresh
-    if (widget.refreshInterval > 0) {
+    // Set up auto-refresh (only if not in preview mode)
+    if (widget.refreshInterval > 0 && !previewData) {
       const interval = setInterval(fetchData, widget.refreshInterval * 1000);
       return () => clearInterval(interval);
     }
-  }, [widget, clientShortName]);
+  }, [widget, clientShortName, previewData]);
 
   const fetchData = async () => {
     try {
@@ -120,7 +137,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           body = { parameters: queryParams };
         }
       } else if (widget.queryType === 'custom' && widget.customQuery) {
-        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/custom-query`;
+        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/query`;
         body = {
           query: widget.customQuery,
           method: widget.queryMethod,
@@ -130,13 +147,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         throw new Error('Invalid widget configuration');
       }
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: body ? JSON.stringify(body) : null
-      });
+      const response = await apiRequest('POST', endpoint, body);
 
       const result = await response.json();
       
@@ -154,7 +165,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   };
 
   const getWidthClass = () => {
-    switch (widget.styling.width) {
+    const width = widget.styling?.width || 'full';
+    switch (width) {
       case 'full': return 'w-full';
       case 'half': return 'w-1/2';
       case 'third': return 'w-1/3';
@@ -164,7 +176,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   };
 
   const getHeightClass = () => {
-    switch (widget.styling.height) {
+    const height = widget.styling?.height || 'medium';
+    switch (height) {
       case 'small': return 'h-48';
       case 'medium': return 'h-72';
       case 'large': return 'h-96';
@@ -214,6 +227,18 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         return renderGauge();
       case 'query':
         return renderQuery();
+      case 'number':
+        return renderNumber();
+      case 'percentage':
+        return renderPercentage();
+      case 'progress':
+        return renderProgress();
+      case 'trend':
+        return renderTrend();
+      case 'statistic':
+        return renderStatistic();
+      case 'summary':
+        return renderSummary();
       default:
         return <div>Unsupported display type: {widget.displayType}</div>;
     }
@@ -567,10 +592,328 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     );
   };
 
+    const renderNumber = () => {
+    let value = data;
+    let label = 'Count';
+
+    // Handle aggregation results
+    if (widget.aggregation) {
+      if (typeof data === 'object' && data !== null) {
+        if (widget.aggregation.function === 'count') {
+          value = data.totalResults || data.length || data.count || 0;
+          label = 'Total Count';
+        } else if (widget.aggregation.function === 'sum') {
+          value = data.sum || data.total || 0;
+          label = 'Total Sum';
+        }
+      } else if (Array.isArray(data)) {
+        value = data.length;
+        label = 'Count';
+      }
+    } else if (Array.isArray(data)) {
+      value = data.length;
+      label = 'Count';
+    } else if (typeof data === 'object' && data !== null && 'totalResults' in data) {
+      value = data.totalResults;
+      label = 'Total Results';
+    }
+
+    const formatNumber = (num: any) => {
+      if (typeof num === 'number') {
+        return num.toLocaleString();
+      }
+      return String(num);
+    };
+
+    return (
+      <div className="text-center py-8">
+        <div className="flex items-center justify-center mb-4">
+          <Hash className="h-6 w-6 text-blue-500 mr-2" />
+          <div className="text-6xl font-bold text-blue-600">
+            {formatNumber(value)}
+          </div>
+        </div>
+        <div className="text-xl text-gray-600 font-medium">
+          {label}
+        </div>
+        {widget.description && (
+          <div className="text-sm text-gray-500 mt-2">
+            {widget.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPercentage = () => {
+    let value = 0;
+    let label = 'Percentage';
+
+    // Handle aggregation results
+    if (widget.aggregation) {
+      if (typeof data === 'object' && data !== null) {
+        if (widget.aggregation.function === 'avg') {
+          value = data.average || data.avg || 0;
+          label = 'Average';
+        } else if (widget.aggregation.function === 'count') {
+          // Calculate percentage if there's a total reference
+          const count = data.count || data.length || 0;
+          const total = data.total || 100;
+          value = total > 0 ? (count / total) * 100 : 0;
+          label = 'Completion Rate';
+        }
+      }
+    } else if (typeof data === 'number') {
+      value = data;
+    } else if (typeof data === 'object' && data !== null) {
+      if ('percentage' in data) value = data.percentage;
+      else if ('percent' in data) value = data.percent;
+      else if ('rate' in data) value = data.rate;
+    }
+
+    const getColor = () => {
+      if (value >= 90) return 'text-green-600';
+      if (value >= 70) return 'text-blue-600';
+      if (value >= 50) return 'text-yellow-600';
+      return 'text-red-600';
+    };
+
+    return (
+      <div className="text-center py-8">
+        <div className="flex items-center justify-center mb-4">
+          <Percent className="h-6 w-6 text-green-500 mr-2" />
+          <div className={`text-6xl font-bold ${getColor()}`}>
+            {Math.round(value)}%
+          </div>
+        </div>
+        <div className="text-xl text-gray-600 font-medium">
+          {label}
+        </div>
+        {widget.description && (
+          <div className="text-sm text-gray-500 mt-2">
+            {widget.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderProgress = () => {
+    let value = 0;
+    let max = 100;
+    let label = 'Progress';
+
+    if (typeof data === 'object' && data !== null) {
+      if ('value' in data) value = data.value;
+      if ('max' in data) max = data.max;
+      if ('current' in data) value = data.current;
+      if ('target' in data) max = data.target;
+      if ('completed' in data && 'total' in data) {
+        value = data.completed;
+        max = data.total;
+        label = 'Completion';
+      }
+    } else if (typeof data === 'number') {
+      value = data;
+    } else if (Array.isArray(data)) {
+      value = data.length;
+      max = 100; // Assume out of 100 for arrays
+    }
+
+    const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+    
+    const getBarColor = () => {
+      if (percentage >= 80) return 'bg-green-500';
+      if (percentage >= 60) return 'bg-blue-500';
+      if (percentage >= 40) return 'bg-yellow-500';
+      return 'bg-red-500';
+    };
+
+    return (
+      <div className="py-8 px-4">
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-lg font-medium text-gray-700">{label}</span>
+            <span className="text-2xl font-bold text-gray-900">
+              {value} / {max}
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-6">
+            <div 
+              className={`h-6 rounded-full transition-all duration-500 ${getBarColor()}`}
+              style={{ width: `${percentage}%` }}
+            >
+              <div className="h-full flex items-center justify-center text-white font-medium text-sm">
+                {Math.round(percentage)}%
+              </div>
+            </div>
+          </div>
+        </div>
+        {widget.description && (
+          <div className="text-sm text-gray-500 text-center">
+            {widget.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTrend = () => {
+    let value = 0;
+    let previous = 0;
+    let label = 'Trend';
+
+    if (typeof data === 'object' && data !== null) {
+      if ('current' in data) value = data.current;
+      if ('previous' in data) previous = data.previous;
+      if ('value' in data) value = data.value;
+      if ('baseline' in data) previous = data.baseline;
+      if ('trend' in data) {
+        // If trend is already calculated
+        const trend = data.trend;
+        return (
+          <div className="text-center py-8">
+            <div className="flex items-center justify-center mb-4">
+              {trend > 0 ? (
+                <TrendingUp className="h-8 w-8 text-green-500 mr-2" />
+              ) : trend < 0 ? (
+                <TrendingDown className="h-8 w-8 text-red-500 mr-2" />
+              ) : (
+                <Activity className="h-8 w-8 text-gray-500 mr-2" />
+              )}
+              <div className={`text-4xl font-bold ${
+                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+              }`}>
+                {trend > 0 ? '+' : ''}{trend}%
+              </div>
+            </div>
+            <div className="text-lg text-gray-600">{label}</div>
+          </div>
+        );
+      }
+    } else if (typeof data === 'number') {
+      value = data;
+    }
+
+    const change = previous !== 0 ? ((value - previous) / previous) * 100 : 0;
+    const isPositive = change > 0;
+    const isNegative = change < 0;
+
+    return (
+      <div className="text-center py-8">
+        <div className="flex items-center justify-center mb-4">
+          {isPositive ? (
+            <TrendingUp className="h-8 w-8 text-green-500 mr-2" />
+          ) : isNegative ? (
+            <TrendingDown className="h-8 w-8 text-red-500 mr-2" />
+          ) : (
+            <Activity className="h-8 w-8 text-gray-500 mr-2" />
+          )}
+          <div className={`text-4xl font-bold ${
+            isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'
+          }`}>
+            {change > 0 ? '+' : ''}{Math.round(change)}%
+          </div>
+        </div>
+        <div className="text-lg text-gray-600">{label}</div>
+        <div className="text-sm text-gray-500 mt-2">
+          Current: {value.toLocaleString()} | Previous: {previous.toLocaleString()}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStatistic = () => {
+    let stats = { min: 0, max: 0, avg: 0, count: 0 };
+
+    if (widget.aggregation && typeof data === 'object' && data !== null) {
+      if ('min' in data) stats.min = data.min;
+      if ('max' in data) stats.max = data.max;
+      if ('avg' in data || 'average' in data) stats.avg = data.avg || data.average;
+      if ('count' in data) stats.count = data.count;
+    } else if (Array.isArray(data)) {
+      // Calculate stats from array
+      const numbers = data.filter(item => typeof item === 'number');
+      if (numbers.length > 0) {
+        stats.min = Math.min(...numbers);
+        stats.max = Math.max(...numbers);
+        stats.avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+        stats.count = numbers.length;
+      }
+    }
+
+    return (
+      <div className="py-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-4 bg-blue-50 rounded-lg border">
+            <div className="text-2xl font-bold text-blue-600">{stats.min.toLocaleString()}</div>
+            <div className="text-sm text-blue-800">Minimum</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg border">
+            <div className="text-2xl font-bold text-green-600">{stats.max.toLocaleString()}</div>
+            <div className="text-sm text-green-800">Maximum</div>
+          </div>
+          <div className="text-center p-4 bg-yellow-50 rounded-lg border">
+            <div className="text-2xl font-bold text-yellow-600">{Math.round(stats.avg).toLocaleString()}</div>
+            <div className="text-sm text-yellow-800">Average</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg border">
+            <div className="text-2xl font-bold text-purple-600">{stats.count.toLocaleString()}</div>
+            <div className="text-sm text-purple-800">Count</div>
+          </div>
+        </div>
+        {widget.description && (
+          <div className="text-sm text-gray-500 text-center mt-4">
+            {widget.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSummary = () => {
+    let summaryData = {};
+
+    if (typeof data === 'object' && data !== null) {
+      summaryData = data;
+    } else if (Array.isArray(data)) {
+      summaryData = {
+        'Total Items': data.length,
+        'Data Type': 'Array',
+        'First Item': data[0] ? (typeof data[0] === 'object' ? 'Object' : String(data[0]).substring(0, 30)) : 'None'
+      };
+    } else {
+      summaryData = {
+        'Value': String(data),
+        'Type': typeof data
+      };
+    }
+
+    return (
+      <div className="py-6">
+        <div className="space-y-3">
+          {Object.entries(summaryData).slice(0, 6).map(([key, value], index) => (
+            <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+              <span className="font-medium text-gray-700">{key}</span>
+              <span className="text-gray-900 font-semibold">
+                {typeof value === 'number' ? value.toLocaleString() : String(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {widget.description && (
+          <div className="text-sm text-gray-500 text-center mt-4">
+            {widget.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const cardClasses = [
     className,
     getWidthClass(),
-    widget.styling.showBorder ? 'border' : 'border-0',
+    widget.styling?.showBorder !== false ? 'border' : 'border-0',
     'transition-all duration-200 hover:shadow-md'
   ].filter(Boolean).join(' ');
 
@@ -581,7 +924,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
   return (
     <Card className={cardClasses}>
-      {widget.styling.showHeader && (
+      {(widget.styling?.showHeader !== false) && (
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">
             {widget.name}
@@ -593,7 +936,12 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={fetchData}
+              onClick={() => {
+                fetchData();
+                if (onRefresh) {
+                  onRefresh();
+                }
+              }}
               disabled={loading}
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />

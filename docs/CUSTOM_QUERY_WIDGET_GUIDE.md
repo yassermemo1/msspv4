@@ -193,6 +193,145 @@ index=security client="${clientShortName}" earliest=-24h | stats count by severi
 - Review example queries for your plugin type
 - Use browser developer tools to debug API calls
 
+## JQL Query Formatting Guide
+
+### ⚠️ Common JQL Mistakes & Fixes
+
+Your error message indicates three main issues with your JQL queries:
+
+1. **"The value 'DEP' does not exist for the field 'project'"**
+2. **"The value 'MD' does not exist for the field 'project'"**  
+3. **"Not able to sort using field 'priority'"**
+
+### 🔧 **How to Fix These Issues**
+
+#### **Issue 1 & 2: Invalid Project Keys**
+
+**❌ Problem:**
+```jql
+project = DEP
+project = MD
+```
+
+**✅ Solutions:**
+
+**Option A: Check Your Actual Project Keys**
+1. Go to your Jira instance: `https://sd.sic.sitco.sa/rest/api/2/project`
+2. Find the real project keys (they might be different)
+3. Use the actual keys in your query
+
+**Option B: Use Correct Syntax**
+```jql
+project = "YOUR_ACTUAL_PROJECT_KEY"
+project in ("KEY1", "KEY2", "KEY3")
+```
+
+#### **Issue 3: Invalid Sort Field**
+
+**❌ Problem:**
+```jql
+ORDER BY priority DESC
+```
+
+**✅ Solution:**
+```jql
+ORDER BY created DESC
+ORDER BY updated DESC  
+ORDER BY key ASC
+ORDER BY status DESC
+```
+
+### 📝 **Complete Fixed Query Examples**
+
+**Before (Broken):**
+```jql
+Project = DEP AND Project = MD ORDER BY priority
+```
+
+**After (Fixed):**
+```jql
+project in ("YOUR_PROJECT_1", "YOUR_PROJECT_2") ORDER BY created DESC
+```
+
+### 🎯 **JQL Best Practices for Custom Widgets**
+
+#### **1. Field Names**
+- ✅ **Correct:** `project`, `status`, `assignee`, `reporter`
+- ❌ **Wrong:** `Project`, `Status`, `Assignee`, `Reporter`
+
+#### **2. String Values** 
+- ✅ **Correct:** `project = "MYPROJECT"`
+- ❌ **Wrong:** `project = MYPROJECT`
+
+#### **3. Multiple Values**
+- ✅ **Correct:** `project in ("PROJ1", "PROJ2")`
+- ❌ **Wrong:** `project in (PROJ1, PROJ2)`
+
+#### **4. Valid Sort Fields**
+- ✅ **Valid:** `created`, `updated`, `key`, `status`, `assignee`
+- ❌ **Invalid:** `priority` (use `created` instead)
+
+#### **5. Combining Conditions**
+- ✅ **Correct:** `project = "MYPROJ" AND status != "Done"`
+- ❌ **Wrong:** `project = MYPROJ AND status != Done`
+
+### 🛠 **Testing Your Queries**
+
+Before creating widgets, test your JQL queries:
+
+1. **In Jira Web Interface:**
+   - Go to Issues → Search for Issues
+   - Switch to "Advanced" search
+   - Test your JQL there first
+
+2. **Using API Testing:**
+   ```bash
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        "https://sd.sic.sitco.sa/rest/api/2/search?jql=YOUR_ENCODED_QUERY"
+   ```
+
+3. **Widget Test Button:**
+   - Use the "Test Query" button in the widget builder
+   - Check the validation warnings and suggestions
+
+### 📋 **Common Query Templates**
+
+#### **Recent Issues by Project:**
+```jql
+project = "YOUR_PROJECT_KEY" AND created >= -7d ORDER BY created DESC
+```
+
+#### **Open Issues for Current User:**
+```jql
+assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC
+```
+
+#### **Issues by Status:**
+```jql
+project = "YOUR_PROJECT_KEY" AND status in ("To Do", "In Progress") ORDER BY created DESC
+```
+
+#### **Multiple Projects:**
+```jql
+project in ("PROJ1", "PROJ2", "PROJ3") AND status != "Done" ORDER BY updated DESC
+```
+
+### 🔍 **Finding Your Project Keys**
+
+If you don't know your project keys:
+
+1. **Via Jira Web Interface:**
+   - Go to Projects → View All Projects
+   - The project key is shown next to each project name
+
+2. **Via API:**
+   ```bash
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        "https://sd.sic.sitco.sa/rest/api/2/project" | jq '.[] | {key: .key, name: .name}'
+   ```
+
+3. **Ask Your Jira Administrator** for the list of available project keys
+
 ---
 
 **Note**: The Custom Query Widget is designed for technical users who need to access raw data. For standard reporting needs, consider using Table, Chart, or Metric widget types instead. 

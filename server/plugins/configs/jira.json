@@ -3,12 +3,11 @@
     {
       "id": "jira-main",
       "name": "Main Jira Instance",
-      "baseUrl": "https://your-jira-domain.com",
+      "baseUrl": "https://sd.sic.sitco.sa",
       "authType": "bearer",
       "authConfig": {
-        "username": "your-username",
-        "password": "your-password",
-        "token": "your-api-token"
+        "username": "yalmohammed",
+        "token": "YOUR_JIRA_API_TOKEN_HERE"
       },
       "isActive": true,
       "tags": [
@@ -16,9 +15,8 @@
         "project-management"
       ],
       "sslConfig": {
-        "rejectUnauthorized": false,
-        "allowSelfSigned": true,
-        "timeout": 30000
+        "verifyCertificate": false,
+        "allowSelfSigned": true
       }
     }
   ],

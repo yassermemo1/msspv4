@@ -7,8 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 export interface DashboardCard {
   id: string;
   title: string;
-  type: 'metric' | 'chart' | 'table' | 'custom' | 'builtin';
-  category: 'dashboard' | 'kpi' | 'chart' | 'custom';
+  type: 'metric' | 'chart' | 'table' | 'custom' | 'builtin' | 'widget';
+  category: 'dashboard' | 'kpi' | 'chart' | 'custom' | 'widget';
   dataSource: string;
   size: 'small' | 'medium' | 'large' | 'xlarge';
   visible: boolean;
@@ -49,6 +49,11 @@ export interface DashboardCard {
     enableDrillDown?: boolean;
     customColors?: string[];
     colors?: string[];
+    // Widget import configuration
+    widgetId?: string; // ID of the imported widget
+    widgetType?: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+    pluginName?: string;
+    instanceId?: string;
   };
   isBuiltIn: boolean;
   isRemovable: boolean;

@@ -25,11 +25,11 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from '@/lib/utils';
-import { ClientWidgetsManager } from "@/components/dashboard/client-widgets-manager";
+// Client widgets manager removed - consolidated to global widget manager
 
 export default function HomePage() {
   const { user } = useAuth();
-  const { formatAmount } = useCurrency();
+  // Currency formatting removed - use basic formatting instead
   const [, setLocation] = useLocation();
   // Dashboard widgets hook removed - deprecated
   const widgetsWithData: any[] = [];
@@ -112,7 +112,7 @@ export default function HomePage() {
 
     const path = navigationMap[card.dataSource];
     if (path) {
-      setLocation(path);
+      window.location.href = path;
     }
   };
 
@@ -239,38 +239,7 @@ export default function HomePage() {
           </Card>
         </div>
 
-        {/* Dashboard Customizer */}
-        <EnhancedDashboard 
-          className={showCustomizer ? "block" : "hidden"}
-        />
-
-        {/* Widget Manager Modal */}
-        {showWidgetManager && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto">
-              <div className="p-4 sm:p-6 border-b">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg sm:text-xl font-semibold">Widget Manager</h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowWidgetManager(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="p-4 sm:p-6">
-                <ClientWidgetsManager
-                  clientId={null}
-                  onWidgetUpdate={() => {
-                    // Refresh widgets if needed
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Dashboard Customizer and Widget Manager removed - consolidated to main dashboard */}
       </div>
     </AppLayout>
   );

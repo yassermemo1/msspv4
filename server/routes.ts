@@ -19,7 +19,7 @@ import {
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
   clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   pagePermissions, savedSearches, searchHistory,
-  serviceScopeFields, scopeVariableValues, userDashboardSettings
+  serviceScopeFields, scopeVariableValues, userDashboardSettings, customWidgets
 } from "@shared/schema";
 import { z } from "zod";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -4176,12 +4176,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user dashboard settings
   app.get("/api/user-dashboard-settings", requireAuth, async (req, res, next) => {
     try {
-      // Return default dashboard settings for now
-      res.json({
-        layout: 'grid',
-        cards: [],
-        refreshInterval: 300000
-      });
+      const userId = req.user!.id;
+      
+      // Get user's dashboard settings
+      const settings = await storage.getUserDashboardSettings(userId);
+      
+      res.json(settings);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Save user dashboard settings
+  app.post('/api/user-dashboard-settings', requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const { cards } = req.body;
+      
+      if (!Array.isArray(cards)) {
+        return res.status(400).json({ error: 'Invalid cards format' });
+      }
+      
+      // Save user's dashboard settings
+      await storage.saveUserDashboardSettings(userId, cards);
+      
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update specific dashboard card
+  app.put('/api/user-dashboard-settings/:cardId', requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const { cardId } = req.params;
+      const updates = req.body;
+      
+      // Update specific card settings
+      await storage.updateUserDashboardCard(userId, cardId, updates);
+      
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Remove dashboard card
+  app.delete('/api/user-dashboard-settings/:cardId', requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const { cardId } = req.params;
+      
+      console.log(`=== DELETE DASHBOARD CARD ===`);
+      console.log(`User ID: ${userId}, Card ID: ${cardId}`);
+      console.log(`Request URL: ${req.url}`);
+      console.log(`Request params:`, req.params);
+      
+      // Remove card from user's dashboard
+      await storage.removeUserDashboardCard(userId, cardId);
+      
+      console.log(`Successfully removed card: ${cardId}`);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Reset dashboard settings to defaults
+  app.post('/api/user-dashboard-settings/reset', requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Reset to default dashboard settings
+      await storage.resetUserDashboardSettings(userId);
+      
+      res.json({ success: true });
     } catch (error) {
       next(error);
     }
@@ -4239,1271 +4309,338 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get widgets manage
   app.get("/api/widgets/manage", requireAuth, async (req, res, next) => {
     try {
-      // Return empty array for now - widget management would need to be implemented
-      res.json([]);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Note: Plugin routes are now handled by pluginRoutes mounted at /api/plugins
-  // (Legacy route commented out - handled by plugin-routes.ts)
-
-  // Get documents
-  app.get("/api/documents", requireAuth, async (req, res, next) => {
-    try {
-      const { clientId, documentType } = req.query;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
       
-      let whereConditions: any[] = [eq(documents.isActive, true)];
-      if (clientId) {
-        whereConditions.push(eq(documents.clientId, parseInt(clientId as string)));
-      }
-      if (documentType && documentType !== 'all') {
-        whereConditions.push(eq(documents.documentType, documentType as string));
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-
-      const docs = await db
-        .select({
-          id: documents.id,
-          name: documents.name,
-          description: documents.description,
-          documentType: documents.documentType,
-          fileName: documents.fileName,
-          filePath: documents.filePath,
-          fileSize: documents.fileSize,
-          mimeType: documents.mimeType,
-          version: documents.version,
-          isActive: documents.isActive,
-          clientId: documents.clientId,
-          contractId: documents.contractId,
-          tags: documents.tags,
-          expirationDate: documents.expirationDate,
-          complianceType: documents.complianceType,
-          uploadedBy: documents.uploadedBy,
-          createdAt: documents.createdAt,
-          updatedAt: documents.updatedAt,
-          clientName: clients.name,
-          contractName: contracts.name
-        })
-        .from(documents)
-        .leftJoin(clients, eq(documents.clientId, clients.id))
-        .leftJoin(contracts, eq(documents.contractId, contracts.id))
-        .where(whereClause)
-        .orderBy(desc(documents.createdAt));
-
-      res.json(docs);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get document by ID
-  app.get("/api/documents/:id", requireAuth, async (req, res, next) => {
-    try {
-      const id = parseInt(req.params.id);
+      // Get all custom widgets for management (admin can see all, users see only their own)
+      const conditions = [eq(customWidgets.isActive, true)];
       
-      const [document] = await db
+      if (userRole !== 'admin') {
+        conditions.push(eq(customWidgets.userId, userId));
+      }
+
+      const widgets = await db
         .select()
-        .from(documents)
-        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
-        .limit(1);
-
-      if (!document) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      res.json(document);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Upload document
-  app.post("/api/documents/upload", requireAuth, upload.single('file'), async (req, res, next) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      const { name, documentType = 'general', clientId, contractId, description, tags } = req.body;
-      
-      const documentData = {
-        name: name || req.file.originalname,
-        description: description || null,
-        documentType,
-        fileName: req.file.filename,
-        filePath: req.file.path,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-        version: 1,
-        isActive: true,
-        clientId: clientId ? parseInt(clientId) : null,
-        contractId: contractId ? parseInt(contractId) : null,
-        tags: tags ? (Array.isArray(tags) ? tags : [tags]) : null,
-        uploadedBy: req.user?.id || 1,
-      };
-
-      const [newDocument] = await db
-        .insert(documents)
-        .values(documentData)
-        .returning();
-
-      res.status(201).json({
-        id: newDocument.id,
-        fileName: newDocument.fileName,
-        fileUrl: `/uploads/${newDocument.fileName}`,
-        fileSize: newDocument.fileSize,
-        message: "Document uploaded successfully"
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Download document
-  app.get("/api/documents/:id/download", requireAuth, async (req, res, next) => {
-    try {
-      const id = parseInt(req.params.id);
-      
-      const [document] = await db
-        .select()
-        .from(documents)
-        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
-        .limit(1);
-
-      if (!document) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      const filePath = path.join(process.cwd(), 'uploads', document.fileName);
-      
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: "File not found on disk" });
-      }
-
-      res.download(filePath, document.name || document.fileName);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Delete document
-  app.delete("/api/documents/:id", requireAuth, async (req, res, next) => {
-    try {
-      const id = parseInt(req.params.id);
-      
-      const [document] = await db
-        .select()
-        .from(documents)
-        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
-        .limit(1);
-
-      if (!document) {
-        return res.status(404).json({ message: "Document not found" });
-      }
-
-      // Soft delete by setting isActive to false
-      await db
-        .update(documents)
-        .set({ 
-          isActive: false, 
-          updatedAt: new Date() 
-        })
-        .where(eq(documents.id, id));
-
-      res.json({ message: "Document deleted successfully" });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get financial transactions
-  app.get("/api/financial-transactions", requireAuth, async (req, res, next) => {
-    try {
-      // Return empty array for now - financial transactions would need to be implemented
-      res.json([]);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get team assignments
-  app.get("/api/team-assignments", requireAuth, async (req, res, next) => {
-    try {
-      // Return empty array for now - team assignments would need to be implemented
-      res.json([]);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // PREVIOUSLY MISSING ENDPOINTS
-  // ========================================
-  
-  // Admin stats endpoint
-  app.get("/api/admin/stats", requireAdmin, async (req, res, next) => {
-    try {
-      const [clientCount] = await db.select({ count: sql<number>`count(*)` }).from(clients);
-      const [contractCount] = await db.select({ count: sql<number>`count(*)` }).from(contracts);
-      const [serviceCount] = await db.select({ count: sql<number>`count(*)` }).from(services);
-      const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
-
-      const stats = {
-        overview: {
-          totalClients: Number(clientCount?.count || 0),
-          totalContracts: Number(contractCount?.count || 0),
-          totalServices: Number(serviceCount?.count || 0),
-          totalUsers: Number(userCount?.count || 0)
-        },
-        timestamp: new Date().toISOString()
-      };
-
-      res.json(stats);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Search analytics endpoint
-  app.get("/api/search/analytics", requireAuth, async (req, res, next) => {
-    try {
-      const analytics = {
-        popularSearches: [],
-        searchVolume: 0,
-        averageResponseTime: 0,
-        timestamp: new Date().toISOString()
-      };
-      res.json(analytics);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Proposals endpoint
-  app.get("/api/proposals", requireAuth, async (req, res, next) => {
-    try {
-      const { clientId } = req.query;
-      
-      // For now, return mock data since proposals table might not be properly set up
-      const mockProposals = [
-        {
-          id: 1,
-          contractId: 1,
-          type: "technical",
-          description: "Security Enhancement Proposal",
-          proposedValue: 50000,
-          proposedStartDate: new Date("2024-01-01").toISOString(),
-          proposedEndDate: new Date("2024-12-31").toISOString(),
-          status: "pending",
-          documentUrl: null,
-          notes: "Proposed security enhancements for Q1-Q4 2024",
-          createdAt: new Date().toISOString(),
-          contractName: "Annual Security Services",
-          clientName: "Acme Corp"
-        },
-        {
-          id: 2,
-          contractId: 2,
-          type: "financial",
-          description: "Cost Optimization Proposal",
-          proposedValue: 35000,
-          proposedStartDate: new Date("2024-02-01").toISOString(),
-          proposedEndDate: new Date("2024-06-30").toISOString(),
-          status: "approved",
-          documentUrl: null,
-          notes: "Cost optimization through service consolidation",
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          contractName: "Managed Services Agreement",
-          clientName: "Tech Solutions Inc"
-        }
-      ];
-      
-      // Filter by clientId if provided
-      if (clientId) {
-        // For mock data, just return empty array if clientId is provided
-        // In real implementation, this would filter based on contract's clientId
-        return res.json([]);
-      }
-      
-      res.json(mockProposals);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Service Authorization Forms endpoint
-  app.get("/api/service-authorization-forms", requireAuth, async (req, res, next) => {
-    try {
-      const { contractId, clientId } = req.query;
-      
-      let whereConditions: any[] = [];
-      
-      if (contractId) {
-        whereConditions.push(eq(serviceAuthorizationForms.contractId, parseInt(contractId as string)));
-      }
-      
-      if (clientId) {
-        whereConditions.push(eq(serviceAuthorizationForms.clientId, parseInt(clientId as string)));
-      }
-
-      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-
-      const safs = await db
-        .select({
-          id: serviceAuthorizationForms.id,
-          clientId: serviceAuthorizationForms.clientId,
-          contractId: serviceAuthorizationForms.contractId,
-          serviceScopeId: serviceAuthorizationForms.serviceScopeId,
-          safNumber: serviceAuthorizationForms.safNumber,
-          title: serviceAuthorizationForms.title,
-          description: serviceAuthorizationForms.description,
-          status: serviceAuthorizationForms.status,
-          requestedDate: serviceAuthorizationForms.requestedDate,
-          approvedDate: serviceAuthorizationForms.approvedDate,
-          expiryDate: serviceAuthorizationForms.expiryDate,
-          approvedBy: serviceAuthorizationForms.approvedBy,
-          notes: serviceAuthorizationForms.notes,
-          createdAt: serviceAuthorizationForms.createdAt,
-          clientName: clients.name,
-          contractName: contracts.name
-        })
-        .from(serviceAuthorizationForms)
-        .leftJoin(clients, eq(serviceAuthorizationForms.clientId, clients.id))
-        .leftJoin(contracts, eq(serviceAuthorizationForms.contractId, contracts.id))
-        .where(whereClause)
-        .orderBy(desc(serviceAuthorizationForms.createdAt));
-
-      res.json(safs);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Reports endpoints (placeholders)
-  app.get("/api/reports/revenue-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Revenue analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/invoice-summary", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Invoice summary report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/payment-history", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Payment history report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/client-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Client analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/contract-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Contract analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/service-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Service analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/operational-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Operational analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/security-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Security analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/reports/compliance-analysis", requireAuth, async (req, res, next) => {
-    try {
-      res.json({ message: "Compliance analysis report placeholder", data: [] });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // AUDIT MANAGEMENT ENDPOINTS
-  // ========================================
-  
-  // New audit endpoints matching frontend expectations
-  app.get("/api/audit/logs", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId, dateRange = '7d' } = req.query;
-      
-      // Mock audit logs data filtered by entity if provided
-      const mockAuditLogs = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          action: 'VIEW',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          resource: `${entityType}:${entityId}`,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent'),
-          details: { success: true }
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          action: 'UPDATE',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          resource: `${entityType}:${entityId}`,
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent'),
-          details: { fields: ['name', 'email'] }
-        }
-      ];
-      
-      res.json(mockAuditLogs);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/audit/change-history", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId, dateRange = '7d' } = req.query;
-      
-      // Mock change history data
-      const mockChangeHistory = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          action: 'UPDATE',
-          field: 'name',
-          oldValue: 'Old Client Name',
-          newValue: 'New Client Name',
-          reason: 'Client name updated'
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          action: 'UPDATE',
-          field: 'status',
-          oldValue: 'INACTIVE',
-          newValue: 'ACTIVE',
-          reason: 'Client activated'
-        }
-      ];
-      
-      res.json(mockChangeHistory);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/audit/security-events", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId, dateRange = '7d' } = req.query;
-      
-      // Mock security events data
-      const mockSecurityEvents = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          eventType: 'UNAUTHORIZED_ACCESS_ATTEMPT',
-          severity: 'MEDIUM',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          source: req.ip,
-          description: 'Unauthorized access attempt to client data',
-          details: { attempts: 1, blocked: true }
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          eventType: 'DATA_EXPORT',
-          severity: 'LOW',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          source: req.ip,
-          description: 'Client data exported',
-          details: { format: 'PDF', user: req.user?.username }
-        }
-      ];
-      
-      res.json(mockSecurityEvents);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get("/api/audit/data-access", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId, dateRange = '7d' } = req.query;
-      
-      // Mock data access logs
-      const mockDataAccessLogs = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          dataType: 'CLIENT_DATA',
-          operation: 'READ',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          ipAddress: req.ip,
-          details: { fields: ['name', 'email', 'contracts'], sensitive: false }
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 1800000).toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          dataType: 'CLIENT_DATA',
-          operation: 'UPDATE',
-          entityType: entityType || 'client',
-          entityId: entityId ? parseInt(entityId as string) : 28,
-          ipAddress: req.ip,
-          details: { fields: ['status'], sensitive: false }
-        }
-      ];
-      
-      res.json(mockDataAccessLogs);
-    } catch (error) {
-      next(error);
-    }
-  });
-  
-  // Audit logs endpoint
-  app.get("/api/audit-logs", requireAuth, async (req, res, next) => {
-    try {
-      const { 
-        dateRange = '7d', 
-        action, 
-        entityType, 
-        userId, 
-        limit = '100',
-        offset = '0',
-        searchTerm 
-      } = req.query;
-      
-      // Build date filter based on dateRange
-      let dateFilter;
-      switch (dateRange) {
-        case '1d':
-          dateFilter = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          break;
-        case '7d':
-          dateFilter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case '30d':
-          dateFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-          break;
-        case '90d':
-          dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-          break;
-        default:
-          dateFilter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      }
-      
-      // Build query conditions
-      const conditions: any[] = [gte(auditLogs.timestamp, dateFilter)];
-      
-      if (action) {
-        conditions.push(eq(auditLogs.action, action as string));
-      }
-      
-      if (entityType) {
-        conditions.push(eq(auditLogs.entityType, entityType as string));
-      }
-      
-      if (userId) {
-        conditions.push(eq(auditLogs.userId, parseInt(userId as string)));
-      }
-      
-      if (searchTerm) {
-        conditions.push(
-          or(
-            like(auditLogs.description, `%${searchTerm}%`),
-            like(auditLogs.entityName, `%${searchTerm}%`)
-          )
-        );
-      }
-      
-      // Get total count
-      const [countResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(auditLogs)
-        .where(and(...conditions));
-      
-      const totalCount = Number(countResult?.count || 0);
-      
-      // Get audit logs with user information
-      const logs = await db
-        .select({
-          id: auditLogs.id,
-          timestamp: auditLogs.timestamp,
-          userId: auditLogs.userId,
-          userName: users.username,
-          userFirstName: users.firstName,
-          userLastName: users.lastName,
-          action: auditLogs.action,
-          entityType: auditLogs.entityType,
-          entityId: auditLogs.entityId,
-          entityName: auditLogs.entityName,
-          description: auditLogs.description,
-          category: auditLogs.category,
-          severity: auditLogs.severity,
-          ipAddress: auditLogs.ipAddress,
-          userAgent: auditLogs.userAgent,
-          sessionId: auditLogs.sessionId,
-          metadata: auditLogs.metadata
-        })
-        .from(auditLogs)
-        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .from(customWidgets)
         .where(and(...conditions))
-        .orderBy(desc(auditLogs.timestamp))
-        .limit(parseInt(limit as string))
-        .offset(parseInt(offset as string));
-      
-      // Format the response
-      const formattedLogs = logs.map(log => ({
-        ...log,
-        userName: log.userName || 'System',
-        userFullName: log.userFirstName && log.userLastName 
-          ? `${log.userFirstName} ${log.userLastName}`
-          : log.userName || 'System'
+        .orderBy(desc(customWidgets.createdAt));
+
+      // Format widgets to match GlobalWidget interface expected by frontend
+      const formattedWidgets = widgets.map(widget => ({
+        id: widget.id.toString(),
+        systemId: 1, // Default system ID for compatibility
+        systemName: widget.pluginName,
+        pluginName: widget.pluginName,
+        name: widget.name,
+        description: widget.description || '',
+        widgetType: widget.displayType,
+        chartType: widget.chartType || undefined,
+        query: widget.customQuery || '',
+        method: widget.queryMethod,
+        parameters: widget.queryParameters,
+        displayConfig: widget.styling,
+        refreshInterval: widget.refreshInterval,
+        isActive: widget.isActive,
+        isGlobal: widget.placement === 'global-dashboard',
+        position: 0,
+        createdBy: widget.userId,
+        createdAt: widget.createdAt,
+        updatedAt: widget.updatedAt,
       }));
-      
-      res.json({
-        logs: formattedLogs,
-        totalCount,
-        hasMore: totalCount > parseInt(offset as string) + parseInt(limit as string)
-      });
+
+      res.json(formattedWidgets);
     } catch (error) {
       next(error);
     }
   });
 
-  // Security events endpoint
-  app.get("/api/security-events", requireAuth, async (req, res, next) => {
-    try {
-      const { dateRange = '7d' } = req.query;
-      
-      // Mock security events data
-      const mockSecurityEvents = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          eventType: 'FAILED_LOGIN',
-          severity: 'MEDIUM',
-          source: req.ip,
-          description: 'Multiple failed login attempts detected',
-          details: { attempts: 3, timeWindow: '5m' }
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          eventType: 'SUSPICIOUS_ACTIVITY',
-          severity: 'HIGH',
-          source: req.ip,
-          description: 'Unusual access pattern detected',
-          details: { pattern: 'rapid_requests' }
-        }
-      ];
-      
-      res.json(mockSecurityEvents);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Data access logs endpoint
-  app.get("/api/data-access-logs", requireAuth, async (req, res, next) => {
-    try {
-      const { dateRange = '7d' } = req.query;
-      
-      // Mock data access logs
-      const mockDataAccessLogs = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          dataType: 'CLIENT_DATA',
-          operation: 'READ',
-          resourceId: 'client_1',
-          ipAddress: req.ip,
-          details: { fields: ['name', 'email', 'contracts'] }
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 1800000).toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          dataType: 'CONTRACT_DATA',
-          operation: 'UPDATE',
-          resourceId: 'contract_5',
-          ipAddress: req.ip,
-          details: { fields: ['status', 'endDate'] }
-        }
-      ];
-      
-      res.json(mockDataAccessLogs);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Change history endpoint
-  app.get("/api/change-history", requireAuth, async (req, res, next) => {
-    try {
-      const { dateRange = '7d' } = req.query;
-      
-      // Mock change history data
-      const mockChangeHistory = [
-        {
-          id: 1,
-          timestamp: new Date().toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          entityType: 'CONTRACT',
-          entityId: 1,
-          action: 'UPDATE',
-          field: 'status',
-          oldValue: 'DRAFT',
-          newValue: 'ACTIVE',
-          reason: 'Contract approved and activated'
-        },
-        {
-          id: 2,
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          userId: req.user?.id,
-          userName: req.user?.username,
-          entityType: 'CLIENT',
-          entityId: 2,
-          action: 'CREATE',
-          field: null,
-          oldValue: null,
-          newValue: null,
-          reason: 'New client onboarded'
-        }
-      ];
-      
-      res.json(mockChangeHistory);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // USER PROFILE ENDPOINTS
-  // ========================================
-  
-  // Update user profile endpoint
-  app.put("/api/user/profile", requireAuth, async (req, res, next) => {
+  // Create widget via management interface
+  app.post("/api/widgets/manage", requireAuth, async (req, res, next) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({ error: "Authentication required" });
+        return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const { firstName, lastName, email, phone, timezone, language, notifications } = req.body;
+      // Convert GlobalWidget format to CustomWidget format
+      const {
+        name,
+        description,
+        pluginName,
+        widgetType,
+        chartType,
+        query,
+        method,
+        parameters,
+        displayConfig,
+        refreshInterval,
+        isGlobal
+      } = req.body;
 
-      // Validate email uniqueness if changing email
-      if (email && email !== req.user.email) {
-        const existingUser = await db
-          .select()
-          .from(users)
-          .where(and(eq(users.email, email), ne(users.id, userId)))
-          .limit(1);
-
-        if (existingUser.length > 0) {
-          return res.status(400).json({ error: "Email already in use" });
-        }
-      }
-
-      // Update user basic info (users table)
-      const userUpdateData: any = {};
-      if (firstName !== undefined) userUpdateData.firstName = firstName;
-      if (lastName !== undefined) userUpdateData.lastName = lastName;
-      if (email !== undefined) userUpdateData.email = email;
-
-      if (Object.keys(userUpdateData).length > 0) {
-        await db
-          .update(users)
-          .set(userUpdateData)
-          .where(eq(users.id, userId));
-      }
-
-      // Update user settings (userSettings table)
-      const settingsUpdateData: any = {};
-      if (timezone !== undefined) settingsUpdateData.timezone = timezone;
-      if (language !== undefined) settingsUpdateData.language = language;
-      if (notifications !== undefined) {
-        // Map notifications object to individual fields
-        if (notifications.email !== undefined) settingsUpdateData.emailNotifications = notifications.email;
-        if (notifications.push !== undefined) settingsUpdateData.pushNotifications = notifications.push;
-        if (notifications.contractReminders !== undefined) settingsUpdateData.contractReminders = notifications.contractReminders;
-        if (notifications.financialAlerts !== undefined) settingsUpdateData.financialAlerts = notifications.financialAlerts;
-      }
-
-      if (Object.keys(settingsUpdateData).length > 0) {
-        settingsUpdateData.updatedAt = new Date();
-        
-        // Check if user settings exist
-        const existingSettings = await db
-          .select()
-          .from(userSettings)
-          .where(eq(userSettings.userId, userId))
-          .limit(1);
-
-        if (existingSettings.length > 0) {
-          // Update existing settings
-          await db
-            .update(userSettings)
-            .set(settingsUpdateData)
-            .where(eq(userSettings.userId, userId));
-        } else {
-          // Create new settings record
-          await db
-            .insert(userSettings)
-            .values({
-              userId,
-              ...settingsUpdateData
-            });
-        }
-      }
-
-      // Get updated user data with settings
-      const updatedUser = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          role: users.role,
-          authProvider: users.authProvider,
-          isActive: users.isActive,
-          createdAt: users.createdAt,
-          // Settings from userSettings table
-          timezone: userSettings.timezone,
-          language: userSettings.language,
-          emailNotifications: userSettings.emailNotifications,
-          pushNotifications: userSettings.pushNotifications,
-          contractReminders: userSettings.contractReminders,
-          financialAlerts: userSettings.financialAlerts,
-          darkMode: userSettings.darkMode,
-          currency: userSettings.currency
-        })
-        .from(users)
-        .leftJoin(userSettings, eq(users.id, userSettings.userId))
-        .where(eq(users.id, userId))
-        .limit(1);
-
-      if (updatedUser.length === 0) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const user = updatedUser[0];
-      
-      // Format response to match expected structure
-      const responseUser = {
-        ...user,
-        notifications: {
-          email: user.emailNotifications,
-          push: user.pushNotifications,
-          contractReminders: user.contractReminders,
-          financialAlerts: user.financialAlerts
-        }
+      const widgetData = {
+        userId,
+        name: name || 'Untitled Widget',
+        description: description || '',
+        pluginName: pluginName || 'unknown',
+        instanceId: pluginName || 'default',
+        queryType: query ? 'custom' : 'default',
+        customQuery: query || '',
+        queryMethod: method || 'GET',
+        queryParameters: parameters || {},
+        displayType: widgetType || 'table',
+        chartType: chartType || null,
+        refreshInterval: refreshInterval || 30,
+        placement: isGlobal ? 'global-dashboard' : 'custom',
+        styling: displayConfig || {
+          width: 'full',
+          height: 'medium',
+          showBorder: true,
+          showHeader: true
+        },
+        isActive: true
       };
 
-      res.json({
-        message: "Profile updated successfully",
-        user: responseUser
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // CLIENT-SPECIFIC ENDPOINTS
-  // ========================================
-
-  // Get client financial transactions
-  app.get("/api/clients/:id/financial-transactions", requireAuth, async (req, res, next) => {
-    try {
-      const clientId = parseInt(req.params.id);
+      const newWidget = await storage.createCustomWidget(widgetData);
       
-      // Mock financial transactions data
-      const mockTransactions = [
-        {
-          id: 1,
-          clientId,
-          type: 'payment',
-          amount: 15000.00,
-          currency: 'USD',
-          description: 'Monthly service payment',
-          date: new Date('2024-01-15').toISOString(),
-          status: 'completed',
-          invoiceId: 'INV-2024-001',
-          paymentMethod: 'bank_transfer'
-        },
-        {
-          id: 2,
-          clientId,
-          type: 'refund',
-          amount: -500.00,
-          currency: 'USD',
-          description: 'Service credit adjustment',
-          date: new Date('2024-01-20').toISOString(),
-          status: 'completed',
-          invoiceId: 'INV-2024-002',
-          paymentMethod: 'credit'
-        }
-      ];
-
-      res.json(mockTransactions);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get client team assignments
-  app.get("/api/clients/:id/team-assignments", requireAuth, async (req, res, next) => {
-    try {
-      const clientId = parseInt(req.params.id);
-      
-      // Mock team assignments data
-      const mockAssignments = [
-        {
-          id: 1,
-          clientId,
-          userId: 2,
-          userName: 'John Smith',
-          userEmail: 'john.smith@mssp.local',
-          role: 'Security Analyst',
-          assignedDate: new Date('2024-01-01').toISOString(),
-          isActive: true,
-          responsibilities: ['Monitoring', 'Incident Response', 'Reporting']
-        },
-        {
-          id: 2,
-          clientId,
-          userId: 3,
-          userName: 'Sarah Johnson',
-          userEmail: 'sarah.johnson@mssp.local',
-          role: 'Senior Engineer',
-          assignedDate: new Date('2024-01-01').toISOString(),
-          isActive: true,
-          responsibilities: ['Architecture', 'Implementation', 'Support']
-        }
-      ];
-
-      res.json(mockAssignments);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get client licenses
-  app.get("/api/clients/:id/licenses", requireAuth, async (req, res, next) => {
-    try {
-      const clientId = parseInt(req.params.id);
-      
-      // Get licenses from license pools for this client
-      const licenses = await db
-        .select({
-          id: licensePools.id,
-          name: licensePools.name,
-          vendor: licensePools.vendor,
-          productName: licensePools.productName,
-          licenseType: licensePools.licenseType,
-          totalLicenses: licensePools.totalLicenses,
-          usedLicenses: licensePools.usedLicenses,
-          availableLicenses: licensePools.availableLicenses,
-          expirationDate: licensePools.expirationDate,
-          renewalDate: licensePools.renewalDate,
-          cost: licensePools.cost,
-          currency: licensePools.currency,
-          status: licensePools.status
-        })
-        .from(licensePools)
-        .where(eq(licensePools.clientId, clientId));
-
-      res.json(licenses);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get client hardware
-  app.get("/api/clients/:id/hardware", requireAuth, async (req, res, next) => {
-    try {
-      const clientId = parseInt(req.params.id);
-      
-      // Mock hardware data
-      const mockHardware = [
-        {
-          id: 1,
-          clientId,
-          name: 'Firewall-01',
-          type: 'Firewall',
-          vendor: 'Fortinet',
-          model: 'FortiGate 100F',
-          serialNumber: 'FG100F-12345',
-          ipAddress: '192.168.1.1',
-          location: 'Main Office',
-          status: 'active',
-          installDate: new Date('2023-06-01').toISOString(),
-          warrantyExpiry: new Date('2026-06-01').toISOString(),
-          lastMaintenance: new Date('2024-01-15').toISOString()
-        },
-        {
-          id: 2,
-          clientId,
-          name: 'Switch-Core-01',
-          type: 'Network Switch',
-          vendor: 'Cisco',
-          model: 'Catalyst 9300',
-          serialNumber: 'CAT9300-67890',
-          ipAddress: '192.168.1.10',
-          location: 'Server Room',
-          status: 'active',
-          installDate: new Date('2023-06-01').toISOString(),
-          warrantyExpiry: new Date('2026-06-01').toISOString(),
-          lastMaintenance: new Date('2024-01-10').toISOString()
-        }
-      ];
-
-      res.json(mockHardware);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // ENTITY RELATIONSHIPS ENDPOINTS
-  // ========================================
-
-  // Get entity relationships
-  app.get("/api/entities/:entityType/:entityId/relationships", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId } = req.params;
-      const { includeTypes, excludeTypes, limit } = req.query;
-      
-      const options: any = {};
-      if (includeTypes) options.includeTypes = (includeTypes as string).split(',');
-      if (excludeTypes) options.excludeTypes = (excludeTypes as string).split(',');
-      if (limit) options.limit = parseInt(limit as string);
-
-      const relationships = await entityRelationsService.getEntityRelationships(
-        entityType as any, 
-        parseInt(entityId), 
-        options
-      );
-
-      res.json(relationships);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Get entity relationship stats
-  app.get("/api/entities/:entityType/:entityId/relationships/stats", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId } = req.params;
-      
-      const stats = await entityRelationsService.getRelationshipStats(
-        entityType as any, 
-        parseInt(entityId)
-      );
-
-      res.json(stats);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Search entities
-  app.get("/api/entities/search", requireAuth, async (req, res, next) => {
-    try {
-      const { query, types, limit, offset } = req.query;
-      
-      const searchParams: any = {
-        query: query as string,
-        limit: limit ? parseInt(limit as string) : 20,
-        offset: offset ? parseInt(offset as string) : 0
+      // Format response to match GlobalWidget interface
+      const formattedWidget = {
+        id: newWidget.id.toString(),
+        systemId: 1,
+        systemName: newWidget.pluginName,
+        pluginName: newWidget.pluginName,
+        name: newWidget.name,
+        description: newWidget.description || '',
+        widgetType: newWidget.displayType,
+        chartType: newWidget.chartType || undefined,
+        query: newWidget.customQuery || '',
+        method: newWidget.queryMethod,
+        parameters: newWidget.queryParameters,
+        displayConfig: newWidget.styling,
+        refreshInterval: newWidget.refreshInterval,
+        isActive: newWidget.isActive,
+        isGlobal: newWidget.placement === 'global-dashboard',
+        position: 0,
+        createdBy: newWidget.userId,
+        createdAt: newWidget.createdAt,
+        updatedAt: newWidget.updatedAt,
       };
+
+      res.status(201).json(formattedWidget);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update widget via management interface
+  app.put("/api/widgets/manage/:id", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
       
-      if (types) {
-        searchParams.types = (types as string).split(',');
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const results = await entityRelationsService.searchEntities(searchParams);
-      res.json(results);
-    } catch (error) {
-      next(error);
-    }
-  });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid widget ID" });
+      }
 
-  // Get related entities
-  app.get("/api/entities/:entityType/:entityId/related/:relatedType", requireAuth, async (req, res, next) => {
-    try {
-      const { entityType, entityId, relatedType } = req.params;
-      const { relationshipType } = req.query;
-      
-      const relatedEntities = await entityRelationsService.getRelatedEntities(
-        entityType as any,
-        parseInt(entityId),
-        relatedType as any,
-        relationshipType as any
-      );
-
-      res.json(relatedEntities);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // PLUGINS ENDPOINTS - Now handled by plugin-routes.ts
-  // ========================================
-
-  // Note: Plugin types endpoint is now handled by pluginRoutes mounted at /api/plugins
-  // (Legacy route commented out - handled by plugin-routes.ts)
-
-  // Get plugin configurations
-  app.get("/api/plugins/configurations", requireAuth, async (req, res, next) => {
-    try {
-      const configurations = [
-        {
-          id: 1,
-          pluginId: 'fortigate',
-          name: 'FortiGate Firewall',
-          type: 'security',
-          status: 'active',
-          lastSync: new Date().toISOString(),
-          config: {
-            host: 'fortigate.example.com',
-            port: 443,
-            enabled: true
-          }
-        },
-        {
-          id: 2,
-          pluginId: 'splunk',
-          name: 'Splunk SIEM',
-          type: 'security',
-          status: 'active',
-          lastSync: new Date().toISOString(),
-          config: {
-            host: 'splunk.example.com',
-            port: 8089,
-            enabled: true
-          }
-        }
-      ];
-
-      res.json(configurations);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // MISSING ENDPOINTS FOR 100% COVERAGE
-  // ========================================
-
-  // Delete contract (archive)
-  app.delete("/api/contracts/:id", requireManagerOrAbove, async (req, res, next) => {
-    try {
-      const contractId = parseInt(req.params.id);
-      
-      // Get existing contract for audit logging
-      const [existingContract] = await db
+      // Check if widget exists and user has permission
+      const [existingWidget] = await db
         .select()
-        .from(contracts)
-        .where(eq(contracts.id, contractId))
+        .from(customWidgets)
+        .where(eq(customWidgets.id, id))
         .limit(1);
 
-      if (!existingContract) {
-        return res.status(404).json({ message: "Contract not found" });
+      if (!existingWidget) {
+        return res.status(404).json({ message: "Widget not found" });
       }
 
-      // Archive the contract by setting status to 'archived'
-      const [archivedContract] = await db
-        .update(contracts)
-        .set({ 
-          status: 'archived',
-          updatedAt: new Date()
-        })
-        .where(eq(contracts.id, contractId))
-        .returning();
-
-      if (!archivedContract) {
-        return res.status(404).json({ message: "Contract not found" });
+      if (userRole !== 'admin' && existingWidget.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Add audit logging for contract archival
-      try {
-        const { AuditLogger } = await import('./lib/audit');
-        const auditLogger = new AuditLogger(req, req.user?.id);
-        await auditLogger.logUpdate(
-          'contract',
-          contractId,
-          existingContract.name,
-          [{ field: 'status', oldValue: existingContract.status, newValue: 'archived' }],
-          existingContract
-        );
-        console.log('✅ Audit logging completed for contract archival');
-      } catch (auditError) {
-        console.error('⚠️ Audit logging failed for contract archival:', auditError.message);
+      // Convert GlobalWidget format to CustomWidget format
+      const {
+        name,
+        description,
+        pluginName,
+        widgetType,
+        chartType,
+        query,
+        method,
+        parameters,
+        displayConfig,
+        refreshInterval,
+        isGlobal
+      } = req.body;
+
+      const updateData = {
+        name: name || existingWidget.name,
+        description: description || existingWidget.description,
+        pluginName: pluginName || existingWidget.pluginName,
+        instanceId: pluginName || existingWidget.instanceId,
+        queryType: query ? 'custom' : existingWidget.queryType,
+        customQuery: query || existingWidget.customQuery,
+        queryMethod: method || existingWidget.queryMethod,
+        queryParameters: parameters || existingWidget.queryParameters,
+        displayType: widgetType || existingWidget.displayType,
+        chartType: chartType || existingWidget.chartType,
+        refreshInterval: refreshInterval ?? existingWidget.refreshInterval,
+        placement: isGlobal ? 'global-dashboard' : existingWidget.placement,
+        styling: displayConfig || existingWidget.styling,
+      };
+
+      const updatedWidget = await storage.updateCustomWidget(id, updateData);
+      
+      if (!updatedWidget) {
+        return res.status(404).json({ message: "Widget not found" });
       }
 
-      res.json({ message: "Contract archived successfully", contract: archivedContract });
+      // Log widget update for dashboard refresh tracking
+      console.log(`🔄 Widget ${id} updated - dashboard cards will refresh automatically`);
+
+      // Format response to match GlobalWidget interface
+      const formattedWidget = {
+        id: updatedWidget.id.toString(),
+        systemId: 1,
+        systemName: updatedWidget.pluginName,
+        pluginName: updatedWidget.pluginName,
+        name: updatedWidget.name,
+        description: updatedWidget.description || '',
+        widgetType: updatedWidget.displayType,
+        chartType: updatedWidget.chartType || undefined,
+        query: updatedWidget.customQuery || '',
+        method: updatedWidget.queryMethod,
+        parameters: updatedWidget.queryParameters,
+        displayConfig: updatedWidget.styling,
+        refreshInterval: updatedWidget.refreshInterval,
+        isActive: updatedWidget.isActive,
+        isGlobal: updatedWidget.placement === 'global-dashboard',
+        position: 0,
+        createdBy: updatedWidget.userId,
+        createdAt: updatedWidget.createdAt,
+        updatedAt: updatedWidget.updatedAt,
+      };
+
+      res.json(formattedWidget);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete widget via management interface
+  app.delete("/api/widgets/manage/:id", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid widget ID" });
+      }
+
+      // Check if widget exists and user has permission
+      const [existingWidget] = await db
+        .select()
+        .from(customWidgets)
+        .where(eq(customWidgets.id, id))
+        .limit(1);
+
+      if (!existingWidget) {
+        return res.status(404).json({ message: "Widget not found" });
+      }
+
+      if (userRole !== 'admin' && existingWidget.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const deleted = await storage.deleteCustomWidget(id, userId);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Widget not found or already deleted" });
+      }
+
+      res.json({ success: true, message: "Widget deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Toggle global status of a widget
+  app.patch("/api/widgets/manage/:id/toggle-global", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid widget ID" });
+      }
+
+      // Check if widget exists and user has permission
+      const [existingWidget] = await db
+        .select()
+        .from(customWidgets)
+        .where(eq(customWidgets.id, id))
+        .limit(1);
+
+      if (!existingWidget) {
+        return res.status(404).json({ message: "Widget not found" });
+      }
+
+      if (userRole !== 'admin' && existingWidget.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Toggle between global-dashboard and custom placement
+      const newPlacement = existingWidget.placement === 'global-dashboard' ? 'custom' : 'global-dashboard';
+      
+      const updatedWidget = await storage.updateCustomWidget(id, {
+        placement: newPlacement
+      });
+      
+      if (!updatedWidget) {
+        return res.status(404).json({ message: "Widget not found" });
+      }
+
+      // Format response to match GlobalWidget interface
+      const formattedWidget = {
+        id: updatedWidget.id.toString(),
+        systemId: 1,
+        systemName: updatedWidget.pluginName,
+        pluginName: updatedWidget.pluginName,
+        name: updatedWidget.name,
+        description: updatedWidget.description || '',
+        widgetType: updatedWidget.displayType,
+        chartType: updatedWidget.chartType || undefined,
+        query: updatedWidget.customQuery || '',
+        method: updatedWidget.queryMethod,
+        parameters: updatedWidget.queryParameters,
+        displayConfig: updatedWidget.styling,
+        refreshInterval: updatedWidget.refreshInterval,
+        isActive: updatedWidget.isActive,
+        isGlobal: updatedWidget.placement === 'global-dashboard',
+        position: 0,
+        createdBy: updatedWidget.userId,
+        createdAt: updatedWidget.createdAt,
+        updatedAt: updatedWidget.updatedAt,
+      };
+
+      res.json(formattedWidget);
     } catch (error) {
       next(error);
     }
@@ -5513,8 +4650,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // CUSTOM WIDGETS ENDPOINTS
   // ========================================
 
-  // Get user's custom widgets
-  app.get("/api/user/widgets", requireAuth, async (req, res, next) => {
+  // Alias routes for compatibility with widget manager frontend
+  app.get("/api/custom-widgets", requireAuth, async (req, res, next) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -5529,8 +4666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create custom widget
-  app.post("/api/user/widgets", requireAuth, async (req, res, next) => {
+  app.post("/api/custom-widgets", requireAuth, async (req, res, next) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -5545,8 +4681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update custom widget
-  app.put("/api/user/widgets/:id", requireAuth, async (req, res, next) => {
+  app.put("/api/custom-widgets/:id", requireAuth, async (req, res, next) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -5566,8 +4701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete custom widget
-  app.delete("/api/user/widgets/:id", requireAuth, async (req, res, next) => {
+  app.delete("/api/custom-widgets/:id", requireAuth, async (req, res, next) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -5582,6 +4716,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json({ message: "Widget deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get user's custom widgets
+  app.get("/api/user/widgets", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { placement } = req.query;
+      const widgets = await storage.getUserCustomWidgets(userId, placement as string);
+      res.json(widgets);
     } catch (error) {
       next(error);
     }

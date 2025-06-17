@@ -69,6 +69,8 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingWidget, setEditingWidget] = useState<GlobalWidget | undefined>();
   const [previewWidget, setPreviewWidget] = useState<GlobalWidget | undefined>();
+  const [allPlugins, setAllPlugins] = useState<any[]>([]);
+  const [instanceIds, setInstanceIds] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadWidgets();
@@ -134,12 +136,13 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
     setShowBuilder(true);
   };
 
-  const handleEditWidget = (widget: GlobalWidget) => {
+  const handleEditWidget = async (widget: GlobalWidget) => {
+    await loadInstanceId(widget.pluginName);
     setEditingWidget(widget);
     setShowBuilder(true);
   };
 
-  const handleSaveWidget = async (widget: Partial<GlobalWidget>) => {
+  const handleSaveWidget = async (widget: any) => {
     const url = editingWidget 
       ? `/api/widgets/manage/${editingWidget.id}`
       : '/api/widgets/manage';
@@ -147,21 +150,37 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
     const method = editingWidget ? 'PUT' : 'POST';
     
     try {
+      // Convert CustomWidget format to GlobalWidget API format
+      const apiPayload = {
+        name: widget.name,
+        description: widget.description,
+        pluginName: widget.pluginName,
+        widgetType: widget.displayType,
+        chartType: widget.chartType,
+        query: widget.customQuery || '',
+        method: widget.queryMethod || 'GET',
+        parameters: widget.queryParameters || {},
+        displayConfig: widget.styling || {},
+        refreshInterval: widget.refreshInterval || 30,
+        isGlobal: widget.placement === 'global-dashboard'
+      };
+
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(widget)
+        body: JSON.stringify(apiPayload)
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to save widget: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to save widget: ${response.statusText}`);
       }
 
       await loadWidgets(); // Reload widgets
-      setEditingWidget(null);
+      setEditingWidget(undefined);
       setShowBuilder(false);
     } catch (error) {
       console.error('Failed to save widget:', error);
@@ -210,22 +229,16 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
   };
 
   const handleDuplicateWidget = (widget: GlobalWidget) => {
-    const duplicatedWidget = { ...widget };
-    // Remove properties that should be auto-generated
-    const { id, createdAt, updatedAt, createdBy, ...widgetData } = duplicatedWidget;
-    
-    setEditingWidget({
-      ...widgetData,
+    const duplicatedWidget: GlobalWidget = {
+      ...widget,
+      id: `${widget.id}-copy-${Date.now()}`,
       name: `${widget.name} (Copy)`,
-      // Add required properties for CustomWidget compatibility
-      instanceId: widget.pluginName || '',
-      queryType: 'custom' as const,
-      queryMethod: 'GET',
-      queryParameters: {},
-      customQuery: '',
-      transformations: [],
-      variables: []
-    });
+      isGlobal: false,
+      createdBy: 0, // Will be set by the server
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setEditingWidget(duplicatedWidget);
     setShowBuilder(true);
   };
 
@@ -255,7 +268,57 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
 
   const handleCloseBuilder = () => {
     setShowBuilder(false);
-    setEditingWidget(null);
+    setEditingWidget(undefined);
+  };
+
+  // Helper function to get the appropriate instance ID for a plugin
+  const getInstanceIdForPlugin = async (pluginName: string): Promise<string> => {
+    try {
+      const response = await fetch(`/api/plugins/${pluginName}/instances`);
+      const data = await response.json();
+      
+      if (data.instances && data.instances.length > 0) {
+        // First try to find an instance with 'main' in the name or ID
+        const mainInstance = data.instances.find((instance: any) => 
+          instance.id.includes('main') || instance.name.toLowerCase().includes('main')
+        );
+        if (mainInstance) {
+          return mainInstance.id;
+        }
+        
+        // Fall back to the first active instance
+        const activeInstance = data.instances.find((instance: any) => instance.isActive);
+        if (activeInstance) {
+          return activeInstance.id;
+        }
+        
+        // Finally, just use the first instance
+        return data.instances[0].id;
+      }
+      
+      // Fallback to default pattern if no instances found
+      return `${pluginName}-main`;
+    } catch (error) {
+      console.warn(`Failed to get instances for plugin ${pluginName}, using fallback:`, error);
+      // Fallback to default pattern
+      return `${pluginName}-main`;
+    }
+  };
+
+  // Load instance ID for a plugin when needed
+  const loadInstanceId = async (pluginName: string) => {
+    if (!instanceIds[pluginName]) {
+      const instanceId = await getInstanceIdForPlugin(pluginName);
+      setInstanceIds(prev => ({ ...prev, [pluginName]: instanceId }));
+      return instanceId;
+    }
+    return instanceIds[pluginName];
+  };
+
+  // Handle preview widget with instance ID resolution
+  const handlePreviewWidget = async (widget: GlobalWidget) => {
+    await loadInstanceId(widget.pluginName);
+    setPreviewWidget(widget);
   };
 
   if (loading) {
@@ -413,7 +476,7 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setPreviewWidget(widget)}
+                      onClick={() => handlePreviewWidget(widget)}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -485,14 +548,25 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
               onSave={handleSaveWidget}
               onCancel={handleCloseBuilder}
               editingWidget={editingWidget ? {
-                ...editingWidget,
-                instanceId: editingWidget.pluginName || '',
+                id: editingWidget.id,
+                name: editingWidget.name,
+                description: editingWidget.description,
+                pluginName: editingWidget.pluginName,
+                instanceId: instanceIds[editingWidget.pluginName] || `${editingWidget.pluginName}-main`,
                 queryType: 'custom' as const,
-                queryMethod: 'GET',
-                queryParameters: {},
-                customQuery: '',
-                transformations: [],
-                variables: []
+                customQuery: editingWidget.query,
+                queryMethod: editingWidget.method,
+                queryParameters: editingWidget.parameters,
+                displayType: editingWidget.widgetType,
+                refreshInterval: editingWidget.refreshInterval,
+                placement: 'global-dashboard' as const,
+                styling: {
+                  width: editingWidget.displayConfig?.width || 'full',
+                  height: editingWidget.displayConfig?.height || 'medium',
+                  showBorder: editingWidget.displayConfig?.showBorder !== false,
+                  showHeader: editingWidget.displayConfig?.showHeader !== false
+                },
+                chartType: editingWidget.chartType
               } : undefined}
             />
           )}
@@ -525,17 +599,24 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
                   name: previewWidget.name,
                   description: previewWidget.description,
                   pluginName: previewWidget.pluginName,
-                  instanceId: previewWidget.pluginName || '',
+                  instanceId: instanceIds[previewWidget.pluginName] || `${previewWidget.pluginName}-main`,
                   queryType: 'custom' as const,
                   customQuery: previewWidget.query,
                   queryMethod: previewWidget.method,
                   queryParameters: previewWidget.parameters,
-                  transformations: [],
-                  variables: [],
+                  displayType: previewWidget.widgetType,
+                  refreshInterval: previewWidget.refreshInterval,
+                  placement: 'global-dashboard' as const,
+                  styling: {
+                    width: previewWidget.displayConfig?.width || 'full',
+                    height: previewWidget.displayConfig?.height || 'medium', 
+                    showBorder: previewWidget.displayConfig?.showBorder !== false,
+                    showHeader: previewWidget.displayConfig?.showHeader !== false
+                  },
+                  chartType: previewWidget.chartType,
                   enabled: previewWidget.isActive
                 }}
                 clientShortName="DEMO"
-                clientDomain="demo.example.com"
               />
             </div>
           )}
