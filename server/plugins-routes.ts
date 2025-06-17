@@ -10,6 +10,7 @@ import {
 import { db } from './db';
 import { savedQueries } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { clients, contracts, services, users, proposals, serviceScopes } from '@shared/schema';
 
 const pluginRoutes = express.Router();
 
@@ -386,21 +387,93 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/validate-query', requireAu
 pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async (req, res) => {
   try {
     const { pluginName, instanceId } = req.params;
-    const { query, method = 'GET', opts = {}, saveAs } = req.body;
+    const { query, method = 'GET', parameters = {}, filters = [], opts = {}, saveAs, context = {} } = req.body;
     
     const plugin = getPlugin(pluginName);
     if (!plugin) {
       return res.status(404).json({ message: 'Plugin not found' });
     }
-    
+
     const instance = plugin.getInstance(instanceId);
     if (!instance) {
       return res.status(404).json({ message: 'Instance not found' });
     }
+
+    // Enhanced parameter substitution with database and context resolution
+    let processedQuery = query;
+    const resolvedParameters: Record<string, string> = {};
+    
+    if (parameters && typeof parameters === 'object') {
+      console.log(`🔧 Enhanced parameter resolution for ${pluginName}/${instanceId}:`);
+      console.log(`   Original query: ${query}`);
+      console.log(`   Parameters config: ${JSON.stringify(parameters)}`);
+      console.log(`   Context: ${JSON.stringify(context)}`);
+      
+      // Build context object from request
+      const resolutionContext = {
+        userId: req.user?.id,
+        clientId: context.clientId,
+        contractId: context.contractId,
+        clientShortName: context.clientShortName,
+        clientName: context.clientName,
+        clientDomain: context.clientDomain
+      };
+      
+      // If we have a clientId but missing client details, fetch them
+      if (resolutionContext.clientId && (!resolutionContext.clientShortName || !resolutionContext.clientName)) {
+        try {
+          const [client] = await db.select({
+            shortName: clients.shortName,
+            name: clients.name,
+            domain: clients.domain
+          })
+          .from(clients)
+          .where(eq(clients.id, resolutionContext.clientId));
+          
+          if (client) {
+            resolutionContext.clientShortName = resolutionContext.clientShortName || client.shortName || '';
+            resolutionContext.clientName = resolutionContext.clientName || client.name || '';
+            resolutionContext.clientDomain = resolutionContext.clientDomain || client.domain || '';
+            
+            console.log(`   📋 Auto-fetched client details: ${client.name} (${client.shortName})`);
+          }
+        } catch (error) {
+          console.warn('Failed to auto-fetch client details:', error);
+        }
+      }
+      
+      // Resolve each parameter value
+      for (const [key, paramConfig] of Object.entries(parameters)) {
+        const resolvedValue = await resolveParameterValue(paramConfig, resolutionContext);
+        resolvedParameters[key] = resolvedValue;
+        
+        console.log(`   Parameter "${key}": ${JSON.stringify(paramConfig)} → "${resolvedValue}"`);
+        
+        // Replace in query
+        const placeholder = `\${${key}}`;
+        const regex = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        processedQuery = processedQuery.replace(regex, resolvedValue);
+      }
+      
+      console.log(`   Processed query: ${processedQuery}`);
+    }
+
+    // Process filters
+    if (filters && Array.isArray(filters) && filters.length > 0) {
+      console.log(`🔍 Processing ${filters.length} filters for ${pluginName}/${instanceId}:`);
+      processedQuery = await processFilters(processedQuery, filters, pluginName);
+      console.log(`   Query after filters: ${processedQuery}`);
+    }
     
     const startTime = Date.now();
-    const data = await plugin.executeQuery(query, method, instanceId, opts);
+    const data = await plugin.executeQuery(processedQuery, method, instanceId, opts);
     const responseTime = Date.now() - startTime;
+
+    // Apply post-query filtering if needed (for APIs that don't support query-based filtering)
+    let filteredData = data;
+    if (filters && Array.isArray(filters) && filters.length > 0) {
+      filteredData = await applyPostQueryFilters(data, filters);
+    }
     
     // Save query if requested
     if (saveAs && req.user) {
@@ -410,7 +483,7 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
           pluginName,
           instanceId,
           name: saveAs,
-          query,
+          query: processedQuery, // Save the processed query
           method,
           description: `Saved query for ${pluginName}`,
           createdAt: new Date()
@@ -422,13 +495,17 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
     
     res.json({
       success: true,
-      data,
+      data: filteredData,
       metadata: {
-        query,
+        query: processedQuery,
+        originalQuery: query,
+        parameters: resolvedParameters,
+        filters: filters.filter((f: any) => f.enabled),
+        context: context,
         method,
         responseTime: `${responseTime}ms`,
-        dataType: typeof data,
-        recordCount: Array.isArray(data) ? data.length : (data && typeof data === 'object' && 'total' in data) ? (data as any).total : null,
+        dataType: typeof filteredData,
+        recordCount: Array.isArray(filteredData) ? filteredData.length : (filteredData && typeof filteredData === 'object' && 'total' in filteredData) ? (filteredData as any).total : null,
         instance: {
           id: instance.id,
           name: instance.name
@@ -438,6 +515,7 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
       saved: !!saveAs
     });
   } catch (error) {
+    console.error(`❌ Enhanced query execution error:`, error);
     res.status(500).json({ 
       success: false,
       message: error instanceof Error ? error.message : 'Query execution failed',
@@ -906,5 +984,397 @@ pluginRoutes.get('/types', (req, res) => {
     });
   }
 });
+
+// Parameter resolution function
+async function resolveParameterValue(
+  paramConfig: any, 
+  context: { 
+    clientId?: number, 
+    contractId?: number, 
+    userId?: number,
+    clientShortName?: string,
+    clientName?: string,
+    clientDomain?: string 
+  }
+): Promise<string> {
+  if (!paramConfig || typeof paramConfig === 'string') {
+    return String(paramConfig || '');
+  }
+
+  const { source, value, dbTable, dbColumn, contextVar } = paramConfig;
+
+  switch (source) {
+    case 'static':
+      return String(value || '');
+      
+    case 'context':
+      switch (contextVar) {
+        case 'clientId': return String(context.clientId || '');
+        case 'clientShortName': return String(context.clientShortName || '');
+        case 'clientName': return String(context.clientName || '');
+        case 'clientDomain': return String(context.clientDomain || '');
+        case 'contractId': return String(context.contractId || '');
+        case 'userId': return String(context.userId || '');
+        default: return '';
+      }
+      
+    case 'database':
+      if (!dbTable || !dbColumn) return '';
+      
+      try {
+        let result: any = null;
+        
+        switch (dbTable) {
+          case 'clients':
+            if (context.clientId) {
+              const [client] = await db.select({ [dbColumn]: (clients as any)[dbColumn] })
+                .from(clients)
+                .where(eq(clients.id, context.clientId));
+              result = client?.[dbColumn];
+            }
+            break;
+            
+          case 'contracts':
+            if (context.contractId) {
+              const [contract] = await db.select({ [dbColumn]: (contracts as any)[dbColumn] })
+                .from(contracts)
+                .where(eq(contracts.id, context.contractId));
+              result = contract?.[dbColumn];
+            } else if (context.clientId) {
+              // Get most recent contract for client
+              const [contract] = await db.select({ [dbColumn]: (contracts as any)[dbColumn] })
+                .from(contracts)
+                .where(eq(contracts.clientId, context.clientId))
+                .orderBy(contracts.startDate)
+                .limit(1);
+              result = contract?.[dbColumn];
+            }
+            break;
+            
+          case 'users':
+            if (context.userId) {
+              const [user] = await db.select({ [dbColumn]: (users as any)[dbColumn] })
+                .from(users)
+                .where(eq(users.id, context.userId));
+              result = user?.[dbColumn];
+            }
+            break;
+        }
+        
+        return String(result || '');
+      } catch (error) {
+        console.error(`Error resolving database parameter ${dbTable}.${dbColumn}:`, error);
+        return '';
+      }
+      
+    default:
+      return String(value || '');
+  }
+}
+
+// Filter processing functions
+async function processFilters(query: string, filters: any[], pluginName: string): Promise<string> {
+  if (!filters || filters.length === 0) return query;
+  
+  const enabledFilters = filters.filter(f => f.enabled);
+  if (enabledFilters.length === 0) return query;
+  
+  console.log(`   Processing ${enabledFilters.length} enabled filters:`);
+  
+  let processedQuery = query;
+  
+  for (const filter of enabledFilters) {
+    console.log(`   Filter: ${filter.field} ${filter.operator} ${filter.value} (${filter.dataType})`);
+    
+    const filterClause = generateFilterClause(filter, pluginName);
+    if (filterClause) {
+      processedQuery = appendFilterToQuery(processedQuery, filterClause, pluginName);
+    }
+  }
+  
+  return processedQuery;
+}
+
+function generateFilterClause(filter: any, pluginName: string): string {
+  const { field, operator, value, value2, dataType } = filter;
+  
+  if (!field || !operator) return '';
+  
+  switch (pluginName) {
+    case 'jira':
+      return generateJiraFilterClause(field, operator, value, value2, dataType);
+    case 'splunk':
+      return generateSplunkFilterClause(field, operator, value, value2, dataType);
+    case 'elasticsearch':
+      return generateElasticsearchFilterClause(field, operator, value, value2, dataType);
+    default:
+      // Generic SQL-like filter for database queries
+      return generateSqlFilterClause(field, operator, value, value2, dataType);
+  }
+}
+
+function generateJiraFilterClause(field: string, operator: string, value: any, value2?: any, dataType?: string): string {
+  switch (operator) {
+    case 'equals':
+      return `${field} = "${value}"`;
+    case 'not_equals':
+      return `${field} != "${value}"`;
+    case 'contains':
+      return `${field} ~ "${value}"`;
+    case 'not_contains':
+      return `${field} !~ "${value}"`;
+    case 'in':
+      const inValues = value.split(',').map((v: string) => `"${v.trim()}"`).join(', ');
+      return `${field} IN (${inValues})`;
+    case 'not_in':
+      const notInValues = value.split(',').map((v: string) => `"${v.trim()}"`).join(', ');
+      return `${field} NOT IN (${notInValues})`;
+    case 'is_null':
+      return `${field} IS EMPTY`;
+    case 'is_not_null':
+      return `${field} IS NOT EMPTY`;
+    case 'greater_than':
+      return `${field} > ${value}`;
+    case 'greater_equal':
+      return `${field} >= ${value}`;
+    case 'less_than':
+      return `${field} < ${value}`;
+    case 'less_equal':
+      return `${field} <= ${value}`;
+    case 'date_before':
+      return `${field} < "${value}"`;
+    case 'date_after':
+      return `${field} > "${value}"`;
+    case 'date_equals':
+      return `${field} = "${value}"`;
+    default:
+      return `${field} = "${value}"`;
+  }
+}
+
+function generateSplunkFilterClause(field: string, operator: string, value: any, value2?: any, dataType?: string): string {
+  switch (operator) {
+    case 'equals':
+      return `${field}="${value}"`;
+    case 'not_equals':
+      return `NOT ${field}="${value}"`;
+    case 'contains':
+      return `${field}="*${value}*"`;
+    case 'not_contains':
+      return `NOT ${field}="*${value}*"`;
+    case 'greater_than':
+      return `${field}>${value}`;
+    case 'less_than':
+      return `${field}<${value}`;
+    case 'in':
+      const inValues = value.split(',').map((v: string) => `${field}="${v.trim()}"`).join(' OR ');
+      return `(${inValues})`;
+    case 'is_null':
+      return `NOT ${field}=*`;
+    case 'is_not_null':
+      return `${field}=*`;
+    default:
+      return `${field}="${value}"`;
+  }
+}
+
+function generateElasticsearchFilterClause(field: string, operator: string, value: any, value2?: any, dataType?: string): string {
+  // Return Elasticsearch query DSL fragments (simplified)
+  switch (operator) {
+    case 'equals':
+      return `{"term": {"${field}": "${value}"}}`;
+    case 'contains':
+      return `{"wildcard": {"${field}": "*${value}*"}}`;
+    case 'greater_than':
+      return `{"range": {"${field}": {"gt": ${dataType === 'number' ? value : `"${value}"`}}}}`;
+    case 'less_than':
+      return `{"range": {"${field}": {"lt": ${dataType === 'number' ? value : `"${value}"`}}}}`;
+    case 'between':
+      return `{"range": {"${field}": {"gte": ${dataType === 'number' ? value : `"${value}"`}, "lte": ${dataType === 'number' ? value2 : `"${value2}"`}}}}`;
+    default:
+      return `{"term": {"${field}": "${value}"}}`;
+  }
+}
+
+function generateSqlFilterClause(field: string, operator: string, value: any, value2?: any, dataType?: string): string {
+  const quotedValue = dataType === 'number' || dataType === 'boolean' ? value : `'${value}'`;
+  const quotedValue2 = dataType === 'number' || dataType === 'boolean' ? value2 : `'${value2}'`;
+  
+  switch (operator) {
+    case 'equals':
+      return `${field} = ${quotedValue}`;
+    case 'not_equals':
+      return `${field} != ${quotedValue}`;
+    case 'contains':
+      return `${field} LIKE '%${value}%'`;
+    case 'not_contains':
+      return `${field} NOT LIKE '%${value}%'`;
+    case 'starts_with':
+      return `${field} LIKE '${value}%'`;
+    case 'ends_with':
+      return `${field} LIKE '%${value}'`;
+    case 'greater_than':
+      return `${field} > ${quotedValue}`;
+    case 'greater_equal':
+      return `${field} >= ${quotedValue}`;
+    case 'less_than':
+      return `${field} < ${quotedValue}`;
+    case 'less_equal':
+      return `${field} <= ${quotedValue}`;
+    case 'between':
+      return `${field} BETWEEN ${quotedValue} AND ${quotedValue2}`;
+    case 'in':
+      const inValues = value.split(',').map((v: string) => dataType === 'number' ? v.trim() : `'${v.trim()}'`).join(', ');
+      return `${field} IN (${inValues})`;
+    case 'not_in':
+      const notInValues = value.split(',').map((v: string) => dataType === 'number' ? v.trim() : `'${v.trim()}'`).join(', ');
+      return `${field} NOT IN (${notInValues})`;
+    case 'is_null':
+      return `${field} IS NULL`;
+    case 'is_not_null':
+      return `${field} IS NOT NULL`;
+    default:
+      return `${field} = ${quotedValue}`;
+  }
+}
+
+function appendFilterToQuery(query: string, filterClause: string, pluginName: string): string {
+  if (!filterClause) return query;
+  
+  switch (pluginName) {
+    case 'jira':
+      // Append to JQL query
+      if (query.toLowerCase().includes(' where ') || query.toLowerCase().includes(' and ') || query.toLowerCase().includes(' or ')) {
+        return `${query} AND ${filterClause}`;
+      } else {
+        return query.includes('ORDER BY') 
+          ? query.replace(/ORDER BY/i, `AND ${filterClause} ORDER BY`)
+          : `${query} AND ${filterClause}`;
+      }
+    
+    case 'splunk':
+      // Append to Splunk search
+      return `${query} | search ${filterClause}`;
+    
+    case 'elasticsearch':
+      // For Elasticsearch, we'd need to modify the query JSON structure
+      // This is a simplified approach
+      return query;
+    
+    default:
+      // SQL-like queries
+      if (query.toLowerCase().includes(' where ')) {
+        return query.replace(/\s+where\s+/i, ` WHERE ${filterClause} AND `);
+      } else if (query.toLowerCase().includes(' order by ')) {
+        return query.replace(/\s+order\s+by/i, ` WHERE ${filterClause} ORDER BY`);
+      } else {
+        return `${query} WHERE ${filterClause}`;
+      }
+  }
+}
+
+// Post-query filtering for APIs that don't support query-based filtering
+async function applyPostQueryFilters(data: any, filters: any[]): Promise<any> {
+  if (!filters || filters.length === 0) return data;
+  
+  const enabledFilters = filters.filter(f => f.enabled);
+  if (enabledFilters.length === 0) return data;
+  
+  console.log(`   Applying ${enabledFilters.length} post-query filters`);
+  
+  // Handle different data structures
+  if (Array.isArray(data)) {
+    return data.filter(item => matchesAllFilters(item, enabledFilters));
+  } else if (data && typeof data === 'object') {
+    // Handle paginated responses
+    if (data.issues && Array.isArray(data.issues)) {
+      const filteredIssues = data.issues.filter((item: any) => matchesAllFilters(item, enabledFilters));
+      return {
+        ...data,
+        issues: filteredIssues,
+        total: filteredIssues.length,
+        startAt: 0,
+        maxResults: filteredIssues.length
+      };
+    } else if (data.results && Array.isArray(data.results)) {
+      const filteredResults = data.results.filter((item: any) => matchesAllFilters(item, enabledFilters));
+      return {
+        ...data,
+        results: filteredResults,
+        total: filteredResults.length
+      };
+    } else if (data.data && Array.isArray(data.data)) {
+      const filteredData = data.data.filter((item: any) => matchesAllFilters(item, enabledFilters));
+      return {
+        ...data,
+        data: filteredData,
+        total: filteredData.length
+      };
+    }
+  }
+  
+  return data;
+}
+
+function matchesAllFilters(item: any, filters: any[]): boolean {
+  return filters.every(filter => matchesFilter(item, filter));
+}
+
+function matchesFilter(item: any, filter: any): boolean {
+  const { field, operator, value, value2, dataType } = filter;
+  
+  // Get field value (support nested properties like 'fields.status.name')
+  const fieldValue = getNestedValue(item, field);
+  
+  if (fieldValue === undefined || fieldValue === null) {
+    return operator === 'is_null';
+  }
+  
+  switch (operator) {
+    case 'equals':
+      return String(fieldValue).toLowerCase() === String(value).toLowerCase();
+    case 'not_equals':
+      return String(fieldValue).toLowerCase() !== String(value).toLowerCase();
+    case 'contains':
+      return String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
+    case 'not_contains':
+      return !String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
+    case 'starts_with':
+      return String(fieldValue).toLowerCase().startsWith(String(value).toLowerCase());
+    case 'ends_with':
+      return String(fieldValue).toLowerCase().endsWith(String(value).toLowerCase());
+    case 'greater_than':
+      return Number(fieldValue) > Number(value);
+    case 'greater_equal':
+      return Number(fieldValue) >= Number(value);
+    case 'less_than':
+      return Number(fieldValue) < Number(value);
+    case 'less_equal':
+      return Number(fieldValue) <= Number(value);
+    case 'between':
+      return Number(fieldValue) >= Number(value) && Number(fieldValue) <= Number(value2);
+    case 'in':
+      const inValues = String(value).split(',').map(v => v.trim().toLowerCase());
+      return inValues.includes(String(fieldValue).toLowerCase());
+    case 'not_in':
+      const notInValues = String(value).split(',').map(v => v.trim().toLowerCase());
+      return !notInValues.includes(String(fieldValue).toLowerCase());
+    case 'is_null':
+      return fieldValue === null || fieldValue === undefined || fieldValue === '';
+    case 'is_not_null':
+      return fieldValue !== null && fieldValue !== undefined && fieldValue !== '';
+    default:
+      return false;
+  }
+}
+
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, prop) => {
+    if (current && typeof current === 'object') {
+      return current[prop];
+    }
+    return undefined;
+  }, obj);
+}
 
 export default pluginRoutes;

@@ -4166,8 +4166,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get global widgets
   app.get("/api/global-widgets", requireAuth, async (req, res, next) => {
     try {
-      // Return empty array for now - widgets would need to be implemented
-      res.json([]);
+      // Get all global widgets (both active and inactive for management)
+      const widgets = await db
+        .select()
+        .from(customWidgets)
+        .where(eq(customWidgets.placement, 'global-dashboard'))
+        .orderBy(desc(customWidgets.createdAt));
+
+
+      // Format widgets to match GlobalWidget interface expected by frontend
+      const formattedWidgets = widgets.map(widget => ({
+        id: widget.id.toString(),
+        systemId: 1, // Default system ID for compatibility
+        systemName: widget.pluginName,
+        pluginName: widget.pluginName,
+        name: widget.name,
+        description: widget.description || '',
+        widgetType: widget.displayType,
+        chartType: widget.chartType || undefined,
+        query: widget.customQuery || '',
+        method: widget.queryMethod,
+        parameters: widget.queryParameters,
+        displayConfig: widget.styling,
+        refreshInterval: widget.refreshInterval,
+        isActive: widget.isActive,
+        isGlobal: true, // All widgets from this endpoint are global
+        position: 0,
+        createdBy: widget.userId,
+        createdAt: widget.createdAt,
+        updatedAt: widget.updatedAt,
+      }));
+
+      console.log(`📊 Global widgets requested, returning ${formattedWidgets.length} widgets`);
+      res.json(formattedWidgets);
     } catch (error) {
       next(error);
     }
@@ -4316,8 +4347,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Get all custom widgets for management (admin can see all, users see only their own)
-      const conditions = [eq(customWidgets.isActive, true)];
+      // Get all custom widgets for management (both active and inactive)
+      const conditions = [];
       
       if (userRole !== 'admin') {
         conditions.push(eq(customWidgets.userId, userId));
@@ -4343,6 +4374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         method: widget.queryMethod,
         parameters: widget.queryParameters,
         displayConfig: widget.styling,
+        groupBy: widget.groupBy,
         refreshInterval: widget.refreshInterval,
         isActive: widget.isActive,
         isGlobal: widget.placement === 'global-dashboard',
@@ -4378,7 +4410,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parameters,
         displayConfig,
         refreshInterval,
-        isGlobal
+        isGlobal,
+        groupBy
       } = req.body;
 
       const widgetData = {
@@ -4401,7 +4434,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           showBorder: true,
           showHeader: true
         },
-        isActive: true
+        groupBy: groupBy || null, // Add groupBy configuration
+        isActive: false // New widgets are hidden by default - must be shown via Manage Widgets
       };
 
       const newWidget = await storage.createCustomWidget(widgetData);
@@ -4420,6 +4454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         method: newWidget.queryMethod,
         parameters: newWidget.queryParameters,
         displayConfig: newWidget.styling,
+        groupBy: newWidget.groupBy,
         refreshInterval: newWidget.refreshInterval,
         isActive: newWidget.isActive,
         isGlobal: newWidget.placement === 'global-dashboard',
@@ -4477,7 +4512,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parameters,
         displayConfig,
         refreshInterval,
-        isGlobal
+        isGlobal,
+        groupBy,
+        isActive
       } = req.body;
 
       const updateData = {
@@ -4494,6 +4531,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         refreshInterval: refreshInterval ?? existingWidget.refreshInterval,
         placement: isGlobal ? 'global-dashboard' : existingWidget.placement,
         styling: displayConfig || existingWidget.styling,
+        groupBy: groupBy !== undefined ? groupBy : existingWidget.groupBy,
+        isActive: isActive !== undefined ? isActive : existingWidget.isActive,
       };
 
       const updatedWidget = await storage.updateCustomWidget(id, updateData);
@@ -4519,6 +4558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         method: updatedWidget.queryMethod,
         parameters: updatedWidget.queryParameters,
         displayConfig: updatedWidget.styling,
+        groupBy: updatedWidget.groupBy,
         refreshInterval: updatedWidget.refreshInterval,
         isActive: updatedWidget.isActive,
         isGlobal: updatedWidget.placement === 'global-dashboard',

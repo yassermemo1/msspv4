@@ -1337,6 +1337,7 @@ export const customWidgets = pgTable("custom_widgets", {
   refreshInterval: integer("refresh_interval").notNull().default(30),
   placement: text("placement").notNull().default("client-details"), // 'client-details' | 'global-dashboard' | 'custom'
   styling: jsonb("styling").notNull().default('{"width":"full","height":"medium","showBorder":true,"showHeader":true}'),
+  groupBy: jsonb("group_by"), // Group by configuration for charts and data processing
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

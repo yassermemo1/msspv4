@@ -116,8 +116,8 @@ const jiraConfig: PluginConfig = {
       authType: authType,
       authConfig: {
         username: process.env.JIRA_USERNAME || 'yalmohammed',
-        password: authType === 'basic' ? (process.env.JIRA_API_TOKEN || '0541887111Ysm!!!!!!!') : undefined,
-        token: authType === 'bearer' ? (process.env.JIRA_API_TOKEN || '0541887111Ysm!!!!!!') : undefined
+        password: authType === 'basic' ? process.env.JIRA_API_TOKEN : undefined,
+        token: authType === 'bearer' ? process.env.JIRA_API_TOKEN : undefined
       },
       isActive: process.env.JIRA_ENABLED === 'true',
       tags: ['tickets', 'project-management'],

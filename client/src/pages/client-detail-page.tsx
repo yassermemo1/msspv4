@@ -866,6 +866,7 @@ export default function ClientDetailPage() {
             {/* Global Widgets Section */}
             <div className="mt-6">
               <GlobalClientWidgets
+                clientId={clientId}
                 clientShortName={client?.shortName || ''}
                 clientName={client?.name || ''}
                 clientDomain={client?.domain}

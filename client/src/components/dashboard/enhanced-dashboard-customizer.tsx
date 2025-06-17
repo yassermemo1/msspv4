@@ -30,15 +30,25 @@ import {
   RotateCcw,
   Import,
   Eye,
+  EyeOff,
   Grid,
   Table as TableIcon,
   Gauge,
   List,
-  Code
+  Code,
+  Activity,
+  X,
+  RefreshCw,
+  Palette,
+  Target,
+  Filter,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { DynamicWidgetBuilder } from '@/components/widgets/dynamic-widget-builder';
 
 // Enhanced card configuration interface
 export interface EnhancedDashboardCard {
@@ -177,6 +187,7 @@ interface GlobalWidget {
   createdBy: number;
   createdAt: string;
   updatedAt: string;
+  groupBy?: any; // Optional groupBy configuration
 }
 
 interface EnhancedDashboardCustomizerProps {
@@ -187,12 +198,8 @@ interface EnhancedDashboardCustomizerProps {
 
 export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: EnhancedDashboardCustomizerProps) {
   const { toast } = useToast();
-  const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
   const [showAddCard, setShowAddCard] = useState(false);
-  const [showWidgetImport, setShowWidgetImport] = useState(false);
-  const [selectedWidget, setSelectedWidget] = useState<GlobalWidget | null>(null);
-
-  const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
+  const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
   const [newCard, setNewCard] = useState<Partial<EnhancedDashboardCard>>({
     title: '',
     type: 'metric',
@@ -200,75 +207,92 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     dataSource: 'clients',
     size: 'small',
     visible: true,
+    position: cards.length,
     config: {
       icon: 'Building',
       color: 'blue',
       format: 'number',
-      aggregation: 'count',
-      chartType: 'bar',
-      trend: false,
-      showLegend: true,
-      showDataLabels: false,
-      enableDrillDown: true,
-      refreshInterval: 300
+      aggregation: 'count'
     },
     isBuiltIn: false,
     isRemovable: true
   });
 
-  // Fetch available widgets for import
-  const { data: availableWidgets = [], isLoading: widgetsLoading } = useQuery<GlobalWidget[]>({
+  const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
+  
+  // Unified Widget Management State
+  const [showUnifiedManager, setShowUnifiedManager] = useState(false);
+  const [showWidgetBuilder, setShowWidgetBuilder] = useState(false);
+  const [configuringWidget, setConfiguringWidget] = useState<GlobalWidget | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch global widgets for import
+  const { data: globalWidgets = [], isLoading: widgetsLoading, refetch: refetchGlobalWidgets } = useQuery<GlobalWidget[]>({
     queryKey: ['global-widgets'],
-    queryFn: async () => {
-      const response = await fetch('/api/widgets/manage', {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch widgets');
-      }
+    queryFn: async (): Promise<GlobalWidget[]> => {
+      const response = await fetch('/api/global-widgets', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch global widgets');
       return response.json();
     },
-    staleTime: 30000, // 30 seconds
   });
 
-  // External systems functionality has been disabled
-  // External systems removed - deprecated
+  // Fetch manage widgets (includes inactive widgets)
+  const { data: manageWidgets = [], isLoading: manageLoading, refetch: refetchManageWidgets } = useQuery<GlobalWidget[]>({
+    queryKey: ['manage-widgets'],
+    queryFn: async (): Promise<GlobalWidget[]> => {
+      const response = await fetch('/api/widgets/manage', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch manage widgets');
+      return response.json();
+    },
+  });
 
-  // Integration Engine functionality has been removed - deprecated
+  // Use manage widgets if available, fallback to global widgets
+  const availableWidgets = manageWidgets.length > 0 ? manageWidgets : globalWidgets;
+  const loading = manageLoading || widgetsLoading;
 
-  // Available fields for each data source (dynamic based on selection)
   const getFieldsForDataSource = (dataSource: string) => {
-    const fieldMap: Record<string, string[]> = {
-      'clients': ['name', 'status', 'industry', 'companySize', 'createdAt'],
-      'contracts': ['status', 'totalValue', 'startDate', 'endDate', 'autoRenewal'],
-      'license_pools': ['type', 'totalLicenses', 'availableLicenses', 'utilization'],
-      'services': ['category', 'deliveryModel', 'basePrice', 'isActive'],
-      'hardware_assets': ['type', 'status', 'assignedTo', 'purchaseDate', 'warrantyExpiry'],
-      'financial_transactions': ['type', 'amount', 'status', 'dueDate'],
-      'users': ['role', 'isActive', 'authProvider', 'createdAt'],
-      'audit_logs': ['action', 'entityType', 'userId', 'timestamp']
+    // This would typically come from your API or be configured
+    const fieldMappings: Record<string, string[]> = {
+      'clients': ['name', 'status', 'industry', 'created_at', 'revenue'],
+      'contracts': ['title', 'status', 'value', 'start_date', 'end_date'],
+      'license_pools': ['name', 'total_licenses', 'used_licenses', 'available_licenses'],
+      'users': ['username', 'email', 'role', 'last_login'],
+      'audit_logs': ['action', 'user', 'timestamp', 'resource']
     };
-    return fieldMap[dataSource] || ['id', 'createdAt', 'updatedAt'];
+    
+    return fieldMappings[dataSource] || [];
   };
 
   const handleAddCard = () => {
-    if (!newCard.title) {
+    if (!newCard.title || !newCard.dataSource) {
       toast({
         title: "Error",
-        description: "Please enter a card title",
-        variant: "destructive"
+        description: "Please fill in all required fields",
+        variant: "destructive",
       });
       return;
     }
 
     const cardToAdd: EnhancedDashboardCard = {
-      ...newCard as EnhancedDashboardCard,
-      id: `custom-${Date.now()}`,
-      position: cards.length
+      id: `card-${Date.now()}`,
+      title: newCard.title!,
+      type: newCard.type || 'metric',
+      category: newCard.category || 'dashboard',
+      dataSource: newCard.dataSource!,
+      size: newCard.size || 'small',
+      visible: newCard.visible ?? true,
+      position: cards.length,
+      config: {
+        ...newCard.config,
+      },
+      isBuiltIn: false,
+      isRemovable: true
     };
 
     onCardsChange([...cards, cardToAdd]);
     setShowAddCard(false);
+    
+    // Reset form
     setNewCard({
       title: '',
       type: 'metric',
@@ -276,17 +300,12 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
       dataSource: 'clients',
       size: 'small',
       visible: true,
+      position: cards.length + 1,
       config: {
         icon: 'Building',
         color: 'blue',
         format: 'number',
-        aggregation: 'count',
-        chartType: 'bar',
-        trend: false,
-        showLegend: true,
-        showDataLabels: false,
-        enableDrillDown: true,
-        refreshInterval: 300
+        aggregation: 'count'
       },
       isBuiltIn: false,
       isRemovable: true
@@ -294,144 +313,113 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
 
     toast({
       title: "Success",
-      description: "Dashboard card added successfully"
+      description: "Dashboard card added successfully",
     });
   };
 
   const handleUpdateCard = (updatedCard: EnhancedDashboardCard) => {
-    console.log('=== ENHANCED DASHBOARD CUSTOMIZER: handleUpdateCard ===');
-    console.log('Updated card:', updatedCard);
-    console.log('Updated card config:', updatedCard.config);
-    
     const updatedCards = cards.map(card => 
       card.id === updatedCard.id ? updatedCard : card
     );
-    
-    console.log('All updated cards:', updatedCards);
-    
-    // Immediately update parent state
     onCardsChange(updatedCards);
     setEditingCard(null);
+    setPendingUpdates(null);
     
     toast({
       title: "Success",
-      description: "Dashboard card updated successfully"
+      description: "Card updated successfully",
     });
   };
 
   const handleRemoveCard = (cardId: string) => {
     const updatedCards = cards.filter(card => card.id !== cardId);
     onCardsChange(updatedCards);
-    
     toast({
       title: "Success",
-      description: "Dashboard card removed successfully"
+      description: "Card removed successfully",
     });
   };
 
   const handleDuplicateCard = (card: EnhancedDashboardCard) => {
     const duplicatedCard: EnhancedDashboardCard = {
       ...card,
-      id: `${card.id}-copy-${Date.now()}`,
+      id: `card-${Date.now()}`,
       title: `${card.title} (Copy)`,
       position: cards.length
     };
     
     onCardsChange([...cards, duplicatedCard]);
-    
     toast({
       title: "Success",
-      description: "Dashboard card duplicated successfully"
+      description: "Card duplicated successfully",
     });
   };
 
-  const handleImportWidget = () => {
-    if (!selectedWidget) {
-      toast({
-        title: "Error",
-        description: "Please select a widget to import",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Use the widget's existing configuration instead of overriding with defaults
+  const handleImportWidget = (widget: GlobalWidget) => {
     const widgetCard: EnhancedDashboardCard = {
-      id: `widget-${selectedWidget.id}`,
-      title: selectedWidget.name,
-      type: selectedWidget.widgetType as 'metric' | 'chart' | 'comparison' | 'pool-comparison' | 'widget', // Use actual widget type
+      id: `widget-${widget.id}-${Date.now()}`,
+      title: widget.name,
+      type: 'widget',
       category: 'widget',
-      dataSource: 'widget', // Special data source for widget cards
-      size: getSizeFromDisplayConfig(selectedWidget.displayConfig), // Use widget's size configuration
+      dataSource: 'external',
+      size: getSizeFromDisplayConfig(widget.displayConfig),
       visible: true,
       position: cards.length,
       config: {
-        icon: getWidgetIcon(selectedWidget.widgetType),
-        color: 'blue',
-        format: 'number',
-        // Use widget's existing chart type if available
-        chartType: selectedWidget.chartType || getDefaultChartType(selectedWidget.widgetType),
-        // Import all widget-specific configuration without overriding
-        widgetId: selectedWidget.id,
-        widgetType: selectedWidget.widgetType,
-        pluginName: selectedWidget.pluginName,
-        instanceId: selectedWidget.systemId.toString(),
-        refreshInterval: selectedWidget.refreshInterval || 30,
-        // Preserve the widget's display configuration
-        ...selectedWidget.displayConfig,
-        // Ensure these critical fields are preserved
-        name: selectedWidget.name,
-        showLegend: selectedWidget.displayConfig?.showLegend ?? true,
-        showDataLabels: selectedWidget.displayConfig?.showDataLabels ?? false,
-        enableDrillDown: selectedWidget.displayConfig?.enableDrillDown ?? true
+        widgetId: widget.id,
+        widgetType: widget.widgetType,
+        pluginName: widget.pluginName,
+        instanceId: `${widget.systemId}`,
+        name: widget.name,
+        icon: getWidgetIcon(widget.widgetType),
+        color: 'purple',
+        chartType: getDefaultChartType(widget.widgetType),
+        refreshInterval: widget.refreshInterval
       },
       isBuiltIn: false,
       isRemovable: true
     };
 
     onCardsChange([...cards, widgetCard]);
-    setShowWidgetImport(false);
-    setSelectedWidget(null);
     
     toast({
       title: "Success",
-      description: `Widget "${selectedWidget.name}" imported with its existing configuration`
+      description: `Widget "${widget.name}" imported successfully`,
     });
   };
 
   const getWidgetIcon = (widgetType: string): string => {
-    switch (widgetType) {
-      case 'table': return 'Table';
-      case 'chart': return 'BarChart3';
-      case 'metric': return 'Gauge';
-      case 'list': return 'List';
-      case 'gauge': return 'Gauge';
-      case 'query': return 'Code';
-      default: return 'Database';
-    }
+    const iconMap: Record<string, string> = {
+      'table': 'Database',
+      'chart': 'BarChart3',
+      'metric': 'Activity',
+      'list': 'List',
+      'gauge': 'Gauge',
+      'query': 'Search'
+    };
+    return iconMap[widgetType] || 'Grid';
   };
 
   const getSizeFromDisplayConfig = (displayConfig: Record<string, any> | undefined): 'small' | 'medium' | 'large' | 'xlarge' => {
-    const width = displayConfig?.width || 'medium';
-    switch (width) {
-      case 'quarter': return 'small';
-      case 'third': return 'medium';
-      case 'half': return 'large';
-      case 'full': return 'xlarge';
-      default: return 'medium';
-    }
+    if (!displayConfig) return 'medium';
+    
+    const width = displayConfig.width;
+    if (width === 'full') return 'xlarge';
+    if (width === 'half') return 'large';
+    if (width === 'third') return 'medium';
+    return 'small';
   };
 
   const getDefaultChartType = (widgetType: string): 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter' => {
-    switch (widgetType) {
-      case 'chart': return 'bar';
-      case 'metric': return 'doughnut';
-      case 'table': return 'bar';
-      case 'list': return 'bar';
-      case 'gauge': return 'doughnut';
-      case 'query': return 'bar';
-      default: return 'bar';
-    }
+    const chartTypeMap: Record<string, 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter'> = {
+      'chart': 'bar',
+      'metric': 'line',
+      'table': 'bar',
+      'list': 'bar',
+      'gauge': 'doughnut',
+      'query': 'bar'
+    };
+    return chartTypeMap[widgetType] || 'bar';
   };
 
   const resetToDefaults = () => {
@@ -465,7 +453,140 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     });
   };
 
-      // Integration Engine import functionality has been removed - deprecated
+  // Unified widget management functions
+  const handleToggleVisibility = async (widget: GlobalWidget) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/widgets/manage/${widget.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...widget,
+          isActive: !widget.isActive
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update widget visibility');
+      }
+
+      toast({
+        title: widget.isActive ? "Widget Hidden" : "Widget Shown",
+        description: `"${widget.name}" is now ${widget.isActive ? 'hidden from' : 'visible on'} the dashboard.`,
+      });
+
+      // Refresh the widgets data
+      await refetchManageWidgets();
+      await refetchGlobalWidgets();
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update widget visibility. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfigureWidget = (widget: GlobalWidget) => {
+    setConfiguringWidget(widget);
+    setShowWidgetBuilder(true);
+  };
+
+  const handleSaveWidgetConfig = async (widgetData: any) => {
+    try {
+      const response = await fetch(`/api/widgets/manage/${configuringWidget?.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(widgetData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to save widget: ${errorData}`);
+      }
+
+      toast({
+        title: "Success",
+        description: "Widget configuration saved successfully!",
+      });
+
+      setShowWidgetBuilder(false);
+      setConfiguringWidget(null);
+      
+      // Refresh the widgets data
+      await refetchManageWidgets();
+
+    } catch (error) {
+      console.error('Error saving widget:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save widget configuration",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMoveWidget = async (widgetId: string, direction: 'up' | 'down') => {
+    const currentIndex = availableWidgets.findIndex(w => w.id === widgetId);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= availableWidgets.length) return;
+
+    try {
+      // Update positions
+      const updates = [
+        {
+          id: availableWidgets[currentIndex].id,
+          position: newIndex
+        },
+        {
+          id: availableWidgets[newIndex].id,
+          position: currentIndex
+        }
+      ];
+
+      await Promise.all(
+        updates.map(update =>
+          fetch(`/api/widgets/manage/${update.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              ...availableWidgets.find(w => w.id === update.id),
+              position: update.position
+            }),
+          })
+        )
+      );
+
+      toast({
+        title: "Widget Order Updated",
+        description: "Widget order has been saved.",
+      });
+
+      // Refresh the widgets data
+      await refetchManageWidgets();
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update widget order. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -482,9 +603,9 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             Reset
           </Button>
           
-          <Button variant="outline" onClick={() => setShowWidgetImport(true)}>
-            <Import className="h-4 w-4 mr-2" />
-            Import Widget
+          <Button variant="outline" onClick={() => setShowUnifiedManager(true)}>
+            <Eye className="h-4 w-4 mr-2" />
+            Manage Widgets
           </Button>
 
           <Button onClick={() => setShowAddCard(true)}>
@@ -688,13 +809,14 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
 
       {/* Widget Import Dialog */}
       <WidgetImportDialog
-        showWidgetImport={showWidgetImport}
-        setShowWidgetImport={setShowWidgetImport}
+        showUnifiedManager={showUnifiedManager}
+        setShowUnifiedManager={setShowUnifiedManager}
         availableWidgets={availableWidgets}
-        widgetsLoading={widgetsLoading}
-        selectedWidget={selectedWidget}
-        setSelectedWidget={setSelectedWidget}
-        handleImportWidget={handleImportWidget}
+        loading={loading}
+        handleToggleVisibility={handleToggleVisibility}
+        handleConfigureWidget={handleConfigureWidget}
+        handleSaveWidgetConfig={handleSaveWidgetConfig}
+        handleMoveWidget={handleMoveWidget}
       />
 
     </div>
@@ -1033,131 +1155,316 @@ function CardCreatorForm({
 
 // Additional Widget Import Dialog component at the end of file
 export const WidgetImportDialog: React.FC<{
-  showWidgetImport: boolean;
-  setShowWidgetImport: (show: boolean) => void;
+  showUnifiedManager: boolean;
+  setShowUnifiedManager: (show: boolean) => void;
   availableWidgets: GlobalWidget[];
-  widgetsLoading: boolean;
-  selectedWidget: GlobalWidget | null;
-  setSelectedWidget: (widget: GlobalWidget | null) => void;
-  handleImportWidget: () => void;
+  loading: boolean;
+  handleToggleVisibility: (widget: GlobalWidget) => void;
+  handleConfigureWidget: (widget: GlobalWidget) => void;
+  handleSaveWidgetConfig: (widgetData: any) => void;
+  handleMoveWidget: (widgetId: string, direction: 'up' | 'down') => void;
 }> = ({
-  showWidgetImport,
-  setShowWidgetImport,
+  showUnifiedManager,
+  setShowUnifiedManager,
   availableWidgets,
-  widgetsLoading,
-  selectedWidget,
-  setSelectedWidget,
-  handleImportWidget
-}) => (
-  <Dialog open={showWidgetImport} onOpenChange={setShowWidgetImport}>
-    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Import Widget to Dashboard</DialogTitle>
-        <DialogDescription>
-          Select a widget from your available widgets to add as a dashboard card
-        </DialogDescription>
-      </DialogHeader>
-      
-      <div className="space-y-4">
-        {widgetsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : availableWidgets.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-8">
-              <Grid className="w-12 h-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Widgets Available</h3>
-              <p className="text-gray-600 text-center mb-4">
-                You haven't created any widgets yet. Create widgets in the Widget Manager first.
-              </p>
-              <Button variant="outline" onClick={() => setShowWidgetImport(false)}>
-                Close
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-            {availableWidgets.filter((widget: GlobalWidget) => widget.isActive).map((widget: GlobalWidget) => (
-              <Card 
-                key={widget.id} 
-                className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                  selectedWidget?.id === widget.id 
-                    ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' 
-                    : 'hover:bg-gray-50'
-                }`}
-                onClick={() => setSelectedWidget(widget)}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      {widget.widgetType === 'table' && <TableIcon className="h-5 w-5 text-blue-600" />}
-                      {widget.widgetType === 'chart' && <BarChart3 className="h-5 w-5 text-green-600" />}
-                      {widget.widgetType === 'metric' && <Gauge className="h-5 w-5 text-purple-600" />}
-                      {widget.widgetType === 'list' && <List className="h-5 w-5 text-orange-600" />}
-                      {widget.widgetType === 'gauge' && <Gauge className="h-5 w-5 text-indigo-600" />}
-                      {widget.widgetType === 'query' && <Code className="h-5 w-5 text-red-600" />}
-                      <CardTitle className="text-base">{widget.name}</CardTitle>
-                    </div>
-                    <Badge variant={widget.isGlobal ? "default" : "secondary"}>
-                      {widget.isGlobal ? "Global" : "Personal"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-sm text-gray-600 mb-3">{widget.description}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span className="flex items-center space-x-1">
-                      <Database className="h-3 w-3" />
-                      <span>{widget.pluginName}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <span>Refresh: {widget.refreshInterval}s</span>
-                    </span>
-                  </div>
+  loading,
+  handleToggleVisibility,
+  handleConfigureWidget,
+  handleSaveWidgetConfig,
+  handleMoveWidget
+}) => {
+  const { toast } = useToast();
+  const [showWidgetBuilder, setShowWidgetBuilder] = useState(false);
+  const [configuringWidget, setConfiguringWidget] = useState<GlobalWidget | null>(null);
+  const [widgetOrder, setWidgetOrder] = useState<GlobalWidget[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize widget order when widgets load
+  useEffect(() => {
+    if (availableWidgets.length > 0) {
+      const sortedWidgets = [...availableWidgets].sort((a, b) => a.position - b.position);
+      setWidgetOrder(sortedWidgets);
+    }
+  }, [availableWidgets]);
+
+  const handleToggleVisibilityLocal = async (widget: GlobalWidget) => {
+    setIsLoading(true);
+    try {
+      await handleToggleVisibility(widget);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update widget visibility. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfigureWidgetLocal = (widget: GlobalWidget) => {
+    setConfiguringWidget(widget);
+    setShowWidgetBuilder(true);
+  };
+
+  const handleSaveWidgetConfigLocal = async (widgetData: any) => {
+    try {
+      await handleSaveWidgetConfig(widgetData);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update widget configuration. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMoveWidgetLocal = async (widgetId: string, direction: 'up' | 'down') => {
+    const currentIndex = widgetOrder.findIndex(w => w.id === widgetId);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= widgetOrder.length) return;
+
+    const newOrder = [...widgetOrder];
+    [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+    
+    // Update positions
+    const updatedOrder = newOrder.map((widget, index) => ({
+      ...widget,
+      position: index
+    }));
+
+    setWidgetOrder(updatedOrder);
+
+    // Save new order to backend
+    try {
+      await handleMoveWidget(widgetId, direction);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update widget order. Please try again.",
+        variant: "destructive",
+      });
+      // Revert on error
+      setWidgetOrder(availableWidgets);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={showUnifiedManager} onOpenChange={setShowUnifiedManager}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Widgets</DialogTitle>
+            <DialogDescription>
+              Show/hide widgets and manage their display order. Click "Configure Widget" to modify widget settings.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <span className="ml-2">Loading widgets...</span>
+              </div>
+            ) : availableWidgets.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <Grid className="w-12 h-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Widgets Available</h3>
+                  <p className="text-gray-600 text-center mb-4">
+                    You haven't created any widgets yet. Create widgets in the Widget Manager first.
+                  </p>
+                  <Button variant="outline" onClick={() => setShowUnifiedManager(false)}>
+                    Close
+                  </Button>
                 </CardContent>
               </Card>
-            ))}
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-sm text-gray-600">
+                    {widgetOrder.filter(w => w.isActive).length} of {widgetOrder.length} widgets visible
+                  </div>
+                  <div className="flex items-center space-x-4 text-xs text-gray-500">
+                    <div className="flex items-center space-x-1">
+                      <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+                      <span>Visible</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-3 h-3 bg-gray-100 border border-gray-300 rounded"></div>
+                      <span>Hidden</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {widgetOrder.map((widget: GlobalWidget, index) => (
+                    <Card 
+                      key={widget.id} 
+                      className={`transition-colors ${
+                        widget.isActive 
+                          ? 'bg-green-50 border-green-200 hover:bg-green-100' 
+                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex flex-col space-y-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMoveWidgetLocal(widget.id, 'up')}
+                                disabled={index === 0}
+                                className="h-6 w-6 p-0"
+                              >
+                                ↑
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMoveWidgetLocal(widget.id, 'down')}
+                                disabled={index === widgetOrder.length - 1}
+                                className="h-6 w-6 p-0"
+                              >
+                                ↓
+                              </Button>
+                            </div>
+                            <div className="flex-1">
+                              <CardTitle className="text-base font-medium">{widget.name}</CardTitle>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {widget.pluginName}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {widget.widgetType}
+                                </Badge>
+                                {widget.isActive ? (
+                                  <Badge className="bg-green-100 text-green-800 text-xs">
+                                    <Eye className="h-3 w-3 mr-1" />
+                                    Visible
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-gray-600 text-xs">
+                                    <EyeOff className="h-3 w-3 mr-1" />
+                                    Hidden
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleConfigureWidgetLocal(widget)}
+                              disabled={isLoading}
+                            >
+                              <Settings className="h-4 w-4 mr-1" />
+                              Configure Widget
+                            </Button>
+                            <Button
+                              variant={widget.isActive ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => handleToggleVisibilityLocal(widget)}
+                              disabled={isLoading}
+                              className={widget.isActive ? "text-red-600 hover:text-red-700" : ""}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : widget.isActive ? (
+                                <>
+                                  <EyeOff className="h-4 w-4 mr-1" />
+                                  Hide
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Show
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <p className="text-sm text-gray-600 mb-3">{widget.description}</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span className="flex items-center space-x-1">
+                              <Database className="h-3 w-3" />
+                              <span>{widget.pluginName}</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <span>Refresh: {widget.refreshInterval}s</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <span>Position: {index + 1}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        )}
-        
-        {selectedWidget && (
-          <Card className="mt-4 bg-blue-50 border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-sm text-blue-800">Selected Widget</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="font-medium">Name:</span> {selectedWidget.name}
-                </div>
-                <div>
-                  <span className="font-medium">Type:</span> {selectedWidget.widgetType}
-                </div>
-                <div>
-                  <span className="font-medium">Plugin:</span> {selectedWidget.pluginName}
-                </div>
-                <div>
-                  <span className="font-medium">System:</span> {selectedWidget.systemName}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-      
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button variant="outline" onClick={() => setShowWidgetImport(false)}>
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleImportWidget}
-          disabled={!selectedWidget}
-        >
-          <Import className="h-4 w-4 mr-2" />
-          Import Widget
-        </Button>
-      </div>
-    </DialogContent>
-  </Dialog>
-);
+          
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={() => setShowUnifiedManager(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Widget Configuration Dialog */}
+      <Dialog open={showWidgetBuilder} onOpenChange={setShowWidgetBuilder}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Configure Widget: {configuringWidget?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {showWidgetBuilder && configuringWidget && (
+            <DynamicWidgetBuilder
+              onSave={handleSaveWidgetConfigLocal}
+              onCancel={() => {
+                setShowWidgetBuilder(false);
+                setConfiguringWidget(null);
+              }}
+              editingWidget={{
+                id: configuringWidget.id,
+                name: configuringWidget.name,
+                description: configuringWidget.description,
+                pluginName: configuringWidget.pluginName,
+                instanceId: `${configuringWidget.pluginName}-main`,
+                queryType: 'custom' as const,
+                customQuery: configuringWidget.query,
+                queryMethod: configuringWidget.method,
+                queryParameters: configuringWidget.parameters,
+                displayType: configuringWidget.widgetType,
+                refreshInterval: configuringWidget.refreshInterval,
+                placement: 'global-dashboard' as const,
+                styling: {
+                  width: configuringWidget.displayConfig?.width || 'full',
+                  height: configuringWidget.displayConfig?.height || 'medium',
+                  showBorder: configuringWidget.displayConfig?.showBorder !== false,
+                  showHeader: configuringWidget.displayConfig?.showHeader !== false
+                },
+                chartType: configuringWidget.chartType,
+                groupBy: configuringWidget.groupBy || undefined
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};

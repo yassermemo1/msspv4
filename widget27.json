@@ -1,0 +1,32 @@
+{
+  "id": "27",
+  "systemId": 1,
+  "systemName": "jira",
+  "pluginName": "jira",
+  "name": "Priority Distribution (Group By)",
+  "description": "Pie chart showing issue distribution by priority using Group By",
+  "widgetType": "chart",
+  "chartType": "pie",
+  "query": "project in (\"DEP\", \"MD\")",
+  "method": "GET",
+  "parameters": {},
+  "displayConfig": {
+    "width": "half",
+    "height": "medium",
+    "showBorder": true,
+    "showHeader": true
+  },
+  "groupBy": {
+    "field": "priority",
+    "limit": 8,
+    "sortBy": "desc",
+    "aggregationFunction": "count"
+  },
+  "refreshInterval": 60,
+  "isActive": true,
+  "isGlobal": true,
+  "position": 0,
+  "createdBy": 17,
+  "createdAt": "2025-06-18T00:58:26.694Z",
+  "updatedAt": "2025-06-17T22:26:40.395Z"
+}

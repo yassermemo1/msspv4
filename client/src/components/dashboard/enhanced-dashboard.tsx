@@ -66,6 +66,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDashboardSettings, DashboardCard } from "@/hooks/use-dashboard-settings";
 import { formatClientName } from "@/lib/utils";
 import { EnhancedDashboardCustomizer, EnhancedDashboardCard } from "./enhanced-dashboard-customizer";
+import AllWidgetsGrid from "@/components/widgets/all-widgets-grid";
 // External widget card removed - deprecated
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#a4de6c', '#d084d0', '#8dd1e1', '#ffb347'];
@@ -619,27 +620,23 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
         />
       </div>
 
-      {/* Dashboard Cards Section */}
+      {/* Dashboard Cards Section - REMOVED: Now integrated into Business Metrics Dashboard */}
+      {/* <div className="mb-8">
+        ...Dashboard Overview section removed...
+      </div> */}
+
+      {/* Business Metrics Dashboard */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-2">
             <h2 className="text-xl font-semibold text-gray-900">
-              Dashboard Overview
+              Business Metrics Dashboard
             </h2>
             <Badge variant="outline" className="ml-2">
-              {visibleCards.length} card{visibleCards.length !== 1 ? 's' : ''}
+              {(visibleCards.filter(card => card.type === 'widget').length)} imported widget{visibleCards.filter(card => card.type === 'widget').length !== 1 ? 's' : ''}
             </Badge>
           </div>
           <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.location.reload()}
-              className="flex items-center space-x-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Refresh</span>
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -647,194 +644,42 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
               className="flex items-center space-x-2"
             >
               <Settings className="h-4 w-4" />
-              <span>{showCustomizer ? 'Hide Customizer' : 'Customize Dashboard'}</span>
+              <span>Manage Widgets</span>
             </Button>
           </div>
         </div>
-
-        {/* Customizable Dashboard Cards */}
-        <div className="mb-6">
-          {visibleCards.length > 0 && (
-            <div className={getGridColsClass(visibleCards.length)}>
-              {visibleCards.map((card) => {
-                // External widget functionality removed - deprecated
-                if (card.type === 'chart') {
-                  const chartData = getChartData(card.config.dataSource || '', card.config.chartType || '');
-                  // ... existing code ...
-                }
-                
-                // Handle widget cards with special onClick behavior
-                if (card.type === 'widget') {
-                  return (
-                    <DynamicDashboardCard
-                      key={card.id}
-                      card={card}
-                      onClick={() => {
-                        // For widget cards, you could navigate to widget manager or specific widget details
-                        // setLocation(`/widgets/${card.config.widgetId}`);
-                        console.log('Widget card clicked:', card.config.widgetId);
-                      }}
-                    />
-                  );
-                }
-                
-                return (
+        
+        {/* Imported Widgets from Customizer */}
+        {visibleCards.filter(card => card.type === 'widget').length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Imported Widgets</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {visibleCards
+                .filter(card => card.type === 'widget')
+                .map(card => (
                   <DynamicDashboardCard
                     key={card.id}
                     card={card}
                     onClick={() => {
-                      // Navigate to relevant page based on data source
-                      const navigationMap: Record<string, string> = {
-                        'clients': '/clients',
-                        'contracts': '/contracts',
-                        'services': '/services',
-                        'license_pools': '/license-pools',
-                        'hardware_assets': '/hardware-assets',
-                      };
-                      const route = navigationMap[card.dataSource];
-                      if (route) {
-                        setLocation(route);
-                      }
+                      console.log('Imported widget clicked:', card.config.widgetId);
                     }}
                   />
-                );
-              })}
+                ))}
             </div>
-          )}
-          
-          {/* Empty Dashboard State */}
-          {visibleCards.length === 0 && (
-            <Card className="text-center py-12">
-              <CardContent>
-                <div className="flex flex-col items-center space-y-4">
-                  <BarChart3 className="h-12 w-12 text-gray-400" />
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      No Dashboard Cards Visible
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      Customize your dashboard to add cards and charts
-                    </p>
-                    <Button onClick={() => setShowCustomizer(true)}>
-                      <Settings className="h-4 w-4 mr-2" />
-                      Customize Dashboard
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </div>
+        )}
+        
+        {/* Global Widgets */}
+        <AllWidgetsGrid 
+          className="w-full"
+          maxColumns={4}
+          showOnlyActive={true}
+          showOnlyGlobal={false}
+        />
       </div>
 
-
-
-      {/* License Pool Cards Section */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">License Pool Management</h3>
-          <div className="flex items-center space-x-2">
-            {!licensePoolsLoading && !licensePoolsError && (
-              <Badge variant="outline" className="text-xs">
-                {licensePools?.length || 0} Pool{(licensePools?.length || 0) !== 1 ? 's' : ''} Available
-              </Badge>
-            )}
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => refetchLicensePools()}
-              disabled={licensePoolsLoading}
-            >
-              <Activity className={`h-4 w-4 mr-1 ${licensePoolsLoading ? 'animate-spin' : ''}`} />
-              Refresh Pools
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setLocation('/license-pools')}
-            >
-              <Eye className="h-4 w-4 mr-1" />
-              View All Pools
-            </Button>
-          </div>
-        </div>
-        
-        {/* Loading State */}
-        {licensePoolsLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="bg-purple-50 border-purple-200">
-                <CardContent className="p-4">
-                  <div className="animate-pulse">
-                    <div className="h-4 bg-purple-200 rounded mb-2"></div>
-                    <div className="h-8 bg-purple-200 rounded mb-2"></div>
-                    <div className="h-3 bg-purple-200 rounded mb-1"></div>
-                    <div className="h-3 bg-purple-200 rounded w-3/4"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-        
-        {/* Error State */}
-        {licensePoolsError && (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <AlertCircle className="h-12 w-12 text-red-400 mb-3" />
-              <h4 className="text-lg font-medium text-red-600 mb-2">Error Loading License Pools</h4>
-              <p className="text-sm text-red-500 mb-4 max-w-md">
-                Unable to fetch license pool data. Please check your connection and try again.
-              </p>
-              <Button 
-                onClick={() => refetchLicensePools()}
-                variant="outline"
-                size="sm"
-                className="border-red-300 text-red-600 hover:bg-red-100"
-              >
-                <Activity className="h-4 w-4 mr-2" />
-                Retry Loading
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-        
-        {/* Success State - Dynamic Grid Layout */}
-        {!licensePoolsLoading && !licensePoolsError && licensePools && licensePools.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
-            {licensePools.map((pool) => (
-              <IndividualLicensePoolCard 
-                key={pool.id}
-                poolId={pool.id}
-                className="bg-purple-50 border-purple-200 hover:bg-purple-100 transition-colors duration-200 hover:shadow-md"
-              />
-            ))}
-          </div>
-        )}
-        
-        {/* Empty State */}
-        {!licensePoolsLoading && !licensePoolsError && (!licensePools || licensePools.length === 0) && (
-          <Card className="border-dashed border-2 border-gray-300 bg-gray-50">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <Server className="h-12 w-12 text-gray-400 mb-3" />
-              <h4 className="text-lg font-medium text-gray-600 mb-2">No License Pools Available</h4>
-              <p className="text-sm text-gray-500 mb-4 max-w-md">
-                Get started by creating your first license pool to track software licenses and utilization.
-              </p>
-              <Button 
-                onClick={() => setLocation('/license-pools')}
-                variant="outline"
-                size="sm"
-              >
-                <Server className="h-4 w-4 mr-2" />
-                Manage License Pools
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-
+      {/* License Pool Cards Section - REMOVED TO AVOID CONFUSION WITH BUSINESS DASHBOARD */}
+      {/* The 4 loading skeleton cards from this section were being mistaken for Business Dashboard cards */}
 
       {/* Enhanced Dashboard Customizer Modal */}
       {showCustomizer && (

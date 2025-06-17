@@ -70,6 +70,13 @@ interface CustomWidget {
     function: 'count' | 'sum' | 'avg' | 'min' | 'max';
     field?: string;
   };
+  groupBy?: {
+    field: string; // X-axis field for grouping
+    valueField?: string; // Y-axis field for values
+    aggregationFunction?: 'count' | 'sum' | 'avg' | 'min' | 'max';
+    limit?: number; // Limit number of groups
+    sortBy?: 'asc' | 'desc'; // Sort groups by value
+  };
   enabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -78,6 +85,8 @@ interface CustomWidget {
 interface DynamicWidgetRendererProps {
   widget: CustomWidget;
   clientShortName?: string; // For client-specific widgets
+  clientName?: string; // Full client name
+  clientDomain?: string; // Client domain
   onEdit?: (widget: CustomWidget) => void;
   onDelete?: (widgetId: string) => void;
   onRefresh?: () => void; // For external refresh requests
@@ -88,6 +97,8 @@ interface DynamicWidgetRendererProps {
 export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   widget,
   clientShortName,
+  clientName,
+  clientDomain,
   onEdit,
   onDelete,
   onRefresh,
@@ -115,7 +126,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       const interval = setInterval(fetchData, widget.refreshInterval * 1000);
       return () => clearInterval(interval);
     }
-  }, [widget, clientShortName, previewData]);
+  }, [widget, clientShortName, clientName, clientDomain, previewData]);
 
   const fetchData = async () => {
     try {
@@ -125,40 +136,115 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       let endpoint = '';
       let body = null;
 
-      // Build query parameters including client context
-      const queryParams = {
-        ...widget.queryParameters,
-        ...(clientShortName && { clientShortName })
-      };
+      // Build enhanced context from current page and props
+      const pageContext: any = {};
+      
+      // Extract context from URL (client ID, contract ID, etc.)
+      const currentPath = window.location.pathname;
+      const pathSegments = currentPath.split('/');
+      
+      // Check for client context (/clients/:id)
+      if (pathSegments.includes('clients') && pathSegments.length > 2) {
+        const clientIndex = pathSegments.indexOf('clients');
+        const clientId = pathSegments[clientIndex + 1];
+        if (clientId && !isNaN(Number(clientId))) {
+          pageContext.clientId = Number(clientId);
+        }
+      }
+      
+      // Check for contract context (/contracts/:id)
+      if (pathSegments.includes('contracts') && pathSegments.length > 2) {
+        const contractIndex = pathSegments.indexOf('contracts');
+        const contractId = pathSegments[contractIndex + 1];
+        if (contractId && !isNaN(Number(contractId))) {
+          pageContext.contractId = Number(contractId);
+        }
+      }
+      
+      // Add client context from props (passed from parent components)
+      if (clientShortName) {
+        pageContext.clientShortName = clientShortName;
+      }
+      if (clientName) {
+        pageContext.clientName = clientName;
+      }
+      if (clientDomain) {
+        pageContext.clientDomain = clientDomain;
+      }
+
+      console.log('📍 Widget context extracted:', pageContext);
+      console.log('🔧 Widget configuration:', {
+        name: widget.name,
+        queryType: widget.queryType,
+        pluginName: widget.pluginName,
+        instanceId: widget.instanceId,
+        parameters: widget.queryParameters
+      });
+
+      // Enhanced parameter logging for debugging
+      if (widget.queryParameters && Object.keys(widget.queryParameters).length > 0) {
+        console.log('⚙️ Widget parameters configuration:');
+        Object.entries(widget.queryParameters).forEach(([key, config]) => {
+          console.log(`   - ${key}:`, config);
+        });
+        console.log('📊 Available context for parameter resolution:', pageContext);
+      }
 
       if (widget.queryType === 'default' && widget.queryId) {
         endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/default-query/${widget.queryId}`;
-        if (Object.keys(queryParams).length > 0) {
-          body = { parameters: queryParams };
-        }
+        body = { 
+          parameters: widget.queryParameters,
+          filters: widget.filters || [],
+          context: pageContext 
+        };
       } else if (widget.queryType === 'custom' && widget.customQuery) {
         endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/query`;
         body = {
           query: widget.customQuery,
           method: widget.queryMethod,
-          parameters: queryParams
+          parameters: widget.queryParameters,
+          filters: widget.filters || [],
+          context: pageContext
         };
       } else {
         throw new Error('Invalid widget configuration');
       }
 
-      const response = await apiRequest('POST', endpoint, body);
+      console.log('🚀 Widget API call:', { endpoint, body });
 
+      const response = await apiRequest('POST', endpoint, body);
       const result = await response.json();
       
       if (result.success) {
         setData(result.data);
         setLastUpdate(new Date());
+        console.log('✅ Widget data loaded successfully');
+        
+        // Log parameter resolution results if available
+        if (result.metadata?.parameters) {
+          console.log('🎯 Parameter resolution results:', result.metadata.parameters);
+        }
+        if (result.metadata?.query !== result.metadata?.originalQuery) {
+          console.log('🔄 Query transformation:');
+          console.log('   Original:', result.metadata?.originalQuery);
+          console.log('   Processed:', result.metadata?.query);
+        }
       } else {
         setError(result.message || 'Failed to fetch data');
+        console.error('❌ Widget API error:', result);
+        
+        // Enhanced error logging for parameter issues
+        if (result.message?.includes('parameter') || result.message?.includes('Parameter')) {
+          console.error('🔧 Parameter resolution may have failed. Check:');
+          console.error('   - Parameter configuration:', widget.queryParameters);
+          console.error('   - Available context:', pageContext);
+          console.error('   - Query template:', widget.customQuery || 'Default query');
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
+      setError(errorMessage);
+      console.error('💥 Widget fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -291,27 +377,36 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const renderChart = () => {
     let chartData = data;
 
-    // Convert data to chart format if needed
-    if (Array.isArray(data) && data.length > 0) {
-      // If data is an array of objects, use as-is
-      if (typeof data[0] === 'object') {
-        chartData = data;
-      } else {
-        // Convert simple array to chart format
-        chartData = data.map((value, index) => ({
-          name: `Item ${index + 1}`,
+    // Apply groupBy processing if configured
+    if (widget.groupBy && Array.isArray(data) && data.length > 0) {
+      chartData = processGroupedData(data, widget.groupBy);
+    } else {
+      // Convert data to chart format if needed (fallback to original logic)
+      if (Array.isArray(data) && data.length > 0) {
+        // If data is an array of objects, use as-is
+        if (typeof data[0] === 'object') {
+          chartData = data;
+        } else {
+          // Convert simple array to chart format
+          chartData = data.map((value, index) => ({
+            name: `Item ${index + 1}`,
+            value: value
+          }));
+        }
+      } else if (typeof data === 'object') {
+        // Convert object to chart format
+        chartData = Object.entries(data).map(([key, value]) => ({
+          name: key,
           value: value
         }));
       }
-    } else if (typeof data === 'object') {
-      // Convert object to chart format
-      chartData = Object.entries(data).map(([key, value]) => ({
-        name: key,
-        value: value
-      }));
     }
 
-    const colors = ['#3b82f6', '#1e40af', '#60a5fa', '#93c5fd', '#dbeafe'];
+    const colors = ['#3b82f6', '#1e40af', '#60a5fa', '#93c5fd', '#dbeafe', '#f97316', '#ea580c', '#dc2626'];
+
+    // Determine the data keys for X and Y axes
+    const xKey = widget.groupBy?.field || 'name';
+    const yKey = widget.groupBy?.valueField || 'value';
 
     switch (widget.chartType) {
       case 'bar':
@@ -319,10 +414,20 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis 
+                dataKey={xKey} 
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                interval={0}
+                fontSize={12}
+              />
               <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill={colors[0]} />
+              <Tooltip 
+                formatter={(value, name) => [formatChartValue(value), name]}
+                labelFormatter={(label) => `${widget.groupBy?.field || 'Category'}: ${label}`}
+              />
+              <Bar dataKey={yKey} fill={colors[0]} />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -332,10 +437,20 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <RechartsLineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis 
+                dataKey={xKey}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                interval={0}
+                fontSize={12}
+              />
               <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke={colors[0]} strokeWidth={2} />
+              <Tooltip 
+                formatter={(value, name) => [formatChartValue(value), name]}
+                labelFormatter={(label) => `${widget.groupBy?.field || 'Category'}: ${label}`}
+              />
+              <Line type="monotone" dataKey={yKey} stroke={colors[0]} strokeWidth={2} />
             </RechartsLineChart>
           </ResponsiveContainer>
         );
@@ -352,13 +467,13 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 outerRadius={80}
                 fill="#8884d8"
-                dataKey="value"
+                dataKey={yKey}
               >
                 {chartData.map((entry: any, index: number) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value) => formatChartValue(value)} />
             </RechartsPieChart>
           </ResponsiveContainer>
         );
@@ -368,10 +483,20 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis 
+                dataKey={xKey}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                interval={0}
+                fontSize={12}
+              />
               <YAxis />
-              <Tooltip />
-              <Area type="monotone" dataKey="value" stroke={colors[0]} fill={colors[0]} fillOpacity={0.3} />
+              <Tooltip 
+                formatter={(value, name) => [formatChartValue(value), name]}
+                labelFormatter={(label) => `${widget.groupBy?.field || 'Category'}: ${label}`}
+              />
+              <Area type="monotone" dataKey={yKey} stroke={colors[0]} fill={colors[0]} fillOpacity={0.3} />
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -379,6 +504,125 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       default:
         return renderTable();
     }
+  };
+
+  // Helper function to process grouped data
+  const processGroupedData = (rawData: any[], groupConfig: NonNullable<CustomWidget['groupBy']>) => {
+    const { field, valueField, aggregationFunction = 'count', limit = 10, sortBy = 'desc' } = groupConfig;
+    
+    console.log('🔄 Processing grouped data:', {
+      field,
+      valueField,
+      aggregationFunction,
+      limit,
+      sortBy,
+      dataLength: rawData.length
+    });
+
+    // Group data by the specified field
+    const groups: Record<string, any[]> = {};
+    rawData.forEach(item => {
+      const groupValue = String(item[field] || 'Unknown');
+      if (!groups[groupValue]) {
+        groups[groupValue] = [];
+      }
+      groups[groupValue].push(item);
+    });
+
+    // Calculate aggregated values for each group
+    const processedData = Object.keys(groups).map(groupKey => {
+      const groupItems = groups[groupKey];
+      let value = 0;
+      
+      switch (aggregationFunction) {
+        case 'count':
+          value = groupItems.length;
+          break;
+        case 'sum':
+          if (valueField) {
+            value = groupItems.reduce((sum, item) => {
+              const val = Number(item[valueField]) || 0;
+              return sum + val;
+            }, 0);
+          } else {
+            value = groupItems.length;
+          }
+          break;
+        case 'avg':
+          if (valueField) {
+            const values = groupItems
+              .map(item => Number(item[valueField]))
+              .filter(val => !isNaN(val));
+            value = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+          } else {
+            value = groupItems.length;
+          }
+          break;
+        case 'min':
+          if (valueField) {
+            const values = groupItems
+              .map(item => Number(item[valueField]))
+              .filter(val => !isNaN(val));
+            value = values.length > 0 ? Math.min(...values) : 0;
+          } else {
+            value = groupItems.length;
+          }
+          break;
+        case 'max':
+          if (valueField) {
+            const values = groupItems
+              .map(item => Number(item[valueField]))
+              .filter(val => !isNaN(val));
+            value = values.length > 0 ? Math.max(...values) : 0;
+          } else {
+            value = groupItems.length;
+          }
+          break;
+        default:
+          value = groupItems.length;
+      }
+      
+      return {
+        [field]: groupKey, // Use the original field name as key
+        name: groupKey, // Keep name for backward compatibility
+        value: value,
+        [valueField || 'value']: value, // Use valueField name if specified
+        count: groupItems.length // Always include count
+      };
+    });
+
+    // Sort the data
+    const sortedData = processedData.sort((a, b) => {
+      if (sortBy === 'asc') {
+        return a.value - b.value;
+      } else {
+        return b.value - a.value;
+      }
+    });
+
+    // Limit the results
+    const limitedData = sortedData.slice(0, limit);
+    
+    console.log('✅ Grouped data processed:', {
+      originalGroups: Object.keys(groups).length,
+      processedItems: limitedData.length,
+      sampleResult: limitedData[0]
+    });
+
+    return limitedData;
+  };
+
+  // Helper function to format chart values
+  const formatChartValue = (value: any) => {
+    if (typeof value === 'number') {
+      if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M`;
+      } else if (value >= 1000) {
+        return `${(value / 1000).toFixed(1)}K`;
+      }
+      return value.toLocaleString();
+    }
+    return String(value);
   };
 
   const renderMetric = () => {

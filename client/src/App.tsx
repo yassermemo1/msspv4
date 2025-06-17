@@ -30,6 +30,7 @@ import FinancialPage from "@/pages/financial-page";
 import DocumentsPage from "@/pages/documents-page";
 import SettingsPage from "@/pages/settings-page";
 import ReportsPage from "@/pages/reports-page";
+import PluginsPage from "@/pages/plugins-page";
 
 import ComprehensiveBulkImportPage from "@/pages/comprehensive-bulk-import";
 
@@ -226,6 +227,13 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/widget-manager">
                         <WidgetManagerPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/plugins" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/plugins">
+                        <PluginsPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />

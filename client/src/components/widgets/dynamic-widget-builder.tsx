@@ -33,6 +33,20 @@ import {
   TrendingUp
 } from 'lucide-react';
 
+// Define filter type for better type safety
+type FilterType = {
+  id: string;
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' |
+            'greater_than' | 'greater_equal' | 'less_than' | 'less_equal' | 'between' | 'in' | 'not_in' |
+            'is_null' | 'is_not_null' | 'date_equals' | 'date_before' | 'date_after' | 'date_range' |
+            'regex_match' | 'exists' | 'not_exists';
+  value: any;
+  value2?: any; // For range operators like 'between'
+  dataType: 'string' | 'number' | 'date' | 'boolean' | 'array';
+  enabled: boolean;
+};
+
 interface Plugin {
   systemName: string;
   displayName: string;
@@ -80,14 +94,17 @@ interface CustomWidget {
     showBorder: boolean;
     showHeader: boolean;
   };
-  filters?: Array<{
-    field: string;
-    operator: string;
-    value: any;
-  }>;
+  filters?: FilterType[];
   aggregation?: {
     function: 'count' | 'sum' | 'avg' | 'min' | 'max';
     field?: string;
+  };
+  groupBy?: {
+    field: string; // X-axis field for grouping
+    valueField?: string; // Y-axis field for values
+    aggregationFunction?: 'count' | 'sum' | 'avg' | 'min' | 'max';
+    limit?: number; // Limit number of groups
+    sortBy?: 'asc' | 'desc'; // Sort groups by value
   };
 }
 
@@ -114,6 +131,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
   const [loading, setLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('basic');
+  const [availableFields, setAvailableFields] = useState<string[]>([]);
 
   const [widget, setWidget] = useState<CustomWidget>({
     name: '',
@@ -131,7 +149,8 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
       height: 'medium',
       showBorder: true,
       showHeader: true
-    }
+    },
+    filters: []
   });
 
   // Load plugins on component mount
@@ -170,6 +189,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
     try {
       setLoading(true);
       setTestResult(null);
+      setAvailableFields([]); // Reset available fields
 
       let endpoint = '';
       let body = null;
@@ -210,6 +230,12 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
 
       const result = await response.json();
       setTestResult(result);
+
+      // Extract field names from the response data
+      if (result.success && result.data) {
+        const fields = extractFieldNames(result.data);
+        setAvailableFields(fields);
+      }
     } catch (error) {
       setTestResult({
         success: false,
@@ -218,6 +244,93 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to extract field names from response data
+  const extractFieldNames = (data: any): string[] => {
+    const fields = new Set<string>();
+
+    if (Array.isArray(data)) {
+      // If data is an array, extract fields from the first few items
+      const sampleSize = Math.min(data.length, 10); // Sample first 10 items
+      for (let i = 0; i < sampleSize; i++) {
+        if (data[i] && typeof data[i] === 'object') {
+          Object.keys(data[i]).forEach(key => {
+            if (key && key.trim() !== '') {
+              fields.add(key);
+            }
+          });
+        }
+      }
+    } else if (data && typeof data === 'object') {
+      // Check different possible data structures
+      if (data.sampleData && Array.isArray(data.sampleData)) {
+        // Jira-style response with sampleData
+        const sampleSize = Math.min(data.sampleData.length, 10);
+        for (let i = 0; i < sampleSize; i++) {
+          if (data.sampleData[i] && typeof data.sampleData[i] === 'object') {
+            Object.keys(data.sampleData[i]).forEach(key => {
+              if (key && key.trim() !== '') {
+                fields.add(key);
+              }
+            });
+          }
+        }
+      } else if (data.results && Array.isArray(data.results)) {
+        // Generic results array
+        const sampleSize = Math.min(data.results.length, 10);
+        for (let i = 0; i < sampleSize; i++) {
+          if (data.results[i] && typeof data.results[i] === 'object') {
+            Object.keys(data.results[i]).forEach(key => {
+              if (key && key.trim() !== '') {
+                fields.add(key);
+              }
+            });
+          }
+        }
+      } else if (data.items && Array.isArray(data.items)) {
+        // Items array structure
+        const sampleSize = Math.min(data.items.length, 10);
+        for (let i = 0; i < sampleSize; i++) {
+          if (data.items[i] && typeof data.items[i] === 'object') {
+            Object.keys(data.items[i]).forEach(key => {
+              if (key && key.trim() !== '') {
+                fields.add(key);
+              }
+            });
+          }
+        }
+      } else if (data.records && Array.isArray(data.records)) {
+        // Records array structure
+        const sampleSize = Math.min(data.records.length, 10);
+        for (let i = 0; i < sampleSize; i++) {
+          if (data.records[i] && typeof data.records[i] === 'object') {
+            Object.keys(data.records[i]).forEach(key => {
+              if (key && key.trim() !== '') {
+                fields.add(key);
+              }
+            });
+          }
+        }
+      } else {
+        // Direct object - extract its keys
+        Object.keys(data).forEach(key => {
+          // Skip metadata keys and focus on data fields
+          if (key && key.trim() !== '' && !['metadata', 'timestamp', 'saved', 'totalResults', 'displayedSample'].includes(key)) {
+            fields.add(key);
+          }
+        });
+      }
+    }
+
+    // Convert to sorted array, filtering out common metadata fields and empty values
+    const fieldArray = Array.from(fields).filter(field => 
+      field && 
+      field.trim() !== '' &&
+      !['metadata', 'timestamp', 'saved', 'success', 'error', 'message'].includes(field)
+    ).sort();
+
+    return fieldArray;
   };
 
   const handleSave = () => {
@@ -240,14 +353,16 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
   };
 
   const addParameter = () => {
-    const key = prompt('Parameter name:');
-    const value = prompt('Parameter value:');
-    if (key && value) {
+    const paramName = prompt("Enter parameter name (e.g., 'reporterDomain'):");
+    if (paramName && paramName.trim()) {
       setWidget({
         ...widget,
         queryParameters: {
           ...widget.queryParameters,
-          [key]: value
+          [paramName.trim()]: {
+            source: 'static',
+            value: ''
+          }
         }
       });
     }
@@ -260,6 +375,127 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
       ...widget,
       queryParameters: newParams
     });
+  };
+
+  // Filter management functions
+  const addFilter = () => {
+    const fieldName = prompt("Enter field name to filter (e.g., 'status', 'priority', 'amount'):");
+    if (fieldName && fieldName.trim()) {
+      const newFilter = {
+        id: Date.now().toString(),
+        field: fieldName.trim(),
+        operator: 'equals' as const,
+        value: '',
+        dataType: 'string' as const,
+        enabled: true
+      };
+      
+      setWidget({
+        ...widget,
+        filters: [...(widget.filters || []), newFilter]
+      });
+    }
+  };
+
+  const updateFilter = (filterId: string, updates: Partial<FilterType>) => {
+    setWidget({
+      ...widget,
+      filters: widget.filters?.map(filter => 
+        filter.id === filterId ? { ...filter, ...updates } : filter
+      ) || []
+    });
+  };
+
+  const removeFilter = (filterId: string) => {
+    setWidget({
+      ...widget,
+      filters: widget.filters?.filter(filter => filter.id !== filterId) || []
+    });
+  };
+
+  const getOperatorsForDataType = (dataType: string) => {
+    const operators = {
+      string: [
+        { value: 'equals', label: 'Equals' },
+        { value: 'not_equals', label: 'Not Equals' },
+        { value: 'contains', label: 'Contains' },
+        { value: 'not_contains', label: 'Does Not Contain' },
+        { value: 'starts_with', label: 'Starts With' },
+        { value: 'ends_with', label: 'Ends With' },
+        { value: 'in', label: 'In List' },
+        { value: 'not_in', label: 'Not In List' },
+        { value: 'is_null', label: 'Is Empty' },
+        { value: 'is_not_null', label: 'Is Not Empty' },
+        { value: 'regex_match', label: 'Matches Pattern' }
+      ],
+      number: [
+        { value: 'equals', label: 'Equals' },
+        { value: 'not_equals', label: 'Not Equals' },
+        { value: 'greater_than', label: 'Greater Than' },
+        { value: 'greater_equal', label: 'Greater Or Equal' },
+        { value: 'less_than', label: 'Less Than' },
+        { value: 'less_equal', label: 'Less Or Equal' },
+        { value: 'between', label: 'Between' },
+        { value: 'in', label: 'In List' },
+        { value: 'not_in', label: 'Not In List' },
+        { value: 'is_null', label: 'Is Empty' },
+        { value: 'is_not_null', label: 'Is Not Empty' }
+      ],
+      date: [
+        { value: 'date_equals', label: 'Date Equals' },
+        { value: 'date_before', label: 'Before Date' },
+        { value: 'date_after', label: 'After Date' },
+        { value: 'date_range', label: 'Date Range' },
+        { value: 'is_null', label: 'Is Empty' },
+        { value: 'is_not_null', label: 'Is Not Empty' }
+      ],
+      boolean: [
+        { value: 'equals', label: 'Is True/False' },
+        { value: 'is_null', label: 'Is Empty' },
+        { value: 'is_not_null', label: 'Is Not Empty' }
+      ],
+      array: [
+        { value: 'contains', label: 'Contains Element' },
+        { value: 'not_contains', label: 'Does Not Contain' },
+        { value: 'in', label: 'Array In List' },
+        { value: 'not_in', label: 'Array Not In List' },
+        { value: 'is_null', label: 'Is Empty' },
+        { value: 'is_not_null', label: 'Is Not Empty' }
+      ]
+    };
+    
+    return operators[dataType as keyof typeof operators] || operators.string;
+  };
+
+  const getFilterExamples = (pluginName: string) => {
+    const examples = {
+      jira: [
+        { field: 'status', operator: 'equals' as const, value: 'Done', dataType: 'string' as const },
+        { field: 'priority', operator: 'in' as const, value: 'High,Critical', dataType: 'string' as const },
+        { field: 'created', operator: 'date_after' as const, value: '2024-01-01', dataType: 'date' as const },
+        { field: 'assignee', operator: 'is_not_null' as const, value: '', dataType: 'string' as const }
+      ],
+      contract: [
+        { field: 'totalValue', operator: 'greater_than' as const, value: '1000000', dataType: 'number' as const },
+        { field: 'endDate', operator: 'date_before' as const, value: '90 days', dataType: 'date' as const },
+        { field: 'status', operator: 'not_equals' as const, value: 'expired', dataType: 'string' as const },
+        { field: 'autoRenewal', operator: 'equals' as const, value: 'true', dataType: 'boolean' as const }
+      ],
+      firewall: [
+        { field: 'action', operator: 'equals' as const, value: 'ALLOW', dataType: 'string' as const },
+        { field: 'action', operator: 'equals' as const, value: 'DENY', dataType: 'string' as const },
+        { field: 'port', operator: 'between' as const, value: '80', value2: '443', dataType: 'number' as const },
+        { field: 'protocol', operator: 'in' as const, value: 'TCP,UDP', dataType: 'string' as const }
+      ],
+      endpoint: [
+        { field: 'edrCount', operator: 'less_than' as const, value: '500', dataType: 'number' as const },
+        { field: 'osType', operator: 'equals' as const, value: 'Windows', dataType: 'string' as const },
+        { field: 'lastSeen', operator: 'date_after' as const, value: '7 days ago', dataType: 'date' as const },
+        { field: 'isActive', operator: 'equals' as const, value: 'true', dataType: 'boolean' as const }
+      ]
+    };
+    
+    return examples[pluginName as keyof typeof examples] || examples.jira;
   };
 
   // Helper function to get system-specific query examples
@@ -355,6 +591,19 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
       default:
         return 'Choose the best display format for your data type.';
     }
+  };
+
+  const getColumnsForTable = (tableName: string): string[] => {
+    const tableColumns: Record<string, string[]> = {
+      clients: ['id', 'name', 'shortName', 'domain', 'industry', 'companySize', 'status', 'source', 'address', 'website'],
+      contracts: ['id', 'clientId', 'name', 'startDate', 'endDate', 'autoRenewal', 'totalValue', 'status'],
+      services: ['id', 'name', 'category', 'description', 'deliveryModel', 'basePrice', 'pricingUnit', 'isActive'],
+      users: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'authProvider', 'isActive'],
+      proposals: ['id', 'contractId', 'name', 'description', 'status', 'totalValue', 'validUntil'],
+      service_scopes: ['id', 'contractId', 'serviceId', 'scopeDefinition', 'safDocumentUrl', 'safStartDate', 'safEndDate']
+    };
+    
+    return tableColumns[tableName] || [];
   };
 
   return (
@@ -601,30 +850,182 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                     Add Parameter
                   </Button>
                 </div>
-                <div className="space-y-2 mt-2">
-                  {Object.entries(widget.queryParameters).map(([key, value]) => (
-                    <div key={key} className="flex items-center space-x-2">
-                      <Input value={key} disabled className="flex-1" />
-                      <Input 
-                        value={String(value)} 
-                        onChange={(e) => setWidget({
-                          ...widget,
-                          queryParameters: {
-                            ...widget.queryParameters,
-                            [key]: e.target.value
-                          }
-                        })}
-                        className="flex-1" 
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeParameter(key)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                <div className="space-y-3 mt-2">
+                  {Object.entries(widget.queryParameters).map(([key, config]) => {
+                    const parameterConfig = typeof config === 'object' && config !== null ? config : { value: config, source: 'static' };
+                    
+                    return (
+                      <div key={key} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">{key}</Label>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeParameter(key)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-gray-600">Parameter Source</Label>
+                            <Select
+                              value={parameterConfig.source || 'static'}
+                              onValueChange={(value) => setWidget({
+                                ...widget,
+                                queryParameters: {
+                                  ...widget.queryParameters,
+                                  [key]: {
+                                    ...parameterConfig,
+                                    source: value,
+                                    ...(value === 'static' && { dbColumn: undefined, dbTable: undefined })
+                                  }
+                                }
+                              })}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="static">Static Value</SelectItem>
+                                <SelectItem value="database">Database Column</SelectItem>
+                                <SelectItem value="context">Page Context</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            {parameterConfig.source === 'static' && (
+                              <>
+                                <Label className="text-xs text-gray-600">Static Value</Label>
+                                <Input 
+                                  value={parameterConfig.value || ''} 
+                                  onChange={(e) => setWidget({
+                                    ...widget,
+                                    queryParameters: {
+                                      ...widget.queryParameters,
+                                      [key]: {
+                                        ...parameterConfig,
+                                        value: e.target.value
+                                      }
+                                    }
+                                  })}
+                                  className="h-8" 
+                                  placeholder="Enter static value"
+                                />
+                              </>
+                            )}
+                            
+                            {parameterConfig.source === 'database' && (
+                              <>
+                                <Label className="text-xs text-gray-600">Database Table</Label>
+                                <Select
+                                  value={parameterConfig.dbTable || ''}
+                                  onValueChange={(value) => setWidget({
+                                    ...widget,
+                                    queryParameters: {
+                                      ...widget.queryParameters,
+                                      [key]: {
+                                        ...parameterConfig,
+                                        dbTable: value,
+                                        dbColumn: '' // Reset column when table changes
+                                      }
+                                    }
+                                  })}
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder="Select table" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="clients">clients</SelectItem>
+                                    <SelectItem value="contracts">contracts</SelectItem>
+                                    <SelectItem value="services">services</SelectItem>
+                                    <SelectItem value="users">users</SelectItem>
+                                    <SelectItem value="proposals">proposals</SelectItem>
+                                    <SelectItem value="service_scopes">service_scopes</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </>
+                            )}
+                            
+                            {parameterConfig.source === 'context' && (
+                              <>
+                                <Label className="text-xs text-gray-600">Context Variable</Label>
+                                <Select
+                                  value={parameterConfig.contextVar || ''}
+                                  onValueChange={(value) => setWidget({
+                                    ...widget,
+                                    queryParameters: {
+                                      ...widget.queryParameters,
+                                      [key]: {
+                                        ...parameterConfig,
+                                        contextVar: value
+                                      }
+                                    }
+                                  })}
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder="Select context" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="clientId">Client ID</SelectItem>
+                                    <SelectItem value="clientShortName">Client Short Name</SelectItem>
+                                    <SelectItem value="clientName">Client Name</SelectItem>
+                                    <SelectItem value="clientDomain">Client Domain</SelectItem>
+                                    <SelectItem value="contractId">Contract ID</SelectItem>
+                                    <SelectItem value="userId">Current User ID</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {parameterConfig.source === 'database' && parameterConfig.dbTable && (
+                          <div>
+                            <Label className="text-xs text-gray-600">Database Column</Label>
+                            <Select
+                              value={parameterConfig.dbColumn || ''}
+                              onValueChange={(value) => setWidget({
+                                ...widget,
+                                queryParameters: {
+                                  ...widget.queryParameters,
+                                  [key]: {
+                                    ...parameterConfig,
+                                    dbColumn: value
+                                  }
+                                }
+                              })}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select column" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getColumnsForTable(parameterConfig.dbTable).map((column) => (
+                                  <SelectItem key={column} value={column}>
+                                    {column}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        
+                        {parameterConfig.source === 'database' && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            💡 Value will be fetched from database column based on current page context (e.g., client ID from URL)
+                          </div>
+                        )}
+                        
+                        {parameterConfig.source === 'context' && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            💡 Value will be taken from current page context automatically
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {Object.keys(widget.queryParameters).length === 0 && (
                     <p className="text-sm text-gray-500">No parameters configured</p>
                   )}
@@ -900,53 +1301,61 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                 <Label>Data Filters</Label>
                 <div className="space-y-2 mt-2">
                   {widget.filters?.map((filter, index) => (
-                    <div key={index} className="flex space-x-2 items-center">
+                    <div key={filter.id || index} className="flex space-x-2 items-center">
                       <Input
                         placeholder="Field name"
                         value={filter.field}
-                        onChange={(e) => {
-                          const newFilters = [...(widget.filters || [])];
-                          newFilters[index] = { ...filter, field: e.target.value };
-                          setWidget({ ...widget, filters: newFilters });
-                        }}
+                        onChange={(e) => updateFilter(filter.id, { field: e.target.value })}
                         className="flex-1"
                       />
                       <Select
+                        value={filter.dataType}
+                        onValueChange={(value: any) => updateFilter(filter.id, { dataType: value })}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="string">Text</SelectItem>
+                          <SelectItem value="number">Number</SelectItem>
+                          <SelectItem value="date">Date</SelectItem>
+                          <SelectItem value="boolean">Boolean</SelectItem>
+                          <SelectItem value="array">Array</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
                         value={filter.operator}
-                        onValueChange={(value) => {
-                          const newFilters = [...(widget.filters || [])];
-                          newFilters[index] = { ...filter, operator: value };
-                          setWidget({ ...widget, filters: newFilters });
-                        }}
+                        onValueChange={(value: any) => updateFilter(filter.id, { operator: value })}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="equals">Equals</SelectItem>
-                          <SelectItem value="not_equals">Not Equals</SelectItem>
-                          <SelectItem value="contains">Contains</SelectItem>
-                          <SelectItem value="greater_than">Greater Than</SelectItem>
-                          <SelectItem value="less_than">Less Than</SelectItem>
+                          {getOperatorsForDataType(filter.dataType).map((operator) => (
+                            <SelectItem key={operator.value} value={operator.value}>
+                              {operator.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <Input
                         placeholder="Value"
                         value={filter.value}
-                        onChange={(e) => {
-                          const newFilters = [...(widget.filters || [])];
-                          newFilters[index] = { ...filter, value: e.target.value };
-                          setWidget({ ...widget, filters: newFilters });
-                        }}
+                        onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
                         className="flex-1"
                       />
+                      {filter.operator === 'between' && (
+                        <Input
+                          placeholder="To value"
+                          value={filter.value2 || ''}
+                          onChange={(e) => updateFilter(filter.id, { value2: e.target.value })}
+                          className="flex-1"
+                        />
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          const newFilters = (widget.filters || []).filter((_, i) => i !== index);
-                          setWidget({ ...widget, filters: newFilters });
-                        }}
+                        onClick={() => removeFilter(filter.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -955,10 +1364,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      const newFilters = [...(widget.filters || []), { field: '', operator: 'equals', value: '' }];
-                      setWidget({ ...widget, filters: newFilters });
-                    }}
+                    onClick={addFilter}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Filter
@@ -966,6 +1372,256 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Add filters to process and refine the data before display
+                </p>
+              </div>
+
+              <Separator />
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label>Chart Grouping & Data Processing</Label>
+                  {availableFields.length > 0 && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {availableFields.length} fields detected
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-4 mt-2 p-4 border rounded-lg bg-gray-50">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="enable-groupby"
+                      checked={!!widget.groupBy}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setWidget({
+                            ...widget,
+                            groupBy: {
+                              field: availableFields.length > 0 ? availableFields[0] : '',
+                              valueField: '',
+                              aggregationFunction: 'count',
+                              limit: 10,
+                              sortBy: 'desc'
+                            }
+                          });
+                        } else {
+                          setWidget({ ...widget, groupBy: undefined });
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <Label htmlFor="enable-groupby" className="text-sm font-medium">
+                      Enable Group By (recommended for charts)
+                    </Label>
+                  </div>
+                  
+                  {availableFields.length === 0 && (
+                    <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                      <div className="flex items-start justify-between">
+                        <p className="text-sm text-blue-800">
+                          <Activity className="h-4 w-4 inline mr-1" />
+                          <strong>Tip:</strong> Test your query first in the "Test & Preview" tab to automatically populate field dropdowns with available data fields.
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setActiveTab('preview')}
+                          className="ml-2 text-xs"
+                        >
+                          Go to Test
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {availableFields.length > 0 && (
+                    <div className="flex items-center justify-between bg-green-50 p-2 rounded">
+                      <span className="text-sm text-green-800">
+                        <CheckCircle className="h-4 w-4 inline mr-1" />
+                        Fields detected from query test
+                      </span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setActiveTab('preview')}
+                        className="text-xs"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Re-test Query
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {widget.groupBy && (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="groupby-field">Group By Field (X-axis)</Label>
+                        {availableFields.length > 0 ? (
+                          <Select
+                            value={widget.groupBy.field}
+                            onValueChange={(value) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, field: value }
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select field to group by..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableFields.filter(field => field && field.trim() !== '').map(field => (
+                                <SelectItem key={field} value={field}>
+                                  {field}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            id="groupby-field"
+                            value={widget.groupBy.field}
+                            onChange={(e) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, field: e.target.value }
+                            })}
+                            placeholder="Field to group by (e.g., 'status', 'priority', 'project')"
+                          />
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {availableFields.length > 0 
+                            ? `Choose from ${availableFields.length} available fields (detected from test query)` 
+                            : "This field will be used as the X-axis for charts. Test your query first to see available fields."
+                          }
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="groupby-value-field">Value Field (Y-axis) - Optional</Label>
+                        {availableFields.length > 0 ? (
+                          <Select
+                            value={widget.groupBy.valueField || '__none__'}
+                            onValueChange={(value) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, valueField: value === '__none__' ? '' : value }
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select value field (optional)..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">No specific field (use count)</SelectItem>
+                              {availableFields.filter(field => field && field.trim() !== '').map(field => (
+                                <SelectItem key={field} value={field}>
+                                  {field}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            id="groupby-value-field"
+                            value={widget.groupBy.valueField || ''}
+                            onChange={(e) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, valueField: e.target.value }
+                            })}
+                            placeholder="Field for values (e.g., 'amount', 'count', 'duration')"
+                          />
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {availableFields.length > 0 
+                            ? "Leave empty to count items per group, or select a numeric field for values"
+                            : "Leave empty to count items per group, or specify field for numeric values. Test your query first to see available fields."
+                          }
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="groupby-aggregation">Aggregation Function</Label>
+                          <Select
+                            value={widget.groupBy.aggregationFunction || 'count'}
+                            onValueChange={(value: any) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, aggregationFunction: value }
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="count">Count</SelectItem>
+                              <SelectItem value="sum">Sum</SelectItem>
+                              <SelectItem value="avg">Average</SelectItem>
+                              <SelectItem value="min">Minimum</SelectItem>
+                              <SelectItem value="max">Maximum</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="groupby-sort">Sort Order</Label>
+                          <Select
+                            value={widget.groupBy.sortBy || 'desc'}
+                            onValueChange={(value: any) => setWidget({
+                              ...widget,
+                              groupBy: { ...widget.groupBy!, sortBy: value }
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="desc">Highest First</SelectItem>
+                              <SelectItem value="asc">Lowest First</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="groupby-limit">Max Groups to Show</Label>
+                        <Input
+                          id="groupby-limit"
+                          type="number"
+                          min="5"
+                          max="50"
+                          value={widget.groupBy.limit || 10}
+                          onChange={(e) => setWidget({
+                            ...widget,
+                            groupBy: { ...widget.groupBy!, limit: parseInt(e.target.value) || 10 }
+                          })}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Limit the number of groups to display (5-50)
+                        </p>
+                      </div>
+
+                      {availableFields.length > 0 && (
+                        <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
+                          <p className="text-sm text-green-800 mb-2">
+                            <strong>Available Fields:</strong>
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {availableFields.map(field => (
+                              <Badge key={field} variant="outline" className="text-xs">
+                                {field}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                        <p className="text-sm text-blue-800">
+                          <strong>Example:</strong> Group by "status" with count function will show how many issues exist for each status (Open: 45, In Progress: 23, Done: 67)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Configure how data should be grouped and aggregated for charts and analysis
                 </p>
               </div>
 
@@ -1060,6 +1716,25 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                           </div>
                         </div>
                       </div>
+
+                      {/* Detected Fields Display */}
+                      {availableFields.length > 0 && (
+                        <div>
+                          <Label>Detected Data Fields ({availableFields.length})</Label>
+                          <div className="bg-green-50 border border-green-200 p-3 rounded-lg mt-2">
+                            <div className="flex flex-wrap gap-1">
+                              {availableFields.map(field => (
+                                <Badge key={field} variant="outline" className="text-xs bg-white">
+                                  {field}
+                                </Badge>
+                              ))}
+                            </div>
+                            <p className="text-xs text-green-700 mt-2">
+                              These fields are now available in the Group By dropdowns in the "Advanced" tab.
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Preview Widget with Selected Display Type */}
                       <div>

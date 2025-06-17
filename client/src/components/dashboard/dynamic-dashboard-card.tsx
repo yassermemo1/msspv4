@@ -73,13 +73,23 @@ function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
   const { data: widget, isLoading, error, refetch } = useQuery({
     queryKey: ['widget', card.config.widgetId],
     queryFn: async () => {
-      const response = await apiRequest('GET', `/api/widgets/manage/${card.config.widgetId}`);
+      const response = await fetch(`/api/widgets/manage/${card.config.widgetId}`, {
+        credentials: 'include', // Ensure authentication cookies are included
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch widget: ${response.status}`);
+      }
+      
       return response.json();
     },
     enabled: !!card.config.widgetId,
-    staleTime: 1 * 60 * 1000, // 1 minute (reduced from 5 to get fresh data more often)
-    refetchInterval: 2 * 60 * 1000, // 2 minutes - auto refresh widget config
-    refetchOnWindowFocus: true, // Refresh when window gets focus
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchInterval: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) {
@@ -112,6 +122,7 @@ function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
             <div className="text-center text-red-600">
               <AlertCircle className="h-8 w-8 mx-auto mb-2" />
               <p className="text-sm">Widget not found</p>
+              <p className="text-xs text-red-500 mt-1">ID: {card.config.widgetId}</p>
             </div>
           </CardContent>
         </Card>
@@ -120,12 +131,20 @@ function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
   }
 
   // Convert the API widget data to the format expected by DynamicWidgetRenderer
+  // Use the proper plugin instance mapping based on systemId
+  const getInstanceId = () => {
+    if (widget.pluginName === 'jira') {
+      return widget.systemId === 1 ? 'jira-main' : `jira-system-${widget.systemId}`;
+    }
+    return `${widget.pluginName}-main`;
+  };
+
   const widgetConfig: CustomWidget = {
     id: widget.id,
     name: widget.name,
     description: widget.description || '',
     pluginName: widget.pluginName,
-    instanceId: `${widget.pluginName}-main`, // This should match the plugin instance configuration
+    instanceId: getInstanceId(),
     queryType: 'custom' as const,
     customQuery: widget.query,
     queryMethod: widget.method || 'GET',
@@ -146,6 +165,11 @@ function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
     updatedAt: widget.updatedAt
   };
 
+  console.log('=== WIDGET CARD RENDERER ===');
+  console.log('Widget data:', widget);
+  console.log('Converted config:', widgetConfig);
+  console.log('Plugin instance ID:', getInstanceId());
+
   return (
     <div className={getSizeClasses(card.size)}>
       <DynamicWidgetRenderer
@@ -153,6 +177,8 @@ function WidgetCardRenderer({ card }: WidgetCardRendererProps) {
         widget={widgetConfig}
         className="h-full"
         onRefresh={() => refetch()}
+        showTitle={true}
+        enableCredentials={true}
       />
     </div>
   );

@@ -113,4 +113,37 @@
   .bg-primary {
     @apply text-white;
   }
+
+  /* Compact widget styling */
+  .compact-widget {
+    @apply text-xs;
+  }
+  
+  .compact-widget table {
+    @apply text-xs;
+  }
+  
+  .compact-widget .widget-metric {
+    @apply text-lg font-semibold;
+  }
+  
+  .compact-widget .widget-chart {
+    @apply h-16;
+  }
+  
+  .compact-widget .table-container {
+    @apply max-h-20 overflow-y-auto;
+  }
+  
+  .compact-widget td, .compact-widget th {
+    @apply py-1 px-2 text-xs;
+  }
+  
+  .compact-widget .error-state {
+    @apply text-xs p-2;
+  }
+  
+  .compact-widget .loading-state {
+    @apply text-xs p-2;
+  }
 }
