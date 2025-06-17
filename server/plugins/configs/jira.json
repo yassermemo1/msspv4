@@ -3,11 +3,12 @@
     {
       "id": "jira-main",
       "name": "Main Jira Instance",
-      "baseUrl": "https://sd.sic.sitco.sa",
-      "authType": "basic",
+      "baseUrl": "https://your-jira-domain.com",
+      "authType": "bearer",
       "authConfig": {
-        "username": "yalmohammed",
-        "password": "0541887111Ysm!!!!!"
+        "username": "your-username",
+        "password": "your-password",
+        "token": "your-api-token"
       },
       "isActive": true,
       "tags": [

@@ -453,7 +453,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   individualLicenses: many(individualLicenses),
   hardwareAssignments: many(clientHardwareAssignments),
   teamAssignments: many(clientTeamAssignments),
-  transactions: many(financialTransactions),
+  transactions: many(financialTransactions, { relationName: "clientTransactions" }),
   serviceAuthorizationForms: many(serviceAuthorizationForms),
   certificatesOfCompliance: many(certificatesOfCompliance),
   externalMappings: many(clientExternalMappings),
@@ -467,7 +467,7 @@ export const contractsRelations = relations(contracts, ({ one, many }) => ({
   client: one(clients, { fields: [contracts.clientId], references: [clients.id] }),
   serviceScopes: many(serviceScopes),
   proposals: many(proposals),
-  transactions: many(financialTransactions),
+  transactions: many(financialTransactions, { relationName: "contractTransactions" }),
 }));
 
 export const servicesRelations = relations(services, ({ many }) => ({
@@ -479,7 +479,7 @@ export const serviceScopesRelations = relations(serviceScopes, ({ one, many }) =
   service: one(services, { fields: [serviceScopes.serviceId], references: [services.id] }),
   licenses: many(clientLicenses),
   hardwareAssignments: many(clientHardwareAssignments),
-  transactions: many(financialTransactions),
+  transactions: many(financialTransactions, { relationName: "scopeTransactions" }),
 }));
 
 export const proposalsRelations = relations(proposals, ({ one }) => ({
@@ -488,7 +488,7 @@ export const proposalsRelations = relations(proposals, ({ one }) => ({
 
 export const licensePoolsRelations = relations(licensePools, ({ many }) => ({
   assignments: many(clientLicenses),
-  transactions: many(financialTransactions),
+  transactions: many(financialTransactions, { relationName: "poolTransactions" }),
 }));
 
 export const clientLicensesRelations = relations(clientLicenses, ({ one }) => ({
@@ -520,7 +520,7 @@ export const certificatesOfComplianceRelations = relations(certificatesOfComplia
 
 export const hardwareAssetsRelations = relations(hardwareAssets, ({ many }) => ({
   assignments: many(clientHardwareAssignments),
-  transactions: many(financialTransactions),
+  transactions: many(financialTransactions, { relationName: "assetTransactions" }),
 }));
 
 export const clientHardwareAssignmentsRelations = relations(clientHardwareAssignments, ({ one }) => ({
@@ -541,6 +541,34 @@ export const userSettingsRelations = relations(userSettings, ({ one }) => ({
 export const clientTeamAssignmentsRelations = relations(clientTeamAssignments, ({ one }) => ({
   client: one(clients, { fields: [clientTeamAssignments.clientId], references: [clients.id] }),
   user: one(users, { fields: [clientTeamAssignments.userId], references: [users.id] }),
+}));
+
+export const financialTransactionsRelations = relations(financialTransactions, ({ one }) => ({
+  client: one(clients, { 
+    fields: [financialTransactions.clientId], 
+    references: [clients.id],
+    relationName: "clientTransactions"
+  }),
+  contract: one(contracts, { 
+    fields: [financialTransactions.contractId], 
+    references: [contracts.id],
+    relationName: "contractTransactions"
+  }),
+  serviceScope: one(serviceScopes, { 
+    fields: [financialTransactions.serviceScopeId], 
+    references: [serviceScopes.id],
+    relationName: "scopeTransactions"
+  }),
+  licensePool: one(licensePools, { 
+    fields: [financialTransactions.licensePoolId], 
+    references: [licensePools.id],
+    relationName: "poolTransactions"
+  }),
+  hardwareAsset: one(hardwareAssets, { 
+    fields: [financialTransactions.hardwareAssetId], 
+    references: [hardwareAssets.id],
+    relationName: "assetTransactions"
+  }),
 }));
 
 // Insert schemas

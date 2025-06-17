@@ -649,8 +649,10 @@ pluginRoutes.post('/instances/:pluginName/:instanceId/test', async (req, res) =>
     
     // Try to execute a simple test query
     try {
+      // Use health check for Jira, simple test for others
+      const testQuery = pluginName === 'jira' ? '__health_check__' : 'test';
       const testResult = await plugin.executeQuery(
-        'test', // Simple test query
+        testQuery,
         'GET',
         instanceId,
         { test: true }
