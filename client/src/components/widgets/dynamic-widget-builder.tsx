@@ -66,7 +66,7 @@ interface CustomWidget {
   customQuery?: string; // For custom queries
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number; // seconds
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -636,6 +636,12 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                         <div className="flex items-center">
                           <Code className="h-4 w-4 mr-2" />
                           List
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="query">
+                        <div className="flex items-center">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Raw Query Results
                         </div>
                       </SelectItem>
                     </SelectContent>

@@ -46,7 +46,7 @@ interface CustomWidget {
   customQuery?: string;
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number;
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -212,6 +212,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         return renderList();
       case 'gauge':
         return renderGauge();
+      case 'query':
+        return renderQuery();
       default:
         return <div>Unsupported display type: {widget.displayType}</div>;
     }
@@ -327,7 +329,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
                 fill="#8884d8"
                 dataKey="value"
               >
-                {chartData.map((entry, index) => (
+                {chartData.map((entry: any, index: number) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
@@ -418,7 +420,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
     return (
       <div className="space-y-2">
-        {listData.slice(0, 10).map((item, idx) => (
+        {listData.slice(0, 10).map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded">
             <span className="text-sm">
               {typeof item === 'object' ? item.key || `Item ${idx + 1}` : String(item)}
@@ -478,6 +480,89 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
             {widget.name}
           </div>
         </div>
+      </div>
+    );
+  };
+
+  const renderQuery = () => {
+    const isJsonData = typeof data === 'object';
+    
+    return (
+      <div className="space-y-4">
+        {/* Query Info Header */}
+        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+          <div className="flex items-center space-x-2">
+            <Badge variant="secondary" className="text-xs">
+              {widget.queryType === 'custom' ? 'Custom Query' : 'Default Query'}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {widget.queryMethod}
+            </Badge>
+          </div>
+          <div className="text-xs text-gray-500">
+            {Array.isArray(data) ? `${data.length} results` : isJsonData ? 'Object response' : 'Simple response'}
+          </div>
+        </div>
+
+        {/* Query Display */}
+        {widget.queryType === 'custom' && widget.customQuery && (
+          <div className="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-xs">
+            <div className="text-gray-400 mb-2">Query:</div>
+            <pre className="whitespace-pre-wrap">{widget.customQuery}</pre>
+          </div>
+        )}
+
+        {/* Results Display */}
+        <div className="bg-white border rounded-lg">
+          <div className="px-3 py-2 border-b bg-gray-50">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Query Results</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigator.clipboard.writeText(JSON.stringify(data, null, 2))}
+                className="text-xs"
+              >
+                Copy JSON
+              </Button>
+            </div>
+          </div>
+          <div className="p-3">
+            {isJsonData ? (
+              <pre className="text-xs font-mono bg-gray-50 p-3 rounded border overflow-auto max-h-64">
+                {JSON.stringify(data, null, 2)}
+              </pre>
+            ) : (
+              <div className="text-sm">
+                <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                  {String(data)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Data Statistics */}
+        {Array.isArray(data) && data.length > 0 && (
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-blue-50 p-3 rounded-lg border">
+              <div className="text-lg font-bold text-blue-600">{data.length}</div>
+              <div className="text-xs text-blue-800">Total Records</div>
+            </div>
+            <div className="bg-green-50 p-3 rounded-lg border">
+              <div className="text-lg font-bold text-green-600">
+                {typeof data[0] === 'object' ? Object.keys(data[0]).length : 1}
+              </div>
+              <div className="text-xs text-green-800">Fields</div>
+            </div>
+            <div className="bg-purple-50 p-3 rounded-lg border">
+              <div className="text-lg font-bold text-purple-600">
+                {new Date().toLocaleTimeString()}
+              </div>
+              <div className="text-xs text-purple-800">Last Updated</div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };

@@ -39,7 +39,7 @@ interface GlobalWidget {
   pluginName: string;
   name: string;
   description: string;
-  widgetType: 'table' | 'chart' | 'metric' | 'list' | 'gauge';
+  widgetType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   query: string;
   method: string;

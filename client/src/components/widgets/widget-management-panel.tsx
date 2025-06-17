@@ -45,7 +45,7 @@ interface CustomWidget {
   customQuery?: string;
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number;
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -73,7 +73,7 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlacement, setFilterPlacement] = useState<string>('all');
-  const [filterDisplayType, setFilterDisplayType] = useState<string>('all');
+  const [filterDisplayType, setFilterDisplayType] = useState<'all' | 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query'>('all');
   
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingWidget, setEditingWidget] = useState<CustomWidget | undefined>();
@@ -296,7 +296,7 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
             <div>
               <select
                 value={filterDisplayType}
-                onChange={(e) => setFilterDisplayType(e.target.value)}
+                onChange={(e) => setFilterDisplayType(e.target.value as any)}
                 className="border rounded px-3 py-2 text-sm"
               >
                 <option value="all">All Types</option>
@@ -305,6 +305,7 @@ export const WidgetManagementPanel: React.FC<WidgetManagementPanelProps> = ({
                 <option value="metric">Metric</option>
                 <option value="list">List</option>
                 <option value="gauge">Gauge</option>
+                <option value="query">Query</option>
               </select>
             </div>
           </div>

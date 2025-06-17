@@ -32,7 +32,8 @@ import {
   Grid,
   List,
   Power,
-  PowerOff
+  PowerOff,
+  Code
 } from 'lucide-react';
 import { DynamicWidgetRenderer } from './dynamic-widget-renderer';
 import { DynamicWidgetBuilder } from './dynamic-widget-builder';
@@ -48,7 +49,7 @@ interface CustomWidget {
   customQuery?: string;
   queryMethod: string;
   queryParameters: Record<string, any>;
-  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge';
+  displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number;
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -222,6 +223,7 @@ export const ClientWidgetsManager: React.FC<ClientWidgetsManagerProps> = ({
       case 'metric': return Gauge;
       case 'list': return List;
       case 'gauge': return Gauge;
+      case 'query': return Code;
       default: return BarChart3;
     }
   };
