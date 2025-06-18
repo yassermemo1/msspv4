@@ -7,7 +7,7 @@
       "authType": "bearer",
       "authConfig": {
         "username": "yalmohammed",
-        "token": "MDg4NTcyNDQ1Mjc2Oiy21pPfEMN7cOcY8QtrLYYQi/+s"
+        "token": "PLACEHOLDER_WILL_BE_SET_FROM_ENV"
       },
       "isActive": true,
       "tags": [
@@ -24,5 +24,6 @@
   "rateLimiting": {
     "requestsPerMinute": 100,
     "burstSize": 20
-  }
+  },
+  "_readme": "Sensitive credentials like API tokens are read from environment variables. Set JIRA_API_TOKEN, JIRA_USERNAME, JIRA_URL, JIRA_AUTH_TYPE, and JIRA_ENABLED as needed."
 }

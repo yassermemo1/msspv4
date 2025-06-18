@@ -212,6 +212,25 @@ const DEFAULT_DASHBOARD_CARDS: DashboardCard[] = [
     isBuiltIn: false,
     isRemovable: true,
   },
+  {
+    id: "expiring-contracts",
+    title: "Expiring Contracts",
+    type: "custom",
+    category: "dashboard",
+    dataSource: "contracts",
+    size: "medium",
+    visible: true,
+    position: 8,
+    config: {
+      icon: "AlertTriangle",
+      color: "orange",
+      format: "number",
+      customApiEndpoint: "/api/contracts/expiring",
+      refreshInterval: 300
+    },
+    isBuiltIn: false,
+    isRemovable: true,
+  },
 ];
 
 export function useDashboardSettings() {

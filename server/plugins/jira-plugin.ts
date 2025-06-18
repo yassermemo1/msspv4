@@ -135,7 +135,8 @@ const jiraConfig: PluginConfig = {
   }
 };
 
-const jiraPlugin: QueryPlugin = {
+// Create plugin with temporary config that will be overridden by environment
+let jiraPlugin: QueryPlugin = {
   systemName: 'jira',
   config: jiraConfig,
   
@@ -180,6 +181,8 @@ const jiraPlugin: QueryPlugin = {
       console.log(`🔑 Auth Type: ${instance.authType}`);
       console.log(`🎫 Token available: ${instance.authConfig?.token ? 'YES' : 'NO'}`);
       console.log(`🔐 Password available: ${instance.authConfig?.password ? 'YES' : 'NO'}`);
+      console.log(`🔍 DEBUG authConfig:`, JSON.stringify(instance.authConfig, null, 2));
+      console.log(`🔍 DEBUG JIRA_API_TOKEN from env:`, process.env.JIRA_API_TOKEN ? '[SET]' : '[MISSING]');
       
       try {
         const res = await fetch(url, fetchOptions);
@@ -240,6 +243,8 @@ const jiraPlugin: QueryPlugin = {
     const fetchOptions = buildFetchOptions(instance, headers);
 
     console.log(`🔍 Jira API Request: ${url}`);
+    console.log(`🔐 DEBUG Regular Query - Auth headers:`, JSON.stringify(headers, null, 2));
+    console.log(`🔍 DEBUG Regular Query - authConfig:`, JSON.stringify(instance.authConfig, null, 2));
     
     try {
       const res = await fetch(url, fetchOptions);
@@ -321,4 +326,32 @@ const jiraPlugin: QueryPlugin = {
   ]
 };
 
-registerPlugin(jiraPlugin); 
+registerPlugin(jiraPlugin);
+
+// Apply environment variable overrides after plugin registration
+// This ensures environment variables take precedence over JSON config
+const instance = jiraPlugin.getInstance('jira-main');
+if (instance && process.env.JIRA_API_TOKEN) {
+  console.log('🔧 Applying environment variable overrides to Jira config...');
+  
+  // Override with environment variables
+  instance.baseUrl = process.env.JIRA_URL || instance.baseUrl;
+  instance.authType = process.env.JIRA_AUTH_TYPE === 'bearer' ? 'bearer' : 'basic';
+  instance.isActive = process.env.JIRA_ENABLED === 'true';
+  
+  if (!instance.authConfig) {
+    instance.authConfig = {};
+  }
+  
+  instance.authConfig.username = process.env.JIRA_USERNAME || instance.authConfig.username;
+  
+  if (instance.authType === 'bearer') {
+    instance.authConfig.token = process.env.JIRA_API_TOKEN;
+    instance.authConfig.password = undefined;
+  } else {
+    instance.authConfig.password = process.env.JIRA_API_TOKEN;
+    instance.authConfig.token = undefined;
+  }
+  
+  console.log(`✅ Applied environment overrides - Auth type: ${instance.authType}, Token set: ${!!instance.authConfig.token}`);
+} 

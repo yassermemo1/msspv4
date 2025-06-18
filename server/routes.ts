@@ -17,7 +17,7 @@ import {
   // Import all the table schemas needed for Drizzle queries
   users, userSettings, companySettings, clients, clientContacts, contracts, proposals, services, serviceScopes, financialTransactions,
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
-  clientHardwareAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
+  clientHardwareAssignments, clientTeamAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   pagePermissions, savedSearches, searchHistory,
   serviceScopeFields, scopeVariableValues, userDashboardSettings, customWidgets
 } from "@shared/schema";
@@ -120,9 +120,11 @@ const apiLicensePoolSchema = z.object({
   productName: z.string(),
   licenseType: z.string().optional(),
   totalLicenses: z.number(),
-  availableLicenses: z.number(),
+  orderedLicenses: z.number().optional().default(0),
   costPerLicense: z.string().optional(),
   renewalDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  purchaseRequestNumber: z.string().optional(),
+  purchaseOrderNumber: z.string().optional(),
   notes: z.string().optional(),
   isActive: z.boolean().optional(),
 });
@@ -681,38 +683,291 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get license pools
+  // ========================================
+  // LICENSE POOL ENDPOINTS 
+  // ========================================
+
+  // Get all license pools
   app.get("/api/license-pools", requireAuth, async (req, res, next) => {
     try {
-      // Return empty array for now - license pools would need to be implemented
-      // This is a placeholder to prevent frontend errors
-      res.json([]);
+      const licensePoolsList = await storage.getAllLicensePools();
+      res.json(licensePoolsList);
     } catch (error) {
+      console.error("Get license pools error:", error);
       next(error);
     }
   });
 
-  // Get license pools summary
-  app.get("/api/license-pools/summary", requireAuth, async (req, res, next) => {
+  // Get license pool by ID
+  app.get("/api/license-pools/:id", requireAuth, async (req, res, next) => {
     try {
-      // Return placeholder data to prevent frontend errors
-      res.json({
-        totalPools: 0,
-        totalLicenses: 0,
-        availableLicenses: 0,
-        utilizationRate: 0
-      });
+      const id = parseInt(req.params.id);
+      const licensePool = await storage.getLicensePool(id);
+      
+      if (!licensePool) {
+        return res.status(404).json({ message: "License pool not found" });
+      }
+      
+      res.json(licensePool);
     } catch (error) {
+      console.error("Get license pool error:", error);
       next(error);
     }
   });
 
-  // Get all license pool allocations
+  // Create license pool
+  app.post("/api/license-pools", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const result = apiLicensePoolSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid license pool data", 
+          errors: result.error.issues 
+        });
+      }
+      
+      const newLicensePool = await storage.createLicensePool(result.data);
+      res.status(201).json(newLicensePool);
+    } catch (error) {
+      console.error("Create license pool error:", error);
+      next(error);
+    }
+  });
+
+  // Update license pool
+  app.put("/api/license-pools/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const licenseData = req.body;
+      const updatedLicensePool = await storage.updateLicensePool(id, licenseData);
+      
+      if (!updatedLicensePool) {
+        return res.status(404).json({ message: "License pool not found" });
+      }
+      
+      res.json(updatedLicensePool);
+    } catch (error) {
+      console.error("Update license pool error:", error);
+      next(error);
+    }
+  });
+
+  // Delete license pool
+  app.delete("/api/license-pools/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteLicensePool(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "License pool not found" });
+      }
+      
+      res.json({ message: "License pool deleted successfully" });
+    } catch (error) {
+      console.error("Delete license pool error:", error);
+      next(error);
+    }
+  });
+
+  // Get license pool allocations
+  app.get("/api/license-pools/:id/allocations", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const allocations = await storage.getLicensePoolAllocations(id);
+      res.json(allocations);
+    } catch (error) {
+      console.error("Get license pool allocations error:", error);
+      next(error);
+    }
+  });
+
+  // Get all license pool allocations (grouped by pool)
   app.get("/api/license-pools/allocations/all", requireAuth, async (req, res, next) => {
     try {
       const allocations = await storage.getAllLicensePoolAllocations();
       res.json(allocations);
     } catch (error) {
+      console.error("Get all license pool allocations error:", error);
+      next(error);
+    }
+  });
+
+  // Get license pools summary for dashboard
+  app.get("/api/license-pools/summary", requireAuth, async (req, res, next) => {
+    try {
+      // Get all license pools
+      const pools = await storage.getAllLicensePools();
+      
+      // Get all allocations to calculate utilization
+      const allocations = await storage.getAllLicensePoolAllocations();
+      
+      // Calculate summary statistics
+      let totalPools = pools.length;
+      let totalLicenses = 0;
+      let totalAvailable = 0;
+      let totalAssigned = 0;
+      let totalCost = 0;
+      let healthyPools = 0;
+      let warningPools = 0;
+      let criticalPools = 0;
+      let expiringPools = 0;
+      
+      const now = new Date();
+      const threeMonthsFromNow = new Date();
+      threeMonthsFromNow.setMonth(now.getMonth() + 3);
+      
+      const poolsWithStats = pools.map(pool => {
+        const poolAllocations = allocations[pool.id] || [];
+        const assignedLicenses = poolAllocations.reduce((sum, alloc) => sum + alloc.assignedLicenses, 0);
+        const utilizationPercentage = pool.totalLicenses > 0 
+          ? (assignedLicenses / pool.totalLicenses) * 100 
+          : 0;
+        
+        // Calculate status based on utilization
+        let status: 'healthy' | 'warning' | 'critical';
+        if (utilizationPercentage >= 90) {
+          status = 'critical';
+          criticalPools++;
+        } else if (utilizationPercentage >= 75) {
+          status = 'warning';
+          warningPools++;
+        } else {
+          status = 'healthy';
+          healthyPools++;
+        }
+        
+        // Check if expiring soon
+        if (pool.renewalDate && new Date(pool.renewalDate) <= threeMonthsFromNow) {
+          expiringPools++;
+        }
+        
+        // Add to totals
+        totalLicenses += pool.totalLicenses;
+        totalAvailable += pool.availableLicenses;
+        totalAssigned += assignedLicenses;
+        
+        if (pool.costPerLicense) {
+          totalCost += parseFloat(pool.costPerLicense.toString()) * pool.totalLicenses;
+        }
+        
+        return {
+          id: pool.id,
+          name: pool.name,
+          vendor: pool.vendor,
+          productName: pool.productName,
+          licenseType: pool.licenseType,
+          totalLicenses: pool.totalLicenses,
+          availableLicenses: pool.availableLicenses,
+          assignedLicenses,
+          utilizationPercentage,
+          status,
+          renewalDate: pool.renewalDate?.toISOString(),
+          costPerLicense: pool.costPerLicense ? parseFloat(pool.costPerLicense.toString()) : undefined,
+          isActive: pool.isActive,
+        };
+      });
+      
+      // Sort pools by utilization percentage (highest first) for dashboard preview
+      poolsWithStats.sort((a, b) => b.utilizationPercentage - a.utilizationPercentage);
+      
+      const summary = {
+        totalPools,
+        totalLicenses,
+        totalAvailable,
+        totalAssigned,
+        healthyPools,
+        warningPools,
+        criticalPools,
+        totalCost,
+        expiringPools,
+        pools: poolsWithStats,
+      };
+      
+      res.json(summary);
+    } catch (error) {
+      console.error("Get license pools summary error:", error);
+      next(error);
+    }
+  });
+
+  // Get license pool stats for specific pool
+  app.get("/api/license-pools/:id/stats", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const pool = await storage.getLicensePool(id);
+      
+      if (!pool) {
+        return res.status(404).json({ message: "License pool not found" });
+      }
+      
+      const allocations = await storage.getLicensePoolAllocations(id);
+      const assignedLicenses = allocations.reduce((sum, alloc) => sum + alloc.assignedLicenses, 0);
+      const utilizationPercentage = pool.totalLicenses > 0 
+        ? (assignedLicenses / pool.totalLicenses) * 100 
+        : 0;
+      
+      let status: 'healthy' | 'warning' | 'critical';
+      if (utilizationPercentage >= 90) {
+        status = 'critical';
+      } else if (utilizationPercentage >= 75) {
+        status = 'warning';
+      } else {
+        status = 'healthy';
+      }
+      
+      res.json({
+        ...pool,
+        assignedLicenses,
+        utilizationPercentage,
+        status,
+        allocations
+      });
+    } catch (error) {
+      console.error("Get license pool stats error:", error);
+      next(error);
+    }
+  });
+
+  // Get license pool assignments
+  app.get("/api/license-pools/:id/assignments", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const assignments = await storage.getLicensePoolAllocations(id);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Get license pool assignments error:", error);
+      next(error);
+    }
+  });
+
+  // Get license pool usage stats
+  app.get("/api/license-pools/:id/usage-stats", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const pool = await storage.getLicensePool(id);
+      
+      if (!pool) {
+        return res.status(404).json({ message: "License pool not found" });
+      }
+      
+      const allocations = await storage.getLicensePoolAllocations(id);
+      const totalAssigned = allocations.reduce((sum, alloc) => sum + alloc.assignedLicenses, 0);
+      
+      res.json({
+        totalLicenses: pool.totalLicenses,
+        assignedLicenses: totalAssigned,
+        availableLicenses: pool.totalLicenses - totalAssigned,
+        utilizationPercentage: pool.totalLicenses > 0 ? (totalAssigned / pool.totalLicenses) * 100 : 0,
+        allocations: allocations.map(alloc => ({
+          clientId: alloc.clientId,
+          clientName: alloc.clientName,
+          assignedLicenses: alloc.assignedLicenses,
+          assignedDate: alloc.assignedDate
+        }))
+      });
+    } catch (error) {
+      console.error("Get license pool usage stats error:", error);
       next(error);
     }
   });
@@ -802,9 +1057,531 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========================================
+  // TEAM ASSIGNMENTS ENDPOINTS
+  // ========================================
 
+  // Get team assignments
+  app.get("/api/team-assignments", requireAuth, async (req, res, next) => {
+    try {
+      const { clientId } = req.query;
+      
+      let whereConditions: any[] = [];
+      
+      if (clientId) {
+        whereConditions.push(eq(clientTeamAssignments.clientId, parseInt(clientId as string)));
+      }
 
-// Get client by ID
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const assignments = await db
+        .select()
+        .from(clientTeamAssignments)
+        .where(whereClause)
+        .orderBy(desc(clientTeamAssignments.assignedDate));
+
+      res.json(assignments);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // FINANCIAL TRANSACTIONS ENDPOINTS
+  // ========================================
+
+  // Get all financial transactions
+  app.get("/api/financial-transactions", requireAuth, async (req, res, next) => {
+    try {
+      const { clientId, contractId, type, status, startDate, endDate } = req.query;
+      
+      let whereConditions: any[] = [];
+      
+      if (clientId) {
+        whereConditions.push(eq(financialTransactions.clientId, parseInt(clientId as string)));
+      }
+      if (contractId) {
+        whereConditions.push(eq(financialTransactions.contractId, parseInt(contractId as string)));
+      }
+      if (type) {
+        whereConditions.push(eq(financialTransactions.type, type as string));
+      }
+      if (status) {
+        whereConditions.push(eq(financialTransactions.status, status as string));
+      }
+      if (startDate) {
+        whereConditions.push(gte(financialTransactions.transactionDate, new Date(startDate as string)));
+      }
+      if (endDate) {
+        whereConditions.push(lte(financialTransactions.transactionDate, new Date(endDate as string)));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const transactions = await db
+        .select({
+          id: financialTransactions.id,
+          type: financialTransactions.type,
+          amount: financialTransactions.amount,
+          description: financialTransactions.description,
+          status: financialTransactions.status,
+          clientId: financialTransactions.clientId,
+          contractId: financialTransactions.contractId,
+          serviceScopeId: financialTransactions.serviceScopeId,
+          licensePoolId: financialTransactions.licensePoolId,
+          hardwareAssetId: financialTransactions.hardwareAssetId,
+          transactionDate: financialTransactions.transactionDate,
+          category: financialTransactions.category,
+          reference: financialTransactions.reference,
+          notes: financialTransactions.notes,
+          createdAt: financialTransactions.createdAt,
+          clientName: clients.name,
+          contractName: contracts.name
+        })
+        .from(financialTransactions)
+        .leftJoin(clients, eq(financialTransactions.clientId, clients.id))
+        .leftJoin(contracts, eq(financialTransactions.contractId, contracts.id))
+        .where(whereClause)
+        .orderBy(desc(financialTransactions.transactionDate));
+
+      res.json(transactions);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get financial transaction by ID
+  app.get("/api/financial-transactions/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [transaction] = await db
+        .select()
+        .from(financialTransactions)
+        .where(eq(financialTransactions.id, id))
+        .limit(1);
+
+      if (!transaction) {
+        return res.status(404).json({ message: "Financial transaction not found" });
+      }
+
+      res.json(transaction);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create financial transaction
+  app.post("/api/financial-transactions", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const result = apiFinancialTransactionSchema.safeParse(req.body);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid financial transaction data", 
+          errors: result.error.issues 
+        });
+      }
+
+      const [newTransaction] = await db
+        .insert(financialTransactions)
+        .values(result.data)
+        .returning();
+
+      res.status(201).json(newTransaction);
+    } catch (error) {
+      console.error("Create financial transaction error:", error);
+      next(error);
+    }
+  });
+
+  // Update financial transaction
+  app.put("/api/financial-transactions/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const transactionData = req.body;
+      
+      const [updatedTransaction] = await db
+        .update(financialTransactions)
+        .set({
+          ...transactionData,
+          transactionDate: transactionData.transactionDate ? new Date(transactionData.transactionDate) : undefined
+        })
+        .where(eq(financialTransactions.id, id))
+        .returning();
+      
+      if (!updatedTransaction) {
+        return res.status(404).json({ message: "Financial transaction not found" });
+      }
+      
+      res.json(updatedTransaction);
+    } catch (error) {
+      console.error("Update financial transaction error:", error);
+      next(error);
+    }
+  });
+
+  // Delete financial transaction
+  app.delete("/api/financial-transactions/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [deletedTransaction] = await db
+        .delete(financialTransactions)
+        .where(eq(financialTransactions.id, id))
+        .returning();
+      
+      if (!deletedTransaction) {
+        return res.status(404).json({ message: "Financial transaction not found" });
+      }
+      
+      res.json({ message: "Financial transaction deleted successfully" });
+    } catch (error) {
+      console.error("Delete financial transaction error:", error);
+      next(error);
+    }
+  });
+
+  // ========================================
+  // DOCUMENT ENDPOINTS
+  // ========================================
+
+  // Get all documents
+  app.get("/api/documents", requireAuth, async (req, res, next) => {
+    try {
+      const { clientId, contractId, documentType } = req.query;
+      
+      let whereConditions: any[] = [eq(documents.isActive, true)];
+      if (clientId) {
+        whereConditions.push(eq(documents.clientId, parseInt(clientId as string)));
+      }
+      if (contractId) {
+        whereConditions.push(eq(documents.contractId, parseInt(contractId as string)));
+      }
+      if (documentType && documentType !== 'all') {
+        whereConditions.push(eq(documents.documentType, documentType as string));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const docs = await db
+        .select({
+          id: documents.id,
+          name: documents.name,
+          description: documents.description,
+          documentType: documents.documentType,
+          fileName: documents.fileName,
+          filePath: documents.filePath,
+          fileSize: documents.fileSize,
+          mimeType: documents.mimeType,
+          version: documents.version,
+          isActive: documents.isActive,
+          clientId: documents.clientId,
+          contractId: documents.contractId,
+          tags: documents.tags,
+          expirationDate: documents.expirationDate,
+          complianceType: documents.complianceType,
+          uploadedBy: documents.uploadedBy,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          clientName: clients.name,
+          contractName: contracts.name
+        })
+        .from(documents)
+        .leftJoin(clients, eq(documents.clientId, clients.id))
+        .leftJoin(contracts, eq(documents.contractId, contracts.id))
+        .where(whereClause)
+        .orderBy(desc(documents.createdAt));
+
+      res.json(docs);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get document by ID
+  app.get("/api/documents/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      res.json(document);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Upload document (main document upload endpoint)
+  app.post("/api/documents/upload", requireAuth, upload.single('file'), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const { name, documentType = 'general', clientId, contractId, description, tags } = req.body;
+      
+      const documentData = {
+        name: name || req.file.originalname,
+        description: description || null,
+        documentType,
+        fileName: req.file.filename,
+        filePath: req.file.path,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        version: 1,
+        isActive: true,
+        clientId: clientId ? parseInt(clientId) : null,
+        contractId: contractId ? parseInt(contractId) : null,
+        tags: tags ? (Array.isArray(tags) ? tags : [tags]) : null,
+        uploadedBy: req.user?.id || 1,
+      };
+
+      const [newDocument] = await db
+        .insert(documents)
+        .values(documentData)
+        .returning();
+
+      // Add audit logging for document creation
+      try {
+        const { AuditLogger } = await import('./lib/audit');
+        const auditLogger = new AuditLogger(req, req.user?.id);
+        
+        await auditLogger.logCreate(
+          'document',
+          newDocument.id,
+          newDocument.name,
+          {
+            documentType: newDocument.documentType,
+            fileName: newDocument.fileName,
+            fileSize: newDocument.fileSize,
+            clientId: newDocument.clientId,
+            contractId: newDocument.contractId
+          }
+        );
+        console.log('✅ Audit logging completed for document upload');
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for document upload:', auditError.message);
+      }
+
+      res.status(201).json({
+        id: newDocument.id,
+        fileName: newDocument.fileName,
+        fileUrl: `/uploads/${newDocument.fileName}`,
+        fileSize: newDocument.fileSize,
+        message: "Document uploaded successfully"
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Download document
+  app.get("/api/documents/:id/download", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const filePath = path.join(process.cwd(), 'uploads', document.fileName);
+      
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        console.error('File not found on disk:', filePath);
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      // Set appropriate headers
+      res.setHeader('Content-Disposition', `attachment; filename="${document.name}"`);
+      res.setHeader('Content-Type', document.mimeType);
+      res.setHeader('Content-Length', document.fileSize.toString());
+
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+      
+      fileStream.on('error', (error) => {
+        console.error('File stream error:', error);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Error reading file" });
+        }
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Preview document (for PDFs and images)
+  app.get("/api/documents/:id/preview", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const filePath = path.join(process.cwd(), 'uploads', document.fileName);
+      
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      // Only allow preview for certain file types
+      const previewableTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'text/plain'
+      ];
+
+      if (!previewableTypes.includes(document.mimeType)) {
+        return res.status(400).json({ message: "File type not previewable" });
+      }
+
+      // Set appropriate headers for inline display
+      res.setHeader('Content-Type', document.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${document.name}"`);
+
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update document metadata
+  app.put("/api/documents/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, description, documentType, tags, expirationDate, complianceType } = req.body;
+
+      // Get existing document to check ownership/permissions
+      const [existingDocument] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!existingDocument) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const updateData: any = {
+        updatedAt: new Date()
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (documentType !== undefined) updateData.documentType = documentType;
+      if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : [tags];
+      if (expirationDate !== undefined) updateData.expirationDate = expirationDate ? new Date(expirationDate) : null;
+      if (complianceType !== undefined) updateData.complianceType = complianceType;
+
+      const [updatedDocument] = await db
+        .update(documents)
+        .set(updateData)
+        .where(eq(documents.id, id))
+        .returning();
+
+      if (!updatedDocument) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      res.json(updatedDocument);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete document
+  app.delete("/api/documents/:id", requireAuth, async (req, res, next) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Get document info before deleting
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Soft delete - mark as inactive
+      const [deletedDocument] = await db
+        .update(documents)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(documents.id, id))
+        .returning();
+
+      if (!deletedDocument) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      res.json({ message: "Document deleted successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Share document endpoint
+  app.post("/api/documents/share", requireAuth, async (req, res, next) => {
+    try {
+      const { documentId, userIds, message } = req.body;
+      
+      if (!documentId || !userIds || !Array.isArray(userIds)) {
+        return res.status(400).json({ message: "Document ID and user IDs are required" });
+      }
+
+      // Get document to verify it exists
+      const [document] = await db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, documentId), eq(documents.isActive, true)))
+        .limit(1);
+
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // For now, just return success - full sharing implementation would require
+      // a document_shares table and notification system
+      res.json({ message: "Document shared successfully" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get client by ID
   app.get("/api/clients/:id", requireAuth, async (req, res, next) => {
     try {
       const id = parseInt(req.params.id);
@@ -4833,6 +5610,892 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ message: "Preference deleted successfully" });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // USER PROFILE MANAGEMENT
+  // ========================================
+
+  // Update user profile
+  app.put("/api/user/profile", requireAuth, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { firstName, lastName, email, phone, department, jobTitle } = req.body;
+      
+      // Validate input
+      if (email && typeof email !== 'string') {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+
+      // Check if email is already taken by another user
+      if (email && email !== req.user.email) {
+        const existingUser = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.email, email), ne(users.id, userId)))
+          .limit(1);
+        
+        if (existingUser.length > 0) {
+          return res.status(400).json({ message: "Email already in use" });
+        }
+      }
+
+      // Update user profile
+      const updatedUser = await db
+        .update(users)
+        .set({
+          firstName: firstName || req.user.firstName,
+          lastName: lastName || req.user.lastName,
+          email: email || req.user.email,
+          phone: phone,
+          department: department,
+          jobTitle: jobTitle,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (updatedUser.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: 'UPDATE',
+          entityType: 'user',
+          entityId: userId,
+          entityName: `${updatedUser[0].firstName} ${updatedUser[0].lastName}`,
+          description: 'User profile updated',
+          category: 'account_management'
+        });
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for user profile update:', auditError);
+      }
+
+      // Remove sensitive data before sending response
+      const { password, ...userProfile } = updatedUser[0];
+      res.json(userProfile);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // CONTRACT LIFECYCLE MANAGEMENT
+  // ========================================
+
+  // Delete contract
+  app.delete("/api/contracts/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Get contract details for audit log
+      const existingContract = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, contractId))
+        .limit(1);
+
+      if (existingContract.length === 0) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      const contract = existingContract[0];
+
+      // Check if contract has dependent records (service scopes, SAFs, etc.)
+      const [serviceScopesCount, safCount, cocCount] = await Promise.all([
+        db.select({ count: count() }).from(serviceScopes).where(eq(serviceScopes.contractId, contractId)),
+        db.select({ count: count() }).from(serviceAuthorizationForms).where(eq(serviceAuthorizationForms.contractId, contractId)),
+        db.select({ count: count() }).from(certificatesOfCompliance).where(eq(certificatesOfCompliance.contractId, contractId))
+      ]);
+
+      const totalDependents = (serviceScopesCount[0]?.count || 0) + (safCount[0]?.count || 0) + (cocCount[0]?.count || 0);
+
+      if (totalDependents > 0) {
+        return res.status(400).json({ 
+          message: "Cannot delete contract with dependent records",
+          details: {
+            serviceScopes: serviceScopesCount[0]?.count || 0,
+            serviceAuthorizationForms: safCount[0]?.count || 0,
+            certificatesOfCompliance: cocCount[0]?.count || 0
+          }
+        });
+      }
+
+      // Delete the contract
+      const deletedContract = await db
+        .delete(contracts)
+        .where(eq(contracts.id, contractId))
+        .returning();
+
+      if (deletedContract.length === 0) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: 'DELETE',
+          entityType: 'contract',
+          entityId: contractId,
+          entityName: contract.name,
+          description: `Contract deleted: ${contract.name}`,
+          category: 'contract_management'
+        });
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for contract deletion:', auditError);
+      }
+
+      res.json({ 
+        message: "Contract deleted successfully",
+        deletedContract: deletedContract[0]
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // PROPOSALS MANAGEMENT
+  // ========================================
+
+  // Get all proposals
+  app.get("/api/proposals", requireAuth, async (req, res, next) => {
+    try {
+      const { clientId, status, page = 1, limit = 50 } = req.query;
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      let whereConditions: any[] = [eq(proposals.isActive, true)];
+      
+      if (clientId) {
+        whereConditions.push(eq(proposals.clientId, parseInt(clientId as string)));
+      }
+      
+      if (status && status !== 'all') {
+        whereConditions.push(eq(proposals.status, status as string));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      const [proposalsList, totalCount] = await Promise.all([
+        db
+          .select({
+            id: proposals.id,
+            clientId: proposals.clientId,
+            clientName: clients.name,
+            name: proposals.name,
+            description: proposals.description,
+            status: proposals.status,
+            totalValue: proposals.totalValue,
+            validUntil: proposals.validUntil,
+            createdAt: proposals.createdAt,
+            updatedAt: proposals.updatedAt,
+            documentUrl: proposals.documentUrl,
+            notes: proposals.notes,
+          })
+          .from(proposals)
+          .leftJoin(clients, eq(proposals.clientId, clients.id))
+          .where(whereClause)
+          .orderBy(desc(proposals.createdAt))
+          .limit(parseInt(limit as string))
+          .offset(offset),
+        
+        db
+          .select({ count: count() })
+          .from(proposals)
+          .where(whereClause)
+      ]);
+
+      // Log data access
+      try {
+        const { logDataAccess } = await import('./lib/audit');
+        await logDataAccess(userId, 'proposal', 'list', `Retrieved ${proposalsList.length} proposals`);
+      } catch (auditError) {
+        console.error('⚠️ Data access logging failed for proposals list:', auditError);
+      }
+
+      // If clientId is specified, return just the proposals array for backward compatibility
+      // Otherwise return the full object with pagination
+      if (clientId) {
+        res.json(proposalsList);
+      } else {
+        res.json({
+          proposals: proposalsList,
+          pagination: {
+            page: parseInt(page as string),
+            limit: parseInt(limit as string),
+            total: totalCount[0].count,
+            pages: Math.ceil(totalCount[0].count / parseInt(limit as string))
+          }
+        });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get proposal by ID
+  app.get("/api/proposals/:id", requireAuth, async (req, res, next) => {
+    try {
+      const proposalId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const proposal = await db
+        .select({
+          id: proposals.id,
+          clientId: proposals.clientId,
+          clientName: clients.name,
+          name: proposals.name,
+          description: proposals.description,
+          status: proposals.status,
+          totalValue: proposals.totalValue,
+          validUntil: proposals.validUntil,
+          createdAt: proposals.createdAt,
+          updatedAt: proposals.updatedAt,
+          documentUrl: proposals.documentUrl,
+          notes: proposals.notes,
+          createdBy: proposals.createdBy,
+          updatedBy: proposals.updatedBy,
+        })
+        .from(proposals)
+        .leftJoin(clients, eq(proposals.clientId, clients.id))
+        .where(and(eq(proposals.id, proposalId), eq(proposals.isActive, true)))
+        .limit(1);
+
+      if (proposal.length === 0) {
+        return res.status(404).json({ message: "Proposal not found" });
+      }
+
+      // Log data access
+      try {
+        const { logDataAccess } = await import('./lib/audit');
+        await logDataAccess(userId, 'proposal', 'view', `Viewed proposal: ${proposal[0].name}`);
+      } catch (auditError) {
+        console.error('⚠️ Data access logging failed for proposal view:', auditError);
+      }
+
+      res.json(proposal[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create proposal
+  app.post("/api/proposals", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const proposalData = insertProposalSchema.parse({
+        ...req.body,
+        createdBy: userId,
+        updatedBy: userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const newProposal = await db
+        .insert(proposals)
+        .values(proposalData)
+        .returning();
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: 'CREATE',
+          entityType: 'proposal',
+          entityId: newProposal[0].id,
+          entityName: newProposal[0].name,
+          description: `Proposal created: ${newProposal[0].name}`,
+          category: 'proposal_management'
+        });
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for proposal creation:', auditError);
+      }
+
+      res.status(201).json(newProposal[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Update proposal
+  app.put("/api/proposals/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const proposalId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const updateData = {
+        ...req.body,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      };
+
+      const updatedProposal = await db
+        .update(proposals)
+        .set(updateData)
+        .where(and(eq(proposals.id, proposalId), eq(proposals.isActive, true)))
+        .returning();
+
+      if (updatedProposal.length === 0) {
+        return res.status(404).json({ message: "Proposal not found" });
+      }
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: 'UPDATE',
+          entityType: 'proposal',
+          entityId: proposalId,
+          entityName: updatedProposal[0].name,
+          description: `Proposal updated: ${updatedProposal[0].name}`,
+          category: 'proposal_management'
+        });
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for proposal update:', auditError);
+      }
+
+      res.json(updatedProposal[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete proposal
+  app.delete("/api/proposals/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const proposalId = parseInt(req.params.id);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Get proposal details for audit log
+      const existingProposal = await db
+        .select()
+        .from(proposals)
+        .where(and(eq(proposals.id, proposalId), eq(proposals.isActive, true)))
+        .limit(1);
+
+      if (existingProposal.length === 0) {
+        return res.status(404).json({ message: "Proposal not found" });
+      }
+
+      // Soft delete the proposal
+      const deletedProposal = await db
+        .update(proposals)
+        .set({ 
+          isActive: false,
+          updatedBy: userId,
+          updatedAt: new Date()
+        })
+        .where(eq(proposals.id, proposalId))
+        .returning();
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: 'DELETE',
+          entityType: 'proposal',
+          entityId: proposalId,
+          entityName: existingProposal[0].name,
+          description: `Proposal deleted: ${existingProposal[0].name}`,
+          category: 'proposal_management'
+        });
+      } catch (auditError) {
+        console.error('⚠️ Audit logging failed for proposal deletion:', auditError);
+      }
+
+      res.json({ 
+        message: "Proposal deleted successfully",
+        deletedProposal: deletedProposal[0]
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // AUDIT & COMPLIANCE SYSTEM
+  // ========================================
+
+  // Get audit logs
+  app.get("/api/audit-logs", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const { 
+        entityType, 
+        entityId, 
+        action, 
+        category,
+        startDate, 
+        endDate, 
+        page = 1, 
+        limit = 50 
+      } = req.query;
+
+      let whereConditions: any[] = [];
+      
+      if (entityType) {
+        whereConditions.push(eq(auditLogs.entityType, entityType as string));
+      }
+      
+      if (entityId) {
+        whereConditions.push(eq(auditLogs.entityId, parseInt(entityId as string)));
+      }
+      
+      if (action) {
+        whereConditions.push(eq(auditLogs.action, action as string));
+      }
+      
+      if (category) {
+        whereConditions.push(eq(auditLogs.category, category as string));
+      }
+      
+      if (startDate) {
+        whereConditions.push(gte(auditLogs.timestamp, new Date(startDate as string)));
+      }
+      
+      if (endDate) {
+        whereConditions.push(lte(auditLogs.timestamp, new Date(endDate as string)));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      const [auditLogsList, totalCount] = await Promise.all([
+        db
+          .select({
+            id: auditLogs.id,
+            userId: auditLogs.userId,
+            action: auditLogs.action,
+            entityType: auditLogs.entityType,
+            entityId: auditLogs.entityId,
+            entityName: auditLogs.entityName,
+            description: auditLogs.description,
+            timestamp: auditLogs.timestamp,
+            category: auditLogs.category,
+            ipAddress: auditLogs.ipAddress,
+            userAgent: auditLogs.userAgent,
+            metadata: auditLogs.metadata,
+            userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`.as('userName'),
+          })
+          .from(auditLogs)
+          .leftJoin(users, eq(auditLogs.userId, users.id))
+          .where(whereClause)
+          .orderBy(desc(auditLogs.timestamp))
+          .limit(parseInt(limit as string))
+          .offset(offset),
+        
+        db
+          .select({ count: count() })
+          .from(auditLogs)
+          .where(whereClause)
+      ]);
+
+      res.json({
+        auditLogs: auditLogsList,
+        pagination: {
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          total: totalCount[0].count,
+          pages: Math.ceil(totalCount[0].count / parseInt(limit as string))
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get audit log by ID
+  app.get("/api/audit-logs/:id", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const auditLogId = parseInt(req.params.id);
+
+      const auditLog = await db
+        .select({
+          id: auditLogs.id,
+          userId: auditLogs.userId,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          entityName: auditLogs.entityName,
+          description: auditLogs.description,
+          timestamp: auditLogs.timestamp,
+          category: auditLogs.category,
+          ipAddress: auditLogs.ipAddress,
+          userAgent: auditLogs.userAgent,
+          metadata: auditLogs.metadata,
+          userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`.as('userName'),
+          userEmail: users.email,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .where(eq(auditLogs.id, auditLogId))
+        .limit(1);
+
+      if (auditLog.length === 0) {
+        return res.status(404).json({ message: "Audit log not found" });
+      }
+
+      res.json(auditLog[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // SECURITY MONITORING
+  // ========================================
+
+  // Get security events
+  app.get("/api/security-events", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const { 
+        eventType, 
+        severity, 
+        startDate, 
+        endDate, 
+        page = 1, 
+        limit = 50 
+      } = req.query;
+
+      let whereConditions: any[] = [];
+      
+      if (eventType) {
+        whereConditions.push(eq(securityEvents.eventType, eventType as string));
+      }
+      
+      if (severity) {
+        whereConditions.push(eq(securityEvents.severity, severity as string));
+      }
+      
+      if (startDate) {
+        whereConditions.push(gte(securityEvents.timestamp, new Date(startDate as string)));
+      }
+      
+      if (endDate) {
+        whereConditions.push(lte(securityEvents.timestamp, new Date(endDate as string)));
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+
+      const [securityEventsList, totalCount] = await Promise.all([
+        db
+          .select({
+            id: securityEvents.id,
+            userId: securityEvents.userId,
+            eventType: securityEvents.eventType,
+            severity: securityEvents.severity,
+            description: securityEvents.description,
+            timestamp: securityEvents.timestamp,
+            ipAddress: securityEvents.ipAddress,
+            userAgent: securityEvents.userAgent,
+            metadata: securityEvents.metadata,
+            resolved: securityEvents.resolved,
+            resolvedBy: securityEvents.resolvedBy,
+            resolvedAt: securityEvents.resolvedAt,
+            userName: sql`CONCAT(${users.firstName}, ' ', ${users.lastName})`.as('userName'),
+          })
+          .from(securityEvents)
+          .leftJoin(users, eq(securityEvents.userId, users.id))
+          .where(whereClause)
+          .orderBy(desc(securityEvents.timestamp))
+          .limit(parseInt(limit as string))
+          .offset(offset),
+        
+        db
+          .select({ count: count() })
+          .from(securityEvents)
+          .where(whereClause)
+      ]);
+
+      res.json({
+        securityEvents: securityEventsList,
+        pagination: {
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          total: totalCount[0].count,
+          pages: Math.ceil(totalCount[0].count / parseInt(limit as string))
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Create security event
+  app.post("/api/security-events", requireManagerOrAbove, async (req, res, next) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { eventType, severity, description, metadata } = req.body;
+      
+      if (!eventType || !severity || !description) {
+        return res.status(400).json({ message: "Missing required fields: eventType, severity, description" });
+      }
+
+      const newSecurityEvent = await db
+        .insert(securityEvents)
+        .values({
+          userId,
+          eventType,
+          severity,
+          description,
+          timestamp: new Date(),
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          metadata: metadata || null,
+          resolved: false,
+        })
+        .returning();
+
+      res.status(201).json(newSecurityEvent[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // CLIENT-SPECIFIC ENDPOINTS
+  // ========================================
+
+  // Get client team assignments
+  app.get("/api/clients/:id/team-assignments", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "Invalid client ID" });
+      }
+      
+      // For now, return empty array as team assignments might not be fully implemented
+      // TODO: Implement proper team assignments with storage method
+      res.json([]);
+    } catch (error) {
+      console.error("Get client team assignments error:", error);
+      next(error);
+    }
+  });
+
+  // Get client hardware assets
+  app.get("/api/clients/:id/hardware", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "Invalid client ID" });
+      }
+      
+      // Simplified query to avoid join issues - get assignments first
+      const assignments = await db
+        .select()
+        .from(clientHardwareAssignments)
+        .where(eq(clientHardwareAssignments.clientId, clientId));
+
+      res.json(assignments || []);
+    } catch (error) {
+      console.error("Get client hardware error:", error);
+      next(error);
+    }
+  });
+
+  // Get client licenses (fix endpoint path)
+  app.get("/api/clients/:id/licenses", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "Invalid client ID" });
+      }
+      
+      // Simplified query to avoid join issues
+      const licenses = await db
+        .select()
+        .from(clientLicenses)
+        .where(eq(clientLicenses.clientId, clientId));
+
+      res.json(licenses || []);
+    } catch (error) {
+      console.error("Get client licenses error:", error);
+      next(error);
+    }
+  });
+
+  // Fix client financial transactions endpoint - make sure it exists and handles empty arrays properly
+  app.get("/api/clients/:id/financial-transactions", requireAuth, async (req, res, next) => {
+    try {
+      const clientId = parseInt(req.params.id);
+      if (isNaN(clientId)) {
+        return res.status(400).json({ message: "Invalid client ID" });
+      }
+      
+      const transactions = await db
+        .select({
+          id: financialTransactions.id,
+          type: financialTransactions.type,
+          amount: financialTransactions.amount,
+          description: financialTransactions.description,
+          status: financialTransactions.status,
+          transactionDate: financialTransactions.transactionDate,
+          category: financialTransactions.category,
+          reference: financialTransactions.reference,
+          notes: financialTransactions.notes,
+          createdAt: financialTransactions.createdAt
+        })
+        .from(financialTransactions)
+        .where(eq(financialTransactions.clientId, clientId))
+        .orderBy(desc(financialTransactions.transactionDate));
+
+      res.json(transactions || []);
+    } catch (error) {
+      console.error("Get client financial transactions error:", error);
+      next(error);
+    }
+  });
+
+  // ========================================
+  // EXPIRING CONTRACTS ENDPOINT
+  // ========================================
+  
+  // Get contracts expiring in X months
+  app.get("/api/contracts/expiring", requireAuth, async (req, res, next) => {
+    try {
+      const { months = 3, clientId } = req.query;
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Calculate the date X months from now
+      const now = new Date();
+      const targetDate = new Date();
+      targetDate.setMonth(now.getMonth() + parseInt(months as string));
+
+      let whereConditions: any[] = [
+        eq(contracts.status, 'active'),
+        lte(contracts.endDate, targetDate),
+        gte(contracts.endDate, now) // Only future dates
+      ];
+      
+      // Optional client filter
+      if (clientId) {
+        whereConditions.push(eq(contracts.clientId, parseInt(clientId as string)));
+      }
+
+      const whereClause = and(...whereConditions);
+
+      const expiringContracts = await db
+        .select({
+          id: contracts.id,
+          clientId: contracts.clientId,
+          clientName: clients.name,
+          name: contracts.name,
+          endDate: contracts.endDate,
+          totalValue: contracts.totalValue,
+          status: contracts.status,
+          daysUntilExpiry: sql<number>`EXTRACT(day FROM ${contracts.endDate} - NOW())::INTEGER`.as('days_until_expiry')
+        })
+        .from(contracts)
+        .leftJoin(clients, eq(contracts.clientId, clients.id))
+        .where(whereClause)
+        .orderBy(contracts.endDate);
+
+      // Log data access
+      try {
+        const { logDataAccess } = await import('./lib/audit');
+        await logDataAccess(userId, 'contract', 'list', `Retrieved ${expiringContracts.length} expiring contracts (${months} months)`);
+      } catch (auditError) {
+        console.error('⚠️ Data access logging failed for expiring contracts:', auditError);
+      }
+
+      res.json(expiringContracts);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
+  // PROPOSALS ENDPOINTS - Removed duplicate route definition  
+  // The main proposals endpoints are defined earlier in the file
+  // ========================================
+
+  // ========================================
+  // ENTITY RELATIONSHIPS ENDPOINTS
+  // ========================================
+
+  // Get entity relationship stats
+  app.get("/api/entities/:type/:id/relationships/stats", requireAuth, async (req, res, next) => {
+    try {
+      const { type, id } = req.params;
+      const entityId = parseInt(id);
+
+      if (isNaN(entityId)) {
+        return res.status(400).json({ error: "Invalid entity ID" });
+      }
+
+      // For now, return basic stats structure to avoid import issues
+      const stats = {
+        totalRelationships: 0,
+        relationshipTypes: {},
+        connectedEntities: 0
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching relationship stats:", error);
+      next(error);
+    }
+  });
+
+  // Get entity relationships
+  app.get("/api/entities/:type/:id/relationships", requireAuth, async (req, res, next) => {
+    try {
+      const { type, id } = req.params;
+      const entityId = parseInt(id);
+
+      if (isNaN(entityId)) {
+        return res.status(400).json({ error: "Invalid entity ID" });
+      }
+
+      // For now, return empty array to avoid import issues
+      res.json([]);
+    } catch (error) {
+      console.error("Error fetching entity relationships:", error);
       next(error);
     }
   });

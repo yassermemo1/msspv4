@@ -25,6 +25,7 @@ import {
 import { DashboardCard } from "@/hooks/use-dashboard-settings";
 import { apiRequest } from "@/lib/api";
 import { DynamicWidgetRenderer } from "@/components/widgets/dynamic-widget-renderer";
+import { ExpiringContractsCard } from "./expiring-contracts-card";
 // IntegrationEngineWidget removed - integration engine deprecated
 
 // Import CustomWidget interface for type safety
@@ -224,6 +225,11 @@ const getSizeClasses = (size: string) => {
 
 export function DynamicDashboardCard({ card, onClick }: DynamicDashboardCardProps) {
   // Integration Engine widget support removed - deprecated
+
+  // Check for special card types first
+  if (card.id === 'expiring-contracts') {
+    return <ExpiringContractsCard card={card} onClick={onClick} />;
+  }
 
   // Handle widget cards differently from regular dashboard cards
   if (card.type === 'widget' && card.config.widgetId) {

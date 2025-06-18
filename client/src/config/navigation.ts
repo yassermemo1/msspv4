@@ -131,12 +131,6 @@ export const mainNavigation: NavigationItem[] = [
     description: "Hardware and license management"
   },
   { 
-    name: "License Pools", 
-    href: "/license-pools", 
-    icon: Server,
-    description: "Software license pool management"
-  },
-  { 
     name: "Financial", 
     href: "/financial", 
     icon: DollarSign,

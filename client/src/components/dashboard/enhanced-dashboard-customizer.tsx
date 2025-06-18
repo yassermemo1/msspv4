@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { 
   Plus, 
@@ -25,30 +24,12 @@ import {
   Shield,
   Server,
   Database,
-  Zap,
-  ExternalLink,
-  RotateCcw,
-  Import,
-  Eye,
-  EyeOff,
-  Grid,
-  Table as TableIcon,
-  Gauge,
-  List,
-  Code,
-  Activity,
   X,
-  RefreshCw,
   Palette,
   Target,
-  Filter,
-  ArrowUp,
-  ArrowDown
+  Filter
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/api';
-import { DynamicWidgetBuilder } from '@/components/widgets/dynamic-widget-builder';
 
 // Enhanced card configuration interface
 export interface EnhancedDashboardCard {
@@ -76,6 +57,11 @@ export interface EnhancedDashboardCard {
         };
     chartType?: 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter';
     filters?: Record<string, any>;
+    dynamicFilters?: Array<{
+      field: string;
+      operator: string;
+      value: string;
+    }>;
     trend?: boolean;
     // Comparison features
     compareWith?: string; // Data source to compare with
@@ -167,29 +153,6 @@ const TIME_RANGES = [
   { value: 'yearly', label: 'Yearly' }
 ];
 
-interface GlobalWidget {
-  id: string;
-  systemId: number;
-  systemName: string;
-  pluginName: string;
-  name: string;
-  description: string;
-  widgetType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
-  chartType?: 'bar' | 'line' | 'pie' | 'area';
-  query: string;
-  method: string;
-  parameters: Record<string, any>;
-  displayConfig: Record<string, any>;
-  refreshInterval: number;
-  isActive: boolean;
-  isGlobal: boolean;
-  position: number;
-  createdBy: number;
-  createdAt: string;
-  updatedAt: string;
-  groupBy?: any; // Optional groupBy configuration
-}
-
 interface EnhancedDashboardCustomizerProps {
   cards: EnhancedDashboardCard[];
   onCardsChange: (cards: EnhancedDashboardCard[]) => void;
@@ -200,117 +163,101 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
   const { toast } = useToast();
   const [showAddCard, setShowAddCard] = useState(false);
   const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
+  const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
   const [newCard, setNewCard] = useState<Partial<EnhancedDashboardCard>>({
-    title: '',
     type: 'metric',
-    category: 'dashboard',
     dataSource: 'clients',
     size: 'small',
     visible: true,
-    position: cards.length,
     config: {
-      icon: 'Building',
       color: 'blue',
       format: 'number',
       aggregation: 'count'
-    },
-    isBuiltIn: false,
-    isRemovable: true
+    }
   });
 
-  const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
-  
-  // Unified Widget Management State
-  const [showUnifiedManager, setShowUnifiedManager] = useState(false);
-  const [showWidgetBuilder, setShowWidgetBuilder] = useState(false);
-  const [configuringWidget, setConfiguringWidget] = useState<GlobalWidget | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Fetch global widgets for import
-  const { data: globalWidgets = [], isLoading: widgetsLoading, refetch: refetchGlobalWidgets } = useQuery<GlobalWidget[]>({
-    queryKey: ['global-widgets'],
-    queryFn: async (): Promise<GlobalWidget[]> => {
-      const response = await fetch('/api/global-widgets', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch global widgets');
-      return response.json();
-    },
-  });
-
-  // Fetch manage widgets (includes inactive widgets)
-  const { data: manageWidgets = [], isLoading: manageLoading, refetch: refetchManageWidgets } = useQuery<GlobalWidget[]>({
-    queryKey: ['manage-widgets'],
-    queryFn: async (): Promise<GlobalWidget[]> => {
-      const response = await fetch('/api/widgets/manage', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch manage widgets');
-      return response.json();
-    },
-  });
-
-  // Use manage widgets if available, fallback to global widgets
-  const availableWidgets = manageWidgets.length > 0 ? manageWidgets : globalWidgets;
-  const loading = manageLoading || widgetsLoading;
-
+  // Field mappings for different data sources
   const getFieldsForDataSource = (dataSource: string) => {
-    // This would typically come from your API or be configured
     const fieldMappings: Record<string, string[]> = {
-      'clients': ['name', 'status', 'industry', 'created_at', 'revenue'],
-      'contracts': ['title', 'status', 'value', 'start_date', 'end_date'],
-      'license_pools': ['name', 'total_licenses', 'used_licenses', 'available_licenses'],
-      'users': ['username', 'email', 'role', 'last_login'],
-      'audit_logs': ['action', 'user', 'timestamp', 'resource']
+      clients: ['id', 'name', 'industry', 'status', 'created_at', 'updated_at'],
+      contracts: ['id', 'title', 'status', 'start_date', 'end_date', 'value', 'client_id', 'created_at'],
+      services: ['id', 'name', 'type', 'price', 'status', 'category', 'created_at'],
+      license_pools: ['id', 'name', 'total_licenses', 'used_licenses', 'available_licenses', 'pool_type'],
+      proposals: ['id', 'title', 'status', 'value', 'submitted_date', 'client_id'],
+      financial_transactions: ['id', 'amount', 'type', 'date', 'status', 'client_id'],
+      users: ['id', 'username', 'email', 'role', 'status', 'created_at'],
+      audit_logs: ['id', 'action', 'entity_type', 'user_id', 'created_at']
     };
-    
     return fieldMappings[dataSource] || [];
   };
 
-  const handleAddCard = () => {
-    if (!newCard.title || !newCard.dataSource) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return;
-    }
+  const getOperators = () => [
+    { value: '=', label: 'Equals' },
+    { value: '!=', label: 'Not equals' },
+    { value: '>', label: 'Greater than' },
+    { value: '<', label: 'Less than' },
+    { value: '>=', label: 'Greater or equal' },
+    { value: '<=', label: 'Less or equal' },
+    { value: 'contains', label: 'Contains' },
+    { value: 'starts_with', label: 'Starts with' },
+    { value: 'ends_with', label: 'Ends with' }
+  ];
 
+  const getDatePresets = () => [
+    { value: '1D', label: 'Last 1 Day' },
+    { value: '3D', label: 'Last 3 Days' },
+    { value: '7D', label: 'Last 7 Days' },
+    { value: '10D', label: 'Last 10 Days' },
+    { value: '30D', label: 'Last 30 Days' },
+    { value: '1M', label: 'Last 1 Month' },
+    { value: '3M', label: 'Last 3 Months' },
+    { value: '6M', label: 'Last 6 Months' },
+    { value: '12M', label: 'Last 12 Months' }
+  ];
+
+  const isDateField = (field: string) => {
+    return field.includes('date') || field.includes('created_at') || field.includes('updated_at');
+  };
+
+  const isNumberField = (field: string) => {
+    return ['value', 'price', 'amount', 'revenue', 'total_licenses', 'used_licenses', 'available_licenses'].includes(field);
+  };
+
+  const handleAddCard = () => {
     const cardToAdd: EnhancedDashboardCard = {
       id: `card-${Date.now()}`,
-      title: newCard.title!,
+      title: newCard.title || 'New Card',
       type: newCard.type || 'metric',
-      category: newCard.category || 'dashboard',
-      dataSource: newCard.dataSource!,
+      category: 'dashboard',
+      dataSource: newCard.dataSource || 'clients',
       size: newCard.size || 'small',
-      visible: newCard.visible ?? true,
+      visible: true,
       position: cards.length,
       config: {
         ...newCard.config,
+        icon: newCard.config?.icon || 'BarChart3',
+        color: newCard.config?.color || 'blue',
+        format: newCard.config?.format || 'number',
+        aggregation: newCard.config?.aggregation || 'count'
       },
       isBuiltIn: false,
       isRemovable: true
     };
 
     onCardsChange([...cards, cardToAdd]);
-    setShowAddCard(false);
-    
-    // Reset form
     setNewCard({
-      title: '',
       type: 'metric',
-      category: 'dashboard',
       dataSource: 'clients',
       size: 'small',
       visible: true,
-      position: cards.length + 1,
       config: {
-        icon: 'Building',
         color: 'blue',
         format: 'number',
         aggregation: 'count'
-      },
-      isBuiltIn: false,
-      isRemovable: true
+      }
     });
-
+    setShowAddCard(false);
+    
     toast({
       title: "Success",
       description: "Dashboard card added successfully",
@@ -322,11 +269,9 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
       card.id === updatedCard.id ? updatedCard : card
     );
     onCardsChange(updatedCards);
-    setEditingCard(null);
-    setPendingUpdates(null);
     
     toast({
-      title: "Success",
+      title: "Success", 
       description: "Card updated successfully",
     });
   };
@@ -334,6 +279,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
   const handleRemoveCard = (cardId: string) => {
     const updatedCards = cards.filter(card => card.id !== cardId);
     onCardsChange(updatedCards);
+    
     toast({
       title: "Success",
       description: "Card removed successfully",
@@ -345,269 +291,30 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
       ...card,
       id: `card-${Date.now()}`,
       title: `${card.title} (Copy)`,
-      position: cards.length
+      position: cards.length,
+      isRemovable: true
     };
     
     onCardsChange([...cards, duplicatedCard]);
+    
     toast({
       title: "Success",
       description: "Card duplicated successfully",
     });
   };
 
-  const handleImportWidget = (widget: GlobalWidget) => {
-    const widgetCard: EnhancedDashboardCard = {
-      id: `widget-${widget.id}-${Date.now()}`,
-      title: widget.name,
-      type: 'widget',
-      category: 'widget',
-      dataSource: 'external',
-      size: getSizeFromDisplayConfig(widget.displayConfig),
-      visible: true,
-      position: cards.length,
-      config: {
-        widgetId: widget.id,
-        widgetType: widget.widgetType,
-        pluginName: widget.pluginName,
-        instanceId: `${widget.systemId}`,
-        name: widget.name,
-        icon: getWidgetIcon(widget.widgetType),
-        color: 'purple',
-        chartType: getDefaultChartType(widget.widgetType),
-        refreshInterval: widget.refreshInterval
-      },
-      isBuiltIn: false,
-      isRemovable: true
-    };
 
-    onCardsChange([...cards, widgetCard]);
-    
-    toast({
-      title: "Success",
-      description: `Widget "${widget.name}" imported successfully`,
-    });
-  };
-
-  const getWidgetIcon = (widgetType: string): string => {
-    const iconMap: Record<string, string> = {
-      'table': 'Database',
-      'chart': 'BarChart3',
-      'metric': 'Activity',
-      'list': 'List',
-      'gauge': 'Gauge',
-      'query': 'Search'
-    };
-    return iconMap[widgetType] || 'Grid';
-  };
-
-  const getSizeFromDisplayConfig = (displayConfig: Record<string, any> | undefined): 'small' | 'medium' | 'large' | 'xlarge' => {
-    if (!displayConfig) return 'medium';
-    
-    const width = displayConfig.width;
-    if (width === 'full') return 'xlarge';
-    if (width === 'half') return 'large';
-    if (width === 'third') return 'medium';
-    return 'small';
-  };
-
-  const getDefaultChartType = (widgetType: string): 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter' => {
-    const chartTypeMap: Record<string, 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter'> = {
-      'chart': 'bar',
-      'metric': 'line',
-      'table': 'bar',
-      'list': 'bar',
-      'gauge': 'doughnut',
-      'query': 'bar'
-    };
-    return chartTypeMap[widgetType] || 'bar';
-  };
-
-  const resetToDefaults = () => {
-    // Reset to basic default cards
-    const defaultCards: EnhancedDashboardCard[] = [
-      {
-        id: "default-clients",
-        title: "Total Clients",
-        type: "metric",
-        category: "dashboard",
-        dataSource: "clients",
-        size: "small",
-        visible: true,
-        position: 0,
-        config: {
-          icon: "Building",
-          color: "blue",
-          format: "number",
-          aggregation: "count"
-        },
-        isBuiltIn: true,
-        isRemovable: true
-      }
-    ];
-    
-    onCardsChange(defaultCards);
-    
-    toast({
-      title: "Success",
-      description: "Dashboard reset to defaults"
-    });
-  };
-
-  // Unified widget management functions
-  const handleToggleVisibility = async (widget: GlobalWidget) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/widgets/manage/${widget.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          ...widget,
-          isActive: !widget.isActive
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update widget visibility');
-      }
-
-      toast({
-        title: widget.isActive ? "Widget Hidden" : "Widget Shown",
-        description: `"${widget.name}" is now ${widget.isActive ? 'hidden from' : 'visible on'} the dashboard.`,
-      });
-
-      // Refresh the widgets data
-      await refetchManageWidgets();
-      await refetchGlobalWidgets();
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update widget visibility. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleConfigureWidget = (widget: GlobalWidget) => {
-    setConfiguringWidget(widget);
-    setShowWidgetBuilder(true);
-  };
-
-  const handleSaveWidgetConfig = async (widgetData: any) => {
-    try {
-      const response = await fetch(`/api/widgets/manage/${configuringWidget?.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(widgetData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Failed to save widget: ${errorData}`);
-      }
-
-      toast({
-        title: "Success",
-        description: "Widget configuration saved successfully!",
-      });
-
-      setShowWidgetBuilder(false);
-      setConfiguringWidget(null);
-      
-      // Refresh the widgets data
-      await refetchManageWidgets();
-
-    } catch (error) {
-      console.error('Error saving widget:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save widget configuration",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleMoveWidget = async (widgetId: string, direction: 'up' | 'down') => {
-    const currentIndex = availableWidgets.findIndex(w => w.id === widgetId);
-    if (currentIndex === -1) return;
-
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= availableWidgets.length) return;
-
-    try {
-      // Update positions
-      const updates = [
-        {
-          id: availableWidgets[currentIndex].id,
-          position: newIndex
-        },
-        {
-          id: availableWidgets[newIndex].id,
-          position: currentIndex
-        }
-      ];
-
-      await Promise.all(
-        updates.map(update =>
-          fetch(`/api/widgets/manage/${update.id}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              ...availableWidgets.find(w => w.id === update.id),
-              position: update.position
-            }),
-          })
-        )
-      );
-
-      toast({
-        title: "Widget Order Updated",
-        description: "Widget order has been saved.",
-      });
-
-      // Refresh the widgets data
-      await refetchManageWidgets();
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update widget order. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Dashboard Customizer</h3>
+          <h3 className="text-lg font-semibold">Advanced Dashboard Card Creator</h3>
           <p className="text-sm text-gray-600">
-            Create advanced dashboard cards with comparisons, charts, and external data
+            Create advanced dashboard cards with external data integration, comparisons, and dynamic filters
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={resetToDefaults}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
-          </Button>
-          
-          <Button variant="outline" onClick={() => setShowUnifiedManager(true)}>
-            <Eye className="h-4 w-4 mr-2" />
-            Manage Widgets
-          </Button>
-
           <Button onClick={() => setShowAddCard(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Card
@@ -667,26 +374,11 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                             <span>{DATABASE_SOURCES.find(s => s.value === card.config.compareWith)?.label || card.config.compareWith}</span>
                           </>
                         )}
-                                {/* External system references removed - deprecated */}
                       </div>
                     </div>
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={card.visible}
-                      onCheckedChange={(checked) => {
-                        const updatedCard = { ...card, visible: checked };
-                        const updatedCards = cards.map(c => 
-                          c.id === updatedCard.id ? updatedCard : c
-                        );
-                        onCardsChange(updatedCards);
-                        toast({
-                          title: "Success",
-                          description: `Card ${checked ? 'shown' : 'hidden'} successfully`,
-                        });
-                      }}
-                    />
                     <Button
                       variant="outline"
                       size="sm"
@@ -722,9 +414,9 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
       <Dialog open={showAddCard} onOpenChange={setShowAddCard}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Dashboard Card</DialogTitle>
+            <DialogTitle>Add Advanced Dashboard Card</DialogTitle>
             <DialogDescription>
-              Create a new dashboard card with advanced features like comparisons and external data
+              Create a new dashboard card with advanced features like comparisons, dynamic filters, and external data integration
             </DialogDescription>
           </DialogHeader>
           
@@ -757,7 +449,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             <CardCreatorForm
               card={{ ...editingCard, ...pendingUpdates }}
               onCardChange={(updatedCard) => {
-                // Accumulate the updates properly, preserving all changes
                 const newUpdates = {
                   ...pendingUpdates,
                   ...updatedCard,
@@ -767,17 +458,9 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                     ...updatedCard.config
                   }
                 };
-                
-                console.log('=== EDIT DIALOG: onCardChange ===');
-                console.log('Original card:', editingCard);
-                console.log('Incoming updates:', updatedCard);
-                console.log('Previous pending updates:', pendingUpdates);
-                console.log('New accumulated updates:', newUpdates);
-                
                 setPendingUpdates(newUpdates);
               }}
               onSave={() => {
-                // Merge original card with pending updates, ensuring config is properly merged
                 const finalCard = {
                   ...editingCard,
                   ...pendingUpdates,
@@ -787,13 +470,8 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                   }
                 } as EnhancedDashboardCard;
                 
-                console.log('=== EDIT DIALOG: onSave ===');
-                console.log('Original card:', editingCard);
-                console.log('Pending updates:', pendingUpdates);
-                console.log('Final merged card:', finalCard);
-                console.log('Final card config:', finalCard.config);
-                
                 handleUpdateCard(finalCard);
+                setEditingCard(null);
                 setPendingUpdates(null);
               }}
               onCancel={() => {
@@ -801,23 +479,11 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                 setPendingUpdates(null);
               }}
               getFieldsForDataSource={getFieldsForDataSource}
-              isEditing
+              isEditing={true}
             />
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Widget Import Dialog */}
-      <WidgetImportDialog
-        showUnifiedManager={showUnifiedManager}
-        setShowUnifiedManager={setShowUnifiedManager}
-        availableWidgets={availableWidgets}
-        loading={loading}
-        handleToggleVisibility={handleToggleVisibility}
-        handleConfigureWidget={handleConfigureWidget}
-        handleSaveWidgetConfig={handleSaveWidgetConfig}
-        handleMoveWidget={handleMoveWidget}
-      />
 
     </div>
   );
@@ -851,6 +517,39 @@ function CardCreatorForm({
     });
   };
 
+  // Helper functions for the dynamic filters
+  const getOperators = () => [
+    { value: '=', label: 'Equals' },
+    { value: '!=', label: 'Not equals' },
+    { value: '>', label: 'Greater than' },
+    { value: '<', label: 'Less than' },
+    { value: '>=', label: 'Greater or equal' },
+    { value: '<=', label: 'Less or equal' },
+    { value: 'contains', label: 'Contains' },
+    { value: 'starts_with', label: 'Starts with' },
+    { value: 'ends_with', label: 'Ends with' }
+  ];
+
+  const getDatePresets = () => [
+    { value: '1D', label: 'Last 1 Day' },
+    { value: '3D', label: 'Last 3 Days' },
+    { value: '7D', label: 'Last 7 Days' },
+    { value: '10D', label: 'Last 10 Days' },
+    { value: '30D', label: 'Last 30 Days' },
+    { value: '1M', label: 'Last 1 Month' },
+    { value: '3M', label: 'Last 3 Months' },
+    { value: '6M', label: 'Last 6 Months' },
+    { value: '12M', label: 'Last 12 Months' }
+  ];
+
+  const isDateField = (field: string) => {
+    return field.includes('date') || field.includes('created_at') || field.includes('updated_at');
+  };
+
+  const isNumberField = (field: string) => {
+    return ['value', 'price', 'amount', 'revenue', 'total_licenses', 'used_licenses', 'available_licenses'].includes(field);
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="basic" className="w-full">
@@ -868,7 +567,7 @@ function CardCreatorForm({
                 id="card-title"
                 value={card.title || ''}
                 onChange={(e) => updateCard({ title: e.target.value })}
-                placeholder="e.g., SIEM EPS Pool vs EDR Pool"
+                placeholder="e.g., Contract Revenue vs License Pool Usage"
               />
             </div>
             
@@ -886,7 +585,6 @@ function CardCreatorForm({
                   <SelectItem value="chart">Chart</SelectItem>
                   <SelectItem value="comparison">Comparison</SelectItem>
                   <SelectItem value="pool-comparison">Pool Comparison</SelectItem>
-                  <SelectItem value="widget">Widget (Imported)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -970,51 +668,9 @@ function CardCreatorForm({
                 </SelectContent>
               </Select>
             </div>
-            
-            {(card.type === 'comparison' || card.type === 'pool-comparison') && (
-              <>
-                <div>
-                  <Label htmlFor="compare-with">Compare With</Label>
-                  <Select 
-                    value={card.config?.compareWith || ''} 
-                    onValueChange={(value) => updateConfig({ compareWith: value })}
-                  >
-                    <SelectTrigger id="compare-with">
-                      <SelectValue placeholder="Select data source to compare" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DATABASE_SOURCES.map(source => (
-                        <SelectItem key={source.value} value={source.value}>
-                          {source.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label htmlFor="comparison-type">Comparison Type</Label>
-                                <Select 
-                value={card.config?.comparisonType || 'vs'} 
-                onValueChange={(value) => updateConfig({ comparisonType: value as 'vs' | 'ratio' | 'diff' | 'trend' })}
-              >
-                    <SelectTrigger id="comparison-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPARISON_TYPES.map(type => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-            
+
             <div>
-              <Label htmlFor="format">Format</Label>
+              <Label htmlFor="format">Value Format</Label>
               <Select 
                 value={card.config?.format || 'number'} 
                 onValueChange={(value) => updateConfig({ format: value as 'number' | 'currency' | 'percentage' })}
@@ -1031,39 +687,19 @@ function CardCreatorForm({
                 </SelectContent>
               </Select>
             </div>
-            
-            <div>
-              <Label htmlFor="time-range">Time Range</Label>
-              <Select 
-                value={card.config?.timeRange || 'monthly'} 
-                onValueChange={(value) => updateConfig({ timeRange: value as 'daily' | 'weekly' | 'monthly' | 'yearly' })}
-              >
-                <SelectTrigger id="time-range">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_RANGES.map(range => (
-                    <SelectItem key={range.value} value={range.value}>
-                      {range.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          {card.dataSource && (
+
             <div>
               <Label htmlFor="group-by">Group By Field</Label>
               <Select 
-                value={card.config?.groupBy || ''} 
-                onValueChange={(value) => updateConfig({ groupBy: value })}
+                value={card.config?.groupBy || 'any'} 
+                onValueChange={(value) => updateConfig({ groupBy: value === 'any' ? undefined : value })}
               >
                 <SelectTrigger id="group-by">
-                  <SelectValue placeholder="Select field to group by" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {getFieldsForDataSource(card.dataSource).map(field => (
+                  <SelectItem value="any">None</SelectItem>
+                  {getFieldsForDataSource(card.dataSource || 'clients').map(field => (
                     <SelectItem key={field} value={field}>
                       {field}
                     </SelectItem>
@@ -1071,400 +707,314 @@ function CardCreatorForm({
                 </SelectContent>
               </Select>
             </div>
-          )}
+          </div>
+
+          {/* Comparison Settings */}
+          <div className="space-y-4">
+            <h5 className="font-medium text-sm text-gray-700">External Data Comparison</h5>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="compare-with">Compare With Data Source</Label>
+                <Select 
+                  value={card.config?.compareWith || 'any'} 
+                  onValueChange={(value) => updateConfig({ compareWith: value === 'any' ? undefined : value })}
+                >
+                  <SelectTrigger id="compare-with">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">None</SelectItem>
+                    {DATABASE_SOURCES.map(source => (
+                      <SelectItem key={source.value} value={source.value}>
+                        {source.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {card.config?.compareWith && (
+                <div>
+                  <Label htmlFor="comparison-type">Comparison Type</Label>
+                  <Select 
+                    value={card.config?.comparisonType || 'vs'} 
+                    onValueChange={(value) => updateConfig({ comparisonType: value as 'vs' | 'ratio' | 'diff' | 'trend' })}
+                  >
+                    <SelectTrigger id="comparison-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPARISON_TYPES.map(type => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dynamic Filters */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h5 className="font-medium text-sm text-gray-700">Dynamic Filters</h5>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const currentFilters = card.config?.dynamicFilters || [];
+                  updateConfig({
+                    dynamicFilters: [
+                      ...currentFilters,
+                      { field: '', operator: '=', value: '' }
+                    ]
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Filter
+              </Button>
+            </div>
+
+            {card.config?.dynamicFilters && card.config.dynamicFilters.length > 0 && (
+              <div className="space-y-3">
+                {card.config.dynamicFilters.map((filter, index) => (
+                  <div key={index} className="grid grid-cols-4 gap-2 items-end">
+                    <div>
+                      <Label className="text-xs">Field</Label>
+                      <Select
+                        value={filter.field || 'any'}
+                        onValueChange={(value) => {
+                          const newFilters = [...(card.config?.dynamicFilters || [])];
+                          newFilters[index] = { ...filter, field: value === 'any' ? '' : value };
+                          updateConfig({ dynamicFilters: newFilters });
+                        }}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Select field</SelectItem>
+                          {getFieldsForDataSource(card.dataSource || 'clients').map(field => (
+                            <SelectItem key={field} value={field}>
+                              {field}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Operator</Label>
+                      <Select
+                        value={filter.operator || '='}
+                        onValueChange={(value) => {
+                          const newFilters = [...(card.config?.dynamicFilters || [])];
+                          newFilters[index] = { ...filter, operator: value };
+                          updateConfig({ dynamicFilters: newFilters });
+                        }}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getOperators().map(op => (
+                            <SelectItem key={op.value} value={op.value}>
+                              {op.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Value</Label>
+                      {isDateField(filter.field) ? (
+                        <Select
+                          value={filter.value || 'any'}
+                          onValueChange={(value) => {
+                            const newFilters = [...(card.config?.dynamicFilters || [])];
+                            newFilters[index] = { ...filter, value: value === 'any' ? '' : value };
+                            updateConfig({ dynamicFilters: newFilters });
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Select period</SelectItem>
+                            {getDatePresets().map(preset => (
+                              <SelectItem key={preset.value} value={preset.value}>
+                                {preset.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : isNumberField(filter.field) ? (
+                        <Input
+                          type="number"
+                          placeholder="Enter number"
+                          value={filter.value}
+                          onChange={(e) => {
+                            const newFilters = [...(card.config?.dynamicFilters || [])];
+                            newFilters[index] = { ...filter, value: e.target.value };
+                            updateConfig({ dynamicFilters: newFilters });
+                          }}
+                          className="h-8"
+                        />
+                      ) : (
+                        <Input
+                          placeholder="Enter value"
+                          value={filter.value}
+                          onChange={(e) => {
+                            const newFilters = [...(card.config?.dynamicFilters || [])];
+                            newFilters[index] = { ...filter, value: e.target.value };
+                            updateConfig({ dynamicFilters: newFilters });
+                          }}
+                          className="h-8"
+                        />
+                      )}
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newFilters = card.config?.dynamicFilters?.filter((_, i) => i !== index) || [];
+                        updateConfig({ dynamicFilters: newFilters });
+                      }}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </TabsContent>
         
         <TabsContent value="visualization" className="space-y-4">
-          {card.type === 'chart' && (
-            <div>
-              <Label htmlFor="chart-type">Chart Type</Label>
-              <div className="grid grid-cols-3 gap-3 mt-2">
-                {CHART_TYPES.map(chartType => {
-                  const Icon = chartType.icon;
-                  return (
-                    <Card 
-                      key={chartType.value}
-                      className={`cursor-pointer transition-colors ${
-                        card.config?.chartType === chartType.value 
-                          ? 'ring-2 ring-blue-500 bg-blue-50' 
-                          : 'hover:bg-gray-50'
-                      }`}
-                      onClick={() => updateConfig({ chartType: chartType.value as 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter' })}
-                    >
-                      <CardContent className="flex flex-col items-center p-4">
-                        <Icon className="h-8 w-8 mb-2" />
-                        <span className="text-sm font-medium">{chartType.label}</span>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+          {(card.type === 'chart' || card.type === 'comparison') && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="chart-type">Chart Type</Label>
+                <Select 
+                  value={card.config?.chartType || 'bar'} 
+                  onValueChange={(value) => updateConfig({ chartType: value as any })}
+                >
+                  <SelectTrigger id="chart-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHART_TYPES.map(type => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-sm text-gray-700">Chart Options</h5>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="show-legend"
+                      checked={card.config?.showLegend !== false}
+                      onChange={(e) => updateConfig({ showLegend: e.target.checked })}
+                    />
+                    <Label htmlFor="show-legend" className="text-sm">Show Legend</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="show-data-labels"
+                      checked={card.config?.showDataLabels === true}
+                      onChange={(e) => updateConfig({ showDataLabels: e.target.checked })}
+                    />
+                    <Label htmlFor="show-data-labels" className="text-sm">Show Data Labels</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="enable-drill-down"
+                      checked={card.config?.enableDrillDown === true}
+                      onChange={(e) => updateConfig({ enableDrillDown: e.target.checked })}
+                    />
+                    <Label htmlFor="enable-drill-down" className="text-sm">Enable Drill Down</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="show-trend"
+                      checked={card.config?.trend === true}
+                      onChange={(e) => updateConfig({ trend: e.target.checked })}
+                    />
+                    <Label htmlFor="show-trend" className="text-sm">Show Trend</Label>
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={card.config?.trend || false}
-                onCheckedChange={(checked) => updateConfig({ trend: checked })}
-              />
-              <Label>Show Trend</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={card.config?.showLegend || false}
-                onCheckedChange={(checked) => updateConfig({ showLegend: checked })}
-              />
-              <Label>Show Legend</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={card.config?.showDataLabels || false}
-                onCheckedChange={(checked) => updateConfig({ showDataLabels: checked })}
-              />
-              <Label>Show Data Labels</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Switch
-                checked={card.config?.enableDrillDown || false}
-                onCheckedChange={(checked) => updateConfig({ enableDrillDown: checked })}
-              />
-              <Label>Enable Drill Down</Label>
+
+          <div className="space-y-4">
+            <h5 className="font-medium text-sm text-gray-700">Advanced Options</h5>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="refresh-interval">Refresh Interval (seconds)</Label>
+                <Input
+                  id="refresh-interval"
+                  type="number"
+                  min="30"
+                  value={card.config?.refreshInterval || 300}
+                  onChange={(e) => updateConfig({ refreshInterval: parseInt(e.target.value) || 300 })}
+                  placeholder="300"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="time-range">Time Range</Label>
+                <Select 
+                  value={card.config?.timeRange || 'monthly'} 
+                  onValueChange={(value) => updateConfig({ timeRange: value as any })}
+                >
+                  <SelectTrigger id="time-range">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_RANGES.map(range => (
+                      <SelectItem key={range.value} value={range.value}>
+                        {range.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </TabsContent>
       </Tabs>
-      
+
       <Separator />
-      
+
       <div className="flex justify-end space-x-2">
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={onSave}>
+        <Button onClick={onSave} disabled={!card.title}>
           {isEditing ? 'Update Card' : 'Add Card'}
         </Button>
       </div>
-      
     </div>
   );
 }
-
-// Additional Widget Import Dialog component at the end of file
-export const WidgetImportDialog: React.FC<{
-  showUnifiedManager: boolean;
-  setShowUnifiedManager: (show: boolean) => void;
-  availableWidgets: GlobalWidget[];
-  loading: boolean;
-  handleToggleVisibility: (widget: GlobalWidget) => void;
-  handleConfigureWidget: (widget: GlobalWidget) => void;
-  handleSaveWidgetConfig: (widgetData: any) => void;
-  handleMoveWidget: (widgetId: string, direction: 'up' | 'down') => void;
-}> = ({
-  showUnifiedManager,
-  setShowUnifiedManager,
-  availableWidgets,
-  loading,
-  handleToggleVisibility,
-  handleConfigureWidget,
-  handleSaveWidgetConfig,
-  handleMoveWidget
-}) => {
-  const { toast } = useToast();
-  const [showWidgetBuilder, setShowWidgetBuilder] = useState(false);
-  const [configuringWidget, setConfiguringWidget] = useState<GlobalWidget | null>(null);
-  const [widgetOrder, setWidgetOrder] = useState<GlobalWidget[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Initialize widget order when widgets load
-  useEffect(() => {
-    if (availableWidgets.length > 0) {
-      const sortedWidgets = [...availableWidgets].sort((a, b) => a.position - b.position);
-      setWidgetOrder(sortedWidgets);
-    }
-  }, [availableWidgets]);
-
-  const handleToggleVisibilityLocal = async (widget: GlobalWidget) => {
-    setIsLoading(true);
-    try {
-      await handleToggleVisibility(widget);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update widget visibility. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleConfigureWidgetLocal = (widget: GlobalWidget) => {
-    setConfiguringWidget(widget);
-    setShowWidgetBuilder(true);
-  };
-
-  const handleSaveWidgetConfigLocal = async (widgetData: any) => {
-    try {
-      await handleSaveWidgetConfig(widgetData);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update widget configuration. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleMoveWidgetLocal = async (widgetId: string, direction: 'up' | 'down') => {
-    const currentIndex = widgetOrder.findIndex(w => w.id === widgetId);
-    if (currentIndex === -1) return;
-
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= widgetOrder.length) return;
-
-    const newOrder = [...widgetOrder];
-    [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
-    
-    // Update positions
-    const updatedOrder = newOrder.map((widget, index) => ({
-      ...widget,
-      position: index
-    }));
-
-    setWidgetOrder(updatedOrder);
-
-    // Save new order to backend
-    try {
-      await handleMoveWidget(widgetId, direction);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update widget order. Please try again.",
-        variant: "destructive",
-      });
-      // Revert on error
-      setWidgetOrder(availableWidgets);
-    }
-  };
-
-  return (
-    <>
-      <Dialog open={showUnifiedManager} onOpenChange={setShowUnifiedManager}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Manage Widgets</DialogTitle>
-            <DialogDescription>
-              Show/hide widgets and manage their display order. Click "Configure Widget" to modify widget settings.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <span className="ml-2">Loading widgets...</span>
-              </div>
-            ) : availableWidgets.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-8">
-                  <Grid className="w-12 h-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Widgets Available</h3>
-                  <p className="text-gray-600 text-center mb-4">
-                    You haven't created any widgets yet. Create widgets in the Widget Manager first.
-                  </p>
-                  <Button variant="outline" onClick={() => setShowUnifiedManager(false)}>
-                    Close
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-sm text-gray-600">
-                    {widgetOrder.filter(w => w.isActive).length} of {widgetOrder.length} widgets visible
-                  </div>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-                      <span>Visible</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <div className="w-3 h-3 bg-gray-100 border border-gray-300 rounded"></div>
-                      <span>Hidden</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {widgetOrder.map((widget: GlobalWidget, index) => (
-                    <Card 
-                      key={widget.id} 
-                      className={`transition-colors ${
-                        widget.isActive 
-                          ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                      }`}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex flex-col space-y-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMoveWidgetLocal(widget.id, 'up')}
-                                disabled={index === 0}
-                                className="h-6 w-6 p-0"
-                              >
-                                ↑
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMoveWidgetLocal(widget.id, 'down')}
-                                disabled={index === widgetOrder.length - 1}
-                                className="h-6 w-6 p-0"
-                              >
-                                ↓
-                              </Button>
-                            </div>
-                            <div className="flex-1">
-                              <CardTitle className="text-base font-medium">{widget.name}</CardTitle>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <Badge variant="outline" className="text-xs">
-                                  {widget.pluginName}
-                                </Badge>
-                                <Badge variant="secondary" className="text-xs">
-                                  {widget.widgetType}
-                                </Badge>
-                                {widget.isActive ? (
-                                  <Badge className="bg-green-100 text-green-800 text-xs">
-                                    <Eye className="h-3 w-3 mr-1" />
-                                    Visible
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-gray-600 text-xs">
-                                    <EyeOff className="h-3 w-3 mr-1" />
-                                    Hidden
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleConfigureWidgetLocal(widget)}
-                              disabled={isLoading}
-                            >
-                              <Settings className="h-4 w-4 mr-1" />
-                              Configure Widget
-                            </Button>
-                            <Button
-                              variant={widget.isActive ? "outline" : "default"}
-                              size="sm"
-                              onClick={() => handleToggleVisibilityLocal(widget)}
-                              disabled={isLoading}
-                              className={widget.isActive ? "text-red-600 hover:text-red-700" : ""}
-                            >
-                              {isLoading ? (
-                                <>
-                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                                  Updating...
-                                </>
-                              ) : widget.isActive ? (
-                                <>
-                                  <EyeOff className="h-4 w-4 mr-1" />
-                                  Hide
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Show
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <p className="text-sm text-gray-600 mb-3">{widget.description}</p>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4 text-xs text-gray-500">
-                            <span className="flex items-center space-x-1">
-                              <Database className="h-3 w-3" />
-                              <span>{widget.pluginName}</span>
-                            </span>
-                            <span className="flex items-center space-x-1">
-                              <span>Refresh: {widget.refreshInterval}s</span>
-                            </span>
-                            <span className="flex items-center space-x-1">
-                              <span>Position: {index + 1}</span>
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={() => setShowUnifiedManager(false)}>
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Widget Configuration Dialog */}
-      <Dialog open={showWidgetBuilder} onOpenChange={setShowWidgetBuilder}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              Configure Widget: {configuringWidget?.name}
-            </DialogTitle>
-          </DialogHeader>
-          {showWidgetBuilder && configuringWidget && (
-            <DynamicWidgetBuilder
-              onSave={handleSaveWidgetConfigLocal}
-              onCancel={() => {
-                setShowWidgetBuilder(false);
-                setConfiguringWidget(null);
-              }}
-              editingWidget={{
-                id: configuringWidget.id,
-                name: configuringWidget.name,
-                description: configuringWidget.description,
-                pluginName: configuringWidget.pluginName,
-                instanceId: `${configuringWidget.pluginName}-main`,
-                queryType: 'custom' as const,
-                customQuery: configuringWidget.query,
-                queryMethod: configuringWidget.method,
-                queryParameters: configuringWidget.parameters,
-                displayType: configuringWidget.widgetType,
-                refreshInterval: configuringWidget.refreshInterval,
-                placement: 'global-dashboard' as const,
-                styling: {
-                  width: configuringWidget.displayConfig?.width || 'full',
-                  height: configuringWidget.displayConfig?.height || 'medium',
-                  showBorder: configuringWidget.displayConfig?.showBorder !== false,
-                  showHeader: configuringWidget.displayConfig?.showHeader !== false
-                },
-                chartType: configuringWidget.chartType,
-                groupBy: configuringWidget.groupBy || undefined
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-};

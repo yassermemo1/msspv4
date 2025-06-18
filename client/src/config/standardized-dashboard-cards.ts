@@ -127,6 +127,30 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     isRemovable: true,
   },
   {
+    id: "expiring-contracts",
+    title: "Expiring Contracts",
+    type: "metric",
+    category: "dashboard",
+    dataSource: "contracts",
+    size: "medium",
+    visible: true,
+    position: 12,
+    config: {
+      icon: "AlertCircle",
+      color: "orange",
+      format: "number",
+      aggregation: "count",
+      filters: { 
+        status: "active",
+        expiring_in_months: 3 // Default to 3 months
+      },
+      enableDrillDown: true,
+      customApiEndpoint: "/api/contracts/expiring"
+    },
+    isBuiltIn: false,
+    isRemovable: true,
+  },
+  {
     id: "total-revenue",
     title: "Total Revenue",
     type: "metric",
@@ -134,7 +158,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "contracts",
     size: "small",
     visible: true,
-    position: 12,
+    position: 13,
     config: {
       icon: "DollarSign",
       color: "emerald",
@@ -152,7 +176,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "tasks",
     size: "small",
     visible: true,
-    position: 13,
+    position: 14,
     config: {
       icon: "AlertCircle",
       color: "orange",
@@ -440,7 +464,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "service_authorization_forms",
     size: "small",
     visible: true,
-    position: 14,
+    position: 15,
     config: {
       icon: "FileCheck",
       color: "teal",
@@ -458,7 +482,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "certificates_of_compliance",
     size: "small",
     visible: true,
-    position: 15,
+    position: 16,
     config: {
       icon: "Award",
       color: "emerald",
@@ -476,7 +500,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "financial_transactions",
     size: "small",
     visible: true,
-    position: 16,
+    position: 17,
     config: {
       icon: "CreditCard",
       color: "green",
@@ -494,7 +518,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "proposals",
     size: "small",
     visible: true,
-    position: 17,
+    position: 18,
     config: {
       icon: "FileText",
       color: "blue",
@@ -513,7 +537,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "hardware_assets",
     size: "small",
     visible: true,
-    position: 18,
+    position: 19,
     config: {
       icon: "HardDrive",
       color: "gray",
@@ -531,7 +555,7 @@ export const STANDARDIZED_DASHBOARD_CARDS: StandardizedDashboardCard[] = [
     dataSource: "documents",
     size: "small",
     visible: true,
-    position: 19,
+    position: 20,
     config: {
       icon: "File",
       color: "indigo",
