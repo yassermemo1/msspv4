@@ -14,7 +14,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
-import { UserSettings } from "@shared/schema";
+import { UserSettings } from "@shared/schema.ts";
 import { 
   User, 
   Shield, 

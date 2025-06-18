@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { 
   Contract, Client, Service, ServiceScope, Document,
   ServiceAuthorizationForm, CertificateOfCompliance, User
-} from "@shared/schema";
+} from "@shared/schema.ts";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

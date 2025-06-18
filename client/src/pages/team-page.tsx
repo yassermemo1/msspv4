@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from "@tanstack/react-query";
-import { User, ClientTeamAssignment, Client } from "@shared/schema";
+import { User, ClientTeamAssignment, Client } from "@shared/schema.ts";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AppLayout } from "@/components/layout/app-layout";
-import type { Document, Client } from "@shared/schema";
+import type { Document, Client } from "@shared/schema.ts";
 import { uploadDocuments } from "@/lib/file-upload";
 import { formatFileSize, formatDate } from "@/lib/utils";
 import { formatClientName } from "@/lib/utils";

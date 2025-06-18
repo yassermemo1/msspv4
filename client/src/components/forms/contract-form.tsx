@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertContractSchema, type Contract, type InsertContract, type Client, type Service } from "@shared/schema";
+import { insertContractSchema, type Contract, type InsertContract, type Client, type Service } from "@shared/schema.ts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

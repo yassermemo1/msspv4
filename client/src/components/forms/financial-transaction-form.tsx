@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertFinancialTransactionSchema, type FinancialTransaction, type InsertFinancialTransaction, type Client } from "@shared/schema";
+import { insertFinancialTransactionSchema, type FinancialTransaction, type InsertFinancialTransaction, type Client } from "@shared/schema.ts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertClientTeamAssignmentSchema, type ClientTeamAssignment, type InsertClientTeamAssignment, type User, type Client } from "@shared/schema";
+import { insertClientTeamAssignmentSchema, type ClientTeamAssignment, type InsertClientTeamAssignment, type User, type Client } from "@shared/schema.ts";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";

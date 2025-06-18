@@ -5,7 +5,7 @@ import {
   Client, Contract, FinancialTransaction, ClientTeamAssignment, User, Document,
   ServiceScope, Service, ClientLicense, LicensePool, ClientHardwareAssignment, HardwareAsset,
   IndividualLicense, ServiceAuthorizationForm, CertificateOfCompliance
-} from "@shared/schema";
+} from "@shared/schema.ts";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

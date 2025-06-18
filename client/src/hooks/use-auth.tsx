@@ -5,7 +5,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from "@tanstack/react-query";
-import type { InsertUser, User } from "@shared/schema";
+import type { InsertUser, User } from "@shared/schema.ts";
 import { getQueryFn, postQueryFn } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 

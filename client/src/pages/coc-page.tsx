@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CertificateOfCompliance, InsertCertificateOfCompliance, Client, Contract, ServiceAuthorizationForm } from "@shared/schema";
+import { CertificateOfCompliance, InsertCertificateOfCompliance, Client, Contract, ServiceAuthorizationForm } from "@shared/schema.ts";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

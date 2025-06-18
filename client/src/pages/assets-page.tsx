@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { HardwareAsset, LicensePool, InsertLicensePool, InsertHardwareAsset, ClientLicense } from "@shared/schema";
+import { HardwareAsset, LicensePool, InsertLicensePool, InsertHardwareAsset, ClientLicense } from "@shared/schema.ts";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { PagePermission } from "@shared/schema";
+import { PagePermission } from "@shared/schema.ts";
 
 interface PagePermissionUpdate {
   id: number;
