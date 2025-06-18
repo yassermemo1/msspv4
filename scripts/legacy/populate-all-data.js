@@ -441,7 +441,7 @@ async function populateAllData() {
       authType: 'basic',
       authConfig: {
         username: 'demo@mssp.com',
-        password: 'demo-api-token'
+        password: process.env.DEMO_API_TOKEN || ''
       },
       apiEndpoints: {
         issues: '/rest/api/3/search',

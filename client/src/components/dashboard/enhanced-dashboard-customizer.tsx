@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Plus, 
   Settings, 
@@ -27,9 +29,38 @@ import {
   X,
   Palette,
   Target,
-  Filter
+  Filter,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Globe
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+// Global Widget interface for import functionality
+interface GlobalWidget {
+  id: string;
+  systemId: number;
+  systemName: string;
+  pluginName: string;
+  name: string;
+  description: string;
+  widgetType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query';
+  chartType?: 'bar' | 'line' | 'pie' | 'area';
+  query: string;
+  method: string;
+  parameters: Record<string, any>;
+  displayConfig: Record<string, any>;
+  refreshInterval: number;
+  isActive: boolean;
+  isGlobal: boolean;
+  position: number;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // Enhanced card configuration interface
 export interface EnhancedDashboardCard {
@@ -164,6 +195,8 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
   const [showAddCard, setShowAddCard] = useState(false);
   const [editingCard, setEditingCard] = useState<EnhancedDashboardCard | null>(null);
   const [pendingUpdates, setPendingUpdates] = useState<Partial<EnhancedDashboardCard> | null>(null);
+  const [showWidgetImport, setShowWidgetImport] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [newCard, setNewCard] = useState<Partial<EnhancedDashboardCard>>({
     type: 'metric',
     dataSource: 'clients',
@@ -175,6 +208,63 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
       aggregation: 'count'
     }
   });
+
+  // Fetch available widgets for import
+  const { data: globalWidgets = [], isLoading: widgetsLoading, refetch: refetchWidgets } = useQuery<GlobalWidget[]>({
+    queryKey: ['global-widgets-import'],
+    queryFn: async () => {
+      const response = await fetch('/api/widgets/manage', {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch widgets');
+      }
+      return response.json();
+    },
+    staleTime: 30000,
+    enabled: showWidgetImport, // Only fetch when dialog is open
+  });
+
+  // Widget management functions
+  const handleToggleWidgetVisibility = async (widget: GlobalWidget) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/widgets/manage/${widget.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...widget,
+          isActive: !widget.isActive,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to update widget visibility: ${errorData}`);
+      }
+
+      await refetchWidgets();
+      
+      toast({
+        title: "Success",
+        description: `Widget ${widget.isActive ? 'hidden' : 'shown'} successfully`,
+      });
+    } catch (error) {
+      console.error('Widget visibility toggle error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update widget visibility",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
 
   // Field mappings for different data sources
   const getFieldsForDataSource = (dataSource: string) => {
@@ -286,6 +376,20 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     });
   };
 
+  const handleToggleCardVisibility = (card: EnhancedDashboardCard) => {
+    const updatedCards = cards.map(c => 
+      c.id === card.id 
+        ? { ...c, visible: !c.visible }
+        : c
+    );
+    onCardsChange(updatedCards);
+
+    toast({
+      title: card.visible ? "Card Hidden" : "Card Shown",
+      description: `"${card.title}" is now ${card.visible ? "hidden" : "visible"}.`,
+    });
+  };
+
   const handleDuplicateCard = (card: EnhancedDashboardCard) => {
     const duplicatedCard: EnhancedDashboardCard = {
       ...card,
@@ -303,8 +407,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
     });
   };
 
-
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -318,6 +420,13 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
           <Button onClick={() => setShowAddCard(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Card
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowWidgetImport(true)}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Widget Visibility
           </Button>
         </div>
       </div>
@@ -379,6 +488,18 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                   </div>
                   
                   <div className="flex items-center space-x-2">
+                    <Button
+                      variant={card.visible ? "outline" : "secondary"}
+                      size="sm"
+                      onClick={() => handleToggleCardVisibility(card)}
+                      title={card.visible ? "Hide card" : "Show card"}
+                    >
+                      {card.visible ? (
+                        <Eye className="h-4 w-4" />
+                      ) : (
+                        <EyeOff className="h-4 w-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -482,6 +603,126 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
               isEditing={true}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Widget Import/Management Dialog */}
+      <Dialog open={showWidgetImport} onOpenChange={setShowWidgetImport}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Eye className="h-5 w-5" />
+              <span>Widget Visibility</span>
+            </DialogTitle>
+            <DialogDescription>
+              Control widget visibility across the platform. Toggle show/hide for widgets to manage what appears on dashboards.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {widgetsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading widgets...</span>
+              </div>
+            ) : globalWidgets.length === 0 ? (
+              <Card className="border-dashed border-2 border-gray-300">
+                <CardContent className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <Globe className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-4">No widgets available</p>
+                    <p className="text-sm text-gray-500">Create widgets in Widget Manager first</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline">
+                      {globalWidgets.filter(w => w.isActive).length} of {globalWidgets.length} widgets visible
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {globalWidgets.map((widget) => (
+                    <Card 
+                      key={widget.id} 
+                      className={`transition-all ${
+                        widget.isActive 
+                          ? 'bg-green-50 border-green-200' 
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-2 rounded ${
+                              widget.isActive ? 'bg-green-100' : 'bg-gray-100'
+                            }`}>
+                              {widget.isActive ? (
+                                <Eye className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <EyeOff className="h-4 w-4 text-gray-400" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <h5 className="font-medium">{widget.name}</h5>
+                                <Badge variant="outline" className="text-xs">
+                                  {widget.pluginName}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {widget.widgetType}
+                                </Badge>
+                                <Badge 
+                                  variant={widget.isActive ? "default" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {widget.isActive ? "Visible" : "Hidden"}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                {widget.description || 'No description provided'}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant={widget.isActive ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => handleToggleWidgetVisibility(widget)}
+                              disabled={isLoading}
+                              className={widget.isActive ? "text-red-600 hover:text-red-700" : ""}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : widget.isActive ? (
+                                <>
+                                  <EyeOff className="h-4 w-4 mr-1" />
+                                  Hide
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Show
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

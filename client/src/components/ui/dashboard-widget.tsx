@@ -35,7 +35,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
     const { valueField, labelField, trendField } = widget.config;
     
     // Debug information in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Metric Widget Debug:', {
         widgetId: widget.id,
         widgetName: widget.name,
@@ -54,7 +54,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
     const trend = data.length > 1 ? calculateTrend(data, valueField) : null;
 
     // Show debug info if valueField is missing
-    if (process.env.NODE_ENV === 'development' && valueField && !hasValueField && data.length > 0) {
+    if (import.meta.env.DEV && valueField && !hasValueField && data.length > 0) {
       console.warn(`⚠️ Metric widget "${widget.name}" looking for field "${valueField}" but it doesn't exist in data. Available fields:`, Object.keys(data[0]));
     }
 
@@ -74,7 +74,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
         )}
         
         {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mt-3 text-xs text-left">
             <strong>Debug Info:</strong>
             <br />Value Field: {valueField || 'not set'}
@@ -92,7 +92,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
     const { columns } = widget.config;
     
     // Debug information in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Table Widget Debug:', {
         widgetId: widget.id,
         widgetName: widget.name,
@@ -118,7 +118,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
             type: typeof sampleRecord[key] === 'number' ? 'number' : 'string'
           }));
         
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('Auto-detected columns:', effectiveColumns);
         }
       }
@@ -135,7 +135,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
               💡 Tip: Use the "Quick Setup" buttons when creating table widgets
             </p>
           </div>
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-left">
               <strong>Debug Info:</strong>
               <br />Widget Config: {JSON.stringify(widget.config, null, 2)}
@@ -150,7 +150,7 @@ export function DashboardWidget({ widget, data, className }: DashboardWidgetProp
     return (
       <div>
         {/* Show auto-detection notice in development */}
-        {process.env.NODE_ENV === 'development' && effectiveColumns !== columns && (
+        {import.meta.env.DEV && effectiveColumns !== columns && (
           <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3 text-xs">
             <strong>Auto-detected columns:</strong> No configuration found, using data structure
           </div>

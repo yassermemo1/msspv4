@@ -11,7 +11,7 @@ const splunkConfig: PluginConfig = {
       authType: 'basic',
       authConfig: {
         username: process.env.SPLUNK_USERNAME || 'admin',
-        password: process.env.SPLUNK_PASSWORD || 'changeme'
+        password: process.env.SPLUNK_PASSWORD
       },
       isActive: false, // Disabled by default
       tags: ['siem', 'logs', 'analytics']

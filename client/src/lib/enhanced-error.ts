@@ -183,7 +183,7 @@ export function formatErrorForToast(
   error: Error | DetailedError | ApiError,
   options: ErrorDisplayOptions = {}
 ): { title: string; description: string; fullErrorText?: string } {
-  const { showDetails = process.env.NODE_ENV === 'development', maxLength = 500 } = options;
+  const { showDetails = import.meta.env.DEV, maxLength = 500 } = options;
 
   let title = 'Error';
   let description = error.message || 'An unexpected error occurred';

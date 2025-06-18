@@ -11,7 +11,7 @@ const elasticConfig: PluginConfig = {
       authType: 'basic',
       authConfig: {
         username: process.env.ELASTICSEARCH_USERNAME || 'elastic',
-        password: process.env.ELASTICSEARCH_PASSWORD || 'changeme'
+        password: process.env.ELASTICSEARCH_PASSWORD
       },
       isActive: false, // Disabled by default
       tags: ['search', 'logs', 'analytics']

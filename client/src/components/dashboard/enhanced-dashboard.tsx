@@ -61,7 +61,7 @@ import {
   Info,
   ExternalLink
 } from 'lucide-react';
-import { DynamicDashboardCard } from "./dynamic-dashboard-card";
+// DynamicDashboardCard removed - using enhanced dashboard cards only
 import { useToast } from "@/hooks/use-toast";
 import { useDashboardSettings, DashboardCard } from "@/hooks/use-dashboard-settings";
 import { formatClientName } from "@/lib/utils";
@@ -633,7 +633,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
               Business Metrics Dashboard
             </h2>
             <Badge variant="outline" className="ml-2">
-              {(visibleCards.filter(card => card.type === 'widget').length)} imported widget{visibleCards.filter(card => card.type === 'widget').length !== 1 ? 's' : ''}
+              {visibleCards.length} dashboard card{visibleCards.length !== 1 ? 's' : ''}
             </Badge>
           </div>
           <div className="flex items-center space-x-2">
@@ -649,19 +649,21 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
           </div>
         </div>
         
-        {/* Imported Widgets from Customizer */}
-        {visibleCards.filter(card => card.type === 'widget').length > 0 && (
+        {/* Dashboard Cards from Customizer */}
+        {visibleCards.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Imported Widgets</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Dashboard Cards</h3>
+            <div className={getGridColsClass(visibleCards.length)}>
               {visibleCards
-                .filter(card => card.type === 'widget')
+                .sort((a, b) => a.position - b.position)
                 .map(card => (
-                  <DynamicDashboardCard
+                  <KPICard
                     key={card.id}
                     card={card}
-                    onClick={() => {
-                      console.log('Imported widget clicked:', card.config.widgetId);
+                    data={stats}
+                    timeRange={selectedTimeRange}
+                    onViewDetails={() => {
+                      console.log('Dashboard card clicked:', card.id, card.type);
                     }}
                   />
                 ))}

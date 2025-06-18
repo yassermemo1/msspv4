@@ -133,7 +133,7 @@ class EnvironmentConfigManager {
 
     this.config = {
       server: {
-        port: parseInt(process.env.PORT || process.env.SERVER_PORT || (isDevelopment ? '3000' : '5001')),
+        port: parseInt(process.env.PORT || process.env.SERVER_PORT || '80'),
         host: process.env.HOST || (isProduction ? '0.0.0.0' : 'localhost'),
         environment: env,
         corsOrigin: this.parseCorsOrigins(),
