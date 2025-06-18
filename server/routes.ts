@@ -2365,9 +2365,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get database document count
       const [{ count: documentCount }] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(documents)
-        .where(eq(documents.isActive, true));
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(serviceScopes)
+        .leftJoin(contracts, eq(serviceScopes.contractId, contracts.id))
+        .where(eq(serviceScopes.status, 'active'));
 
       res.json({
         uploadsDirectory: uploadsDir,
@@ -5019,47 +5020,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get dashboard card data
   app.get("/api/dashboard/card-data", requireAuth, async (req, res, next) => {
     try {
-      const { table, aggregation, filter_status } = req.query;
-      
-      let result = 0;
-      
-      switch (table) {
-        case 'clients':
-          const [clientCount] = await db.select({ count: count() }).from(clients);
-          result = clientCount?.count || 0;
-          break;
-        case 'contracts':
-          if (aggregation === 'sum') {
-            const [contractSum] = await db
-              .select({
-                sum: sql<number>`COALESCE(SUM(CASE WHEN ${contracts.totalValue} IS NOT NULL THEN CAST(${contracts.totalValue} AS DECIMAL) ELSE 0 END), 0)`
-              })
-              .from(contracts);
-            result = Number(contractSum?.sum || 0);
-          } else {
-            let query = db.select({ count: count() }).from(contracts);
-            if (filter_status) {
-              query = query.where(eq(contracts.status, filter_status as string));
-            }
-            const [contractCount] = await query;
-            result = contractCount?.count || 0;
-          }
-          break;
-        case 'services':
-          const [serviceCount] = await db.select({ count: count() }).from(services);
-          result = serviceCount?.count || 0;
-          break;
-        case 'tasks':
-          result = 0; // Placeholder - tasks table would need to be implemented
-          break;
-        case 'license_pools':
-          result = 0; // Placeholder - license pools would need to be implemented
-          break;
-        default:
-          result = 0;
-      }
-      
-      res.json({ value: result });
+      // Import and use the proper card-data handler
+      const cardDataHandler = (await import('./api/dashboard/card-data.js')).default;
+      return cardDataHandler(req, res);
     } catch (error) {
       next(error);
     }
@@ -6449,6 +6412,322 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching entity relationships:", error);
       next(error);
     }
+  });
+
+  // TEMPORARY: Add comprehensive dashboard test cards for all tables
+  app.get("/api/dashboard-test-cards", async (req, res) => {
+    console.log("Dashboard test cards endpoint called");
+    res.json({
+      testCards: [
+        // Core Business Entities
+        {
+          id: "clients-card",
+          title: "Total Clients",
+          type: "metric",
+          category: "business",
+          dataSource: "clients",
+          size: "small",
+          visible: true,
+          position: 1,
+          config: {
+            icon: "Users",
+            color: "blue",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM clients WHERE archived_at IS NULL"
+          }
+        },
+        {
+          id: "active-contracts-card", 
+          title: "Active Contracts",
+          type: "metric",
+          category: "business",
+          dataSource: "contracts",
+          size: "small",
+          visible: true,
+          position: 2,
+          config: {
+            icon: "FileText",
+            color: "green",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM contracts WHERE status = 'active'"
+          }
+        },
+        {
+          id: "license-pools-card",
+          title: "License Pools",
+          type: "metric", 
+          category: "resources",
+          dataSource: "license_pools",
+          size: "small",
+          visible: true,
+          position: 3,
+          config: {
+            icon: "Package",
+            color: "purple",
+            format: "number", 
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM license_pools WHERE is_active = true"
+          }
+        },
+        {
+          id: "hardware-assets-card",
+          title: "Hardware Assets",
+          type: "metric",
+          category: "resources", 
+          dataSource: "hardware_assets",
+          size: "small",
+          visible: true,
+          position: 4,
+          config: {
+            icon: "HardDrive",
+            color: "orange",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM hardware_assets"
+          }
+        },
+        {
+          id: "services-card",
+          title: "Services",
+          type: "metric",
+          category: "business",
+          dataSource: "services", 
+          size: "small",
+          visible: true,
+          position: 5,
+          config: {
+            icon: "Settings",
+            color: "indigo",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM services"
+          }
+        },
+        {
+          id: "service-scopes-card",
+          title: "Service Scopes",
+          type: "metric",
+          category: "business",
+          dataSource: "service_scopes",
+          size: "small", 
+          visible: true,
+          position: 6,
+          config: {
+            icon: "Target",
+            color: "teal",
+            format: "number",
+            aggregation: "count", 
+            query: "SELECT COUNT(*) as count FROM service_scopes"
+          }
+        },
+        {
+          id: "safs-card",
+          title: "Service Authorization Forms",
+          type: "metric",
+          category: "compliance",
+          dataSource: "service_authorization_forms",
+          size: "small",
+          visible: true,
+          position: 7,
+          config: {
+            icon: "Shield",
+            color: "red",
+            format: "number", 
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM service_authorization_forms"
+          }
+        },
+        {
+          id: "cocs-card", 
+          title: "Certificates of Compliance",
+          type: "metric",
+          category: "compliance",
+          dataSource: "certificates_of_compliance",
+          size: "small",
+          visible: true,
+          position: 8,
+          config: {
+            icon: "Award",
+            color: "yellow",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM certificates_of_compliance"
+          }
+        },
+        {
+          id: "proposals-card",
+          title: "Proposals", 
+          type: "metric",
+          category: "business",
+          dataSource: "proposals",
+          size: "small",
+          visible: true,
+          position: 9,
+          config: {
+            icon: "FileEdit",
+            color: "pink",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM proposals"
+          }
+        },
+        {
+          id: "financial-transactions-card",
+          title: "Financial Transactions", 
+          type: "metric",
+          category: "finance",
+          dataSource: "financial_transactions",
+          size: "small",
+          visible: true,
+          position: 10,
+          config: {
+            icon: "DollarSign",
+            color: "emerald",
+            format: "currency",
+            aggregation: "sum",
+            query: "SELECT COALESCE(SUM(amount), 0) as count FROM financial_transactions"
+          }
+        },
+        {
+          id: "client-licenses-card",
+          title: "Client License Assignments",
+          type: "metric",
+          category: "resources", 
+          dataSource: "client_licenses",
+          size: "small",
+          visible: true,
+          position: 11,
+          config: {
+            icon: "Key",
+            color: "violet",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM client_licenses"
+          }
+        },
+        {
+          id: "individual-licenses-card",
+          title: "Individual Licenses",
+          type: "metric",
+          category: "resources",
+          dataSource: "individual_licenses",
+          size: "small",
+          visible: true,
+          position: 12,
+          config: {
+            icon: "User",
+            color: "cyan",
+            format: "number", 
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM individual_licenses"
+          }
+        },
+        {
+          id: "client-contacts-card",
+          title: "Client Contacts",
+          type: "metric",
+          category: "business",
+          dataSource: "client_contacts",
+          size: "small",
+          visible: true,
+          position: 13,
+          config: {
+            icon: "Phone",
+            color: "slate",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM client_contacts"
+          }
+        },
+        {
+          id: "team-assignments-card",
+          title: "Team Assignments",
+          type: "metric",
+          category: "team",
+          dataSource: "client_team_assignments", 
+          size: "small",
+          visible: true,
+          position: 14,
+          config: {
+            icon: "Users2",
+            color: "amber",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM client_team_assignments"
+          }
+        },
+        {
+          id: "documents-card",
+          title: "Documents",
+          type: "metric",
+          category: "documents",
+          dataSource: "documents",
+          size: "small",
+          visible: true,
+          position: 15,
+          config: {
+            icon: "FileIcon",
+            color: "gray",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM documents"
+          }
+        },
+        {
+          id: "users-card",
+          title: "System Users",
+          type: "metric",
+          category: "system",
+          dataSource: "users",
+          size: "small",
+          visible: true,
+          position: 16,
+          config: {
+            icon: "UserCheck",
+            color: "blue",
+            format: "number",
+            aggregation: "count", 
+            query: "SELECT COUNT(*) as count FROM users"
+          }
+        },
+        {
+          id: "audit-logs-card",
+          title: "Audit Log Entries",
+          type: "metric",
+          category: "system",
+          dataSource: "audit_logs",
+          size: "small",
+          visible: true,
+          position: 17,
+          config: {
+            icon: "History",
+            color: "red",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM audit_logs WHERE created_at >= NOW() - INTERVAL '30 days'"
+          }
+        },
+        {
+          id: "client-feedback-card",
+          title: "Client Feedback Items",
+          type: "metric",
+          category: "satisfaction",
+          dataSource: "client_feedback",
+          size: "small",
+          visible: true,
+          position: 18,
+          config: {
+            icon: "MessageSquare",
+            color: "lime",
+            format: "number",
+            aggregation: "count",
+            query: "SELECT COUNT(*) as count FROM client_feedback"
+          }
+        }
+      ]
+    });
   });
 
   return httpServer;

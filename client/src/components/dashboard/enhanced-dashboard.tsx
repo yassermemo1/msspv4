@@ -59,7 +59,12 @@ import {
   Trash2,
   AlertTriangle,
   Info,
-  ExternalLink
+  ExternalLink,
+  Key,
+  HardDrive,
+  Award,
+  ClipboardCheck,
+  PieChart as PieChartIcon
 } from 'lucide-react';
 // DynamicDashboardCard removed - using enhanced dashboard cards only
 import { useToast } from "@/hooks/use-toast";
@@ -144,13 +149,200 @@ const getTimeRangeOptions = () => {
   ];
 };
 
-// KPI Card Component for built-in cards
+// Dynamic KPI Card Component that fetches data from API
+const DynamicKPICard: React.FC<{
+  card: DashboardCard;
+  timeRange: string;
+  onViewDetails?: (metric: string) => void;
+}> = ({ card, timeRange, onViewDetails }) => {
+  const [cardData, setCardData] = useState<{ value: number; metadata?: any } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const IconComponent = {
+    Building: Building,
+    FileText: FileText,
+    DollarSign: DollarSign,
+    Users: Users,
+    Server: Server,
+    Settings: Settings,
+    Key: Key,
+    HardDrive: HardDrive,
+    Shield: Shield,
+    TrendingUp: TrendingUp,
+    PieChart: PieChartIcon,
+    Award: Award,
+    ClipboardCheck: ClipboardCheck,
+  }[card.config.icon || 'Building'] || Building;
+
+  const colorClasses = {
+    blue: 'text-blue-600 bg-blue-50',
+    green: 'text-green-600 bg-green-50',
+    emerald: 'text-emerald-600 bg-emerald-50',
+    purple: 'text-purple-600 bg-purple-50',
+    violet: 'text-violet-600 bg-violet-50',
+    orange: 'text-orange-600 bg-orange-50',
+    gray: 'text-gray-600 bg-gray-50',
+    red: 'text-red-600 bg-red-50',
+    indigo: 'text-indigo-600 bg-indigo-50',
+    teal: 'text-teal-600 bg-teal-50',
+    yellow: 'text-yellow-600 bg-yellow-50',
+  };
+
+  useEffect(() => {
+    const fetchCardData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const params = new URLSearchParams({
+          table: card.dataSource,
+          aggregation: card.config.aggregation?.toString() || 'count',
+          timeRange: timeRange
+        });
+
+        // Add filters if they exist
+        if (card.config.filters) {
+          Object.entries(card.config.filters).forEach(([key, value]) => {
+            params.append(key, value.toString());
+          });
+        }
+
+        const response = await fetch(`/api/dashboard/card-data?${params}`, {
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch card data: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setCardData(data);
+      } catch (err) {
+        console.error('Error fetching card data:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCardData();
+  }, [card.dataSource, card.config.aggregation, card.config.filters, timeRange]);
+
+  const formatValue = (value: number) => {
+    if (card.config.format === 'currency') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(value);
+    }
+    if (card.config.format === 'percentage') {
+      return `${value.toFixed(1)}%`;
+    }
+    return value.toLocaleString();
+  };
+
+  const getTrend = () => {
+    // Mock trend data - in real app this would come from metadata
+    return Math.random() > 0.5 ? 'up' : 'down';
+  };
+
+  const getTrendPercentage = () => {
+    return (Math.random() * 20 + 1).toFixed(1);
+  };
+
+  if (isLoading) {
+    return (
+      <Card className="relative overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className={`p-2 rounded-lg ${colorClasses[card.config.color as keyof typeof colorClasses] || colorClasses.blue}`}>
+              <IconComponent className="h-5 w-5" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1">
+            <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+            <p className="text-sm text-muted-foreground">{card.title}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="relative overflow-hidden border-red-200">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="p-2 rounded-lg bg-red-50 text-red-600">
+              <IconComponent className="h-5 w-5" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1">
+            <p className="text-2xl font-bold text-red-600">Error</p>
+            <p className="text-sm text-muted-foreground">{card.title}</p>
+            <p className="text-xs text-red-500">{error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const value = cardData?.value || 0;
+  const trend = getTrend();
+  const trendPercentage = getTrendPercentage();
+
+  return (
+    <Card className="relative overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => onViewDetails?.(card.id)}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className={`p-2 rounded-lg ${colorClasses[card.config.color as keyof typeof colorClasses] || colorClasses.blue}`}>
+            <IconComponent className="h-5 w-5" />
+          </div>
+          {card.config.trend && (
+            <div className={`flex items-center text-xs ${
+              trend === 'up' ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {trend === 'up' ? (
+                <ArrowUpRight className="h-3 w-3 mr-1" />
+              ) : (
+                <ArrowDownRight className="h-3 w-3 mr-1" />
+              )}
+              {trendPercentage}%
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          <p className="text-2xl font-bold">{formatValue(value)}</p>
+          <p className="text-sm text-muted-foreground">{card.title}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// KPI Card Component for built-in cards (keep for backwards compatibility)
 const KPICard: React.FC<{
   card: DashboardCard;
   data: any;
   timeRange: string;
   onViewDetails?: (metric: string) => void;
 }> = ({ card, data, timeRange, onViewDetails }) => {
+  // If this is one of our new dynamic cards, use the DynamicKPICard component
+  if (card.id.startsWith('api-test-') || card.type === 'metric' || card.type === 'chart') {
+    return <DynamicKPICard card={card} timeRange={timeRange} onViewDetails={onViewDetails} />;
+  }
+
+  // Otherwise use the original hardcoded logic for built-in cards
   const IconComponent = {
     Building: Building,
     FileText: FileText,
