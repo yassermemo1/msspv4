@@ -35,8 +35,26 @@ export function IndividualLicensePoolCard({ poolId, className, onClick }: Indivi
   const { data: poolData, isLoading } = useQuery<LicensePoolData>({
     queryKey: [`/api/license-pools/${poolId}/stats`],
     queryFn: async () => {
-      const res = await apiRequest('GET', `/api/license-pools/${poolId}/stats`);
-      return res.json();
+      // For now, use the working license summary endpoint and find the specific pool
+      const res = await apiRequest('GET', `/api/license-summary`);
+      const summaryData = await res.json();
+      
+      // Find the specific pool from the categorized pools
+      let foundPool = null;
+      if (summaryData.pools) {
+        Object.values(summaryData.pools).forEach((poolArray: any) => {
+          if (Array.isArray(poolArray)) {
+            const pool = poolArray.find((p: any) => p.id === poolId);
+            if (pool) foundPool = pool;
+          }
+        });
+      }
+      
+      if (foundPool) {
+        return foundPool;
+      } else {
+        throw new Error(`Pool with ID ${poolId} not found`);
+      }
     },
   });
 

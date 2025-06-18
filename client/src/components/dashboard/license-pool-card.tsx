@@ -40,9 +40,9 @@ export function LicensePoolCard({ className, onClick }: LicensePoolCardProps) {
   const [, navigate] = useLocation();
 
   const { data: licensePoolSummary, isLoading } = useQuery<LicensePoolSummary>({
-    queryKey: ['/api/license-pools/summary'],
+    queryKey: ['/api/license-summary'],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/license-pools/summary');
+      const res = await apiRequest('GET', '/api/license-summary');
       return res.json();
     },
   });

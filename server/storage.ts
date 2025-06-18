@@ -919,7 +919,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(licensePools)
       .where(eq(licensePools.isActive, true))
-      .orderBy(licensePools.vendor, licensePools.productName);
+      .orderBy(licensePools.id);
   }
 
   async getLicensePool(id: number): Promise<LicensePool | undefined> {
