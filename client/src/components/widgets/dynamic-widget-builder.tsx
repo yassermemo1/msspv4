@@ -157,7 +157,19 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
   useEffect(() => {
     loadPlugins();
     if (editingWidget) {
-      setWidget(editingWidget);
+      console.log('🔍 BUILDER MOUNT - EditingWidget received:', editingWidget);
+      console.log('🔍 BUILDER MOUNT - EditingWidget groupBy:', editingWidget.groupBy);
+      
+      // Ensure queryParameters is always an object
+      setWidget({
+        ...editingWidget,
+        queryParameters: editingWidget.queryParameters || {},
+        filters: editingWidget.filters || [],
+        // Preserve existing groupBy configuration
+        groupBy: editingWidget.groupBy || undefined
+      });
+      
+      console.log('🔍 BUILDER MOUNT - Widget state set with groupBy:', editingWidget.groupBy);
     }
   }, [editingWidget]);
 
@@ -334,18 +346,18 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
   };
 
   const handleSave = () => {
-    if (!widget.name || !widget.pluginName || !widget.instanceId) {
-      alert('Please fill in all required fields');
+    console.log('🔍 BUILDER SAVE - Full widget state:', widget);
+    console.log('🔍 BUILDER SAVE - GroupBy configuration:', widget.groupBy);
+    console.log('🔍 BUILDER SAVE - Available fields:', availableFields);
+    
+    // Validate required fields
+    if (!widget.name.trim()) {
+      alert('Please enter a widget name');
       return;
     }
 
-    if (widget.queryType === 'default' && !widget.queryId) {
-      alert('Please select a default query');
-      return;
-    }
-
-    if (widget.queryType === 'custom' && !widget.customQuery) {
-      alert('Please enter a custom query');
+    if (!widget.pluginName) {
+      alert('Please select a data source');
       return;
     }
 
@@ -851,7 +863,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                   </Button>
                 </div>
                 <div className="space-y-3 mt-2">
-                  {Object.entries(widget.queryParameters).map(([key, config]) => {
+                  {Object.entries(widget.queryParameters || {}).map(([key, config]) => {
                     const parameterConfig = typeof config === 'object' && config !== null ? config : { value: config, source: 'static' };
                     
                     return (
@@ -1026,7 +1038,7 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                       </div>
                     );
                   })}
-                  {Object.keys(widget.queryParameters).length === 0 && (
+                  {Object.keys(widget.queryParameters || {}).length === 0 && (
                     <p className="text-sm text-gray-500">No parameters configured</p>
                   )}
                 </div>
@@ -1458,24 +1470,35 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                       <div>
                         <Label htmlFor="groupby-field">Group By Field (X-axis)</Label>
                         {availableFields.length > 0 ? (
-                          <Select
-                            value={widget.groupBy.field}
-                            onValueChange={(value) => setWidget({
-                              ...widget,
-                              groupBy: { ...widget.groupBy!, field: value }
-                            })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select field to group by..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableFields.filter(field => field && field.trim() !== '').map(field => (
-                                <SelectItem key={field} value={field}>
-                                  {field}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-2">
+                            <Select
+                              value={widget.groupBy.field}
+                              onValueChange={(value) => setWidget({
+                                ...widget,
+                                groupBy: { ...widget.groupBy!, field: value }
+                              })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select field to group by..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableFields.filter(field => field && field.trim() !== '').map(field => (
+                                  <SelectItem key={field} value={field}>
+                                    {field}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              value={widget.groupBy.field}
+                              onChange={(e) => setWidget({
+                                ...widget,
+                                groupBy: { ...widget.groupBy!, field: e.target.value }
+                              })}
+                              placeholder="Or type field name manually..."
+                              className="text-sm"
+                            />
+                          </div>
                         ) : (
                           <Input
                             id="groupby-field"
@@ -1484,13 +1507,13 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                               ...widget,
                               groupBy: { ...widget.groupBy!, field: e.target.value }
                             })}
-                            placeholder="Field to group by (e.g., 'status', 'priority', 'project')"
+                            placeholder="Field to group by (e.g., 'assignee', 'status', 'priority')"
                           />
                         )}
                         <p className="text-xs text-gray-500 mt-1">
                           {availableFields.length > 0 
-                            ? `Choose from ${availableFields.length} available fields (detected from test query)` 
-                            : "This field will be used as the X-axis for charts. Test your query first to see available fields."
+                            ? `Choose from dropdown or type manually. ${availableFields.length} fields detected from test query.` 
+                            : "Enter the field name to group by. For JIRA queries, common fields include: assignee, status, priority, project, reporter."
                           }
                         </p>
                       </div>
@@ -1498,25 +1521,36 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                       <div>
                         <Label htmlFor="groupby-value-field">Value Field (Y-axis) - Optional</Label>
                         {availableFields.length > 0 ? (
-                          <Select
-                            value={widget.groupBy.valueField || '__none__'}
-                            onValueChange={(value) => setWidget({
-                              ...widget,
-                              groupBy: { ...widget.groupBy!, valueField: value === '__none__' ? '' : value }
-                            })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select value field (optional)..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">No specific field (use count)</SelectItem>
-                              {availableFields.filter(field => field && field.trim() !== '').map(field => (
-                                <SelectItem key={field} value={field}>
-                                  {field}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-2">
+                            <Select
+                              value={widget.groupBy.valueField || '__none__'}
+                              onValueChange={(value) => setWidget({
+                                ...widget,
+                                groupBy: { ...widget.groupBy!, valueField: value === '__none__' ? '' : value }
+                              })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select value field (optional)..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">No specific field (use count)</SelectItem>
+                                {availableFields.filter(field => field && field.trim() !== '').map(field => (
+                                  <SelectItem key={field} value={field}>
+                                    {field}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              value={widget.groupBy.valueField || ''}
+                              onChange={(e) => setWidget({
+                                ...widget,
+                                groupBy: { ...widget.groupBy!, valueField: e.target.value }
+                              })}
+                              placeholder="Or type field name manually (leave empty for count)..."
+                              className="text-sm"
+                            />
+                          </div>
                         ) : (
                           <Input
                             id="groupby-value-field"
@@ -1525,13 +1559,13 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                               ...widget,
                               groupBy: { ...widget.groupBy!, valueField: e.target.value }
                             })}
-                            placeholder="Field for values (e.g., 'amount', 'count', 'duration')"
+                            placeholder="Optional: field for values (leave empty to count items per group)"
                           />
                         )}
                         <p className="text-xs text-gray-500 mt-1">
                           {availableFields.length > 0 
-                            ? "Leave empty to count items per group, or select a numeric field for values"
-                            : "Leave empty to count items per group, or specify field for numeric values. Test your query first to see available fields."
+                            ? "Choose from dropdown, type manually, or leave empty to count items per group"
+                            : "Leave empty to count items per group, or specify a field name for numeric values (e.g., 'story_points', 'time_spent')."
                           }
                         </p>
                       </div>

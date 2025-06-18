@@ -28,7 +28,14 @@ export interface DashboardCard {
           field?: string;
         };
     chartType?: 'line' | 'bar' | 'pie' | 'doughnut' | 'area' | 'radar' | 'scatter';
+    xAxisField?: string;
+    yAxisField?: string;
     filters?: Record<string, any>;
+    dynamicFilters?: Array<{
+      field: string;
+      operator: string;
+      value: string;
+    }>;
     trend?: boolean;
     // Comparison features
     compareWith?: string; // Data source to compare with

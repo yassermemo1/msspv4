@@ -4933,6 +4933,224 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Dashboard Card Schema and Values API
+  app.get('/api/dashboard/schema/:tableName', requireAuth, async (req, res, next) => {
+    try {
+      const { tableName } = req.params;
+      
+      console.log(`🔍 SCHEMA API: Fetching schema for table: ${tableName}`);
+      
+      // Validate table name to prevent SQL injection
+      const allowedTables = [
+        'clients', 'contracts', 'services', 'license_pools', 'proposals',
+        'financial_transactions', 'users', 'audit_logs', 'hardware_assets',
+        'service_scopes', 'client_licenses', 'documents'
+      ];
+      
+      if (!allowedTables.includes(tableName)) {
+        console.error(`❌ SCHEMA API: Table '${tableName}' not allowed`);
+        return res.status(400).json({ error: `Table '${tableName}' is not allowed` });
+      }
+      
+      // Get column information using string interpolation (safe for table names)
+      const columnQuery = `
+        SELECT column_name, data_type, is_nullable 
+        FROM information_schema.columns 
+        WHERE table_name = '${tableName}' AND table_schema = 'public'
+        ORDER BY ordinal_position
+      `;
+      
+      console.log(`🔍 SCHEMA API: Column query: ${columnQuery}`);
+      const columnsResult = await db.execute(sql.raw(columnQuery));
+      console.log(`🔍 SCHEMA API: Raw columns result:`, columnsResult);
+      console.log(`🔍 SCHEMA API: Columns result type:`, typeof columnsResult);
+      console.log(`🔍 SCHEMA API: Is array:`, Array.isArray(columnsResult));
+      
+      // Handle different response formats from Drizzle
+      const columns = Array.isArray(columnsResult) ? columnsResult : (columnsResult.rows || []);
+      console.log(`🔍 SCHEMA API: Found ${columns.length} columns for ${tableName}`);
+      
+      if (!Array.isArray(columns)) {
+        console.error(`🔍 SCHEMA API: Columns is not an array:`, columns);
+        throw new Error('Database returned invalid column format');
+      }
+      
+      // For each column, get sample distinct values (limited to 50)
+      const columnValues: Record<string, any[]> = {};
+      
+      for (const column of columns) {
+        try {
+          // Use string interpolation for table name, double quotes for column name
+          const valueQuery = `
+            SELECT DISTINCT "${column.column_name}" as value 
+            FROM "${tableName}" 
+            WHERE "${column.column_name}" IS NOT NULL 
+            ORDER BY "${column.column_name}" 
+            LIMIT 50
+          `;
+          console.log(`🔍 SCHEMA API: Value query for ${column.column_name}: ${valueQuery}`);
+          const valuesResult = await db.execute(sql.raw(valueQuery));
+          const values = Array.isArray(valuesResult) ? valuesResult : (valuesResult.rows || []);
+          columnValues[column.column_name] = values.map((v: any) => v.value);
+          console.log(`🔍 SCHEMA API: Found ${values.length} values for ${column.column_name}`);
+        } catch (error) {
+          console.warn(`Could not fetch values for ${tableName}.${column.column_name}:`, error);
+          columnValues[column.column_name] = [];
+        }
+      }
+      
+      console.log(`🔍 SCHEMA API: Returning schema for ${tableName}:`, {
+        tableName,
+        columnCount: columns.length,
+        columnNames: columns.map(c => c.column_name)
+      });
+      
+      res.json({
+        tableName,
+        columns: columns,
+        columnValues
+      });
+    } catch (error) {
+      console.error(`❌ SCHEMA API ERROR for ${req.params.tableName}:`, error);
+      next(error);
+    }
+  });
+
+  // Preview Dashboard Card Data API
+  app.post('/api/dashboard/preview', requireAuth, async (req, res, next) => {
+    try {
+      const { dataSource, config } = req.body;
+      
+      // Build preview query based on card configuration using string interpolation
+      let query = `SELECT * FROM "${dataSource}"`;
+      const conditions: string[] = [];
+      
+      // Function to safely escape SQL values
+      const escapeValue = (value: any): string => {
+        if (typeof value === 'string') {
+          return `'${value.replace(/'/g, "''")}'`; // Escape single quotes
+        } else if (typeof value === 'number') {
+          return String(value);
+        } else if (typeof value === 'boolean') {
+          return value ? 'true' : 'false';
+        } else if (value === null || value === undefined) {
+          return 'NULL';
+        } else {
+          return `'${String(value).replace(/'/g, "''")}'`;
+        }
+      };
+      
+      // Apply filters
+      if (config.filters) {
+        for (const [field, value] of Object.entries(config.filters)) {
+          if (value !== null && value !== undefined && value !== '') {
+            conditions.push(`"${field}" = ${escapeValue(value)}`);
+          }
+        }
+      }
+      
+      // Apply dynamic filters  
+      if (config.dynamicFilters && Array.isArray(config.dynamicFilters)) {
+        for (const filter of config.dynamicFilters) {
+          if (filter.field && filter.operator && filter.value) {
+            const escapedValue = escapeValue(filter.value);
+            switch (filter.operator) {
+              case '=':
+                conditions.push(`"${filter.field}" = ${escapedValue}`);
+                break;
+              case '!=':
+                conditions.push(`"${filter.field}" != ${escapedValue}`);
+                break;
+              case '>':
+                conditions.push(`"${filter.field}" > ${escapedValue}`);
+                break;
+              case '<':
+                conditions.push(`"${filter.field}" < ${escapedValue}`);
+                break;
+              case '>=':
+                conditions.push(`"${filter.field}" >= ${escapedValue}`);
+                break;
+              case '<=':
+                conditions.push(`"${filter.field}" <= ${escapedValue}`);
+                break;
+              case 'contains':
+                conditions.push(`"${filter.field}" ILIKE '%${filter.value.replace(/'/g, "''")}%'`);
+                break;
+              case 'starts_with':
+                conditions.push(`"${filter.field}" ILIKE '${filter.value.replace(/'/g, "''")}%'`);
+                break;
+              case 'ends_with':
+                conditions.push(`"${filter.field}" ILIKE '%${filter.value.replace(/'/g, "''")}'`);
+                break;
+            }
+          }
+        }
+      }
+      
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      
+      // Add ordering and limit for preview
+      query += ` ORDER BY id DESC LIMIT 10`;
+      
+      console.log('🔍 PREVIEW: Final query:', query);
+      
+      const previewResult = await db.execute(sql.raw(query));
+      console.log('Preview data result:', previewResult);
+      console.log('Preview data type:', typeof previewResult);
+      console.log('Preview data is array:', Array.isArray(previewResult));
+      
+      // Handle different response formats from Drizzle
+      const previewData = Array.isArray(previewResult) ? previewResult : (previewResult.rows || []);
+      
+      // Also calculate the metric value based on aggregation
+      let metricValue = 0;
+      let countQuery = `SELECT COUNT(*) as count`;
+      
+      if (config.aggregation === 'sum' && config.aggregation.field) {
+        countQuery = `SELECT SUM("${config.aggregation.field}") as count`;
+      } else if (config.aggregation === 'avg' && config.aggregation.field) {
+        countQuery = `SELECT AVG("${config.aggregation.field}") as count`;
+      } else if (config.aggregation === 'max' && config.aggregation.field) {
+        countQuery = `SELECT MAX("${config.aggregation.field}") as count`;
+      } else if (config.aggregation === 'min' && config.aggregation.field) {
+        countQuery = `SELECT MIN("${config.aggregation.field}") as count`;
+      }
+      
+      countQuery += ` FROM "${dataSource}"`;
+      if (conditions.length > 0) {
+        countQuery += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      
+      console.log('🔍 PREVIEW: Metric query:', countQuery);
+      const metricResult = await db.execute(sql.raw(countQuery));
+      // Handle different response formats from Drizzle
+      const metricRows = Array.isArray(metricResult) ? metricResult : (metricResult.rows || []);
+      metricValue = metricRows[0]?.count || 0;
+      
+      // Ensure previewData is always an array
+      const safePreviewData = Array.isArray(previewData) ? previewData : [];
+      
+      res.json({
+        previewData: safePreviewData, // The actual array data
+        metricValue,
+        totalRows: safePreviewData.length,
+        sampleQuery: query,
+        appliedFilters: {
+          static: config.filters || {},
+          dynamic: config.dynamicFilters || []
+        }
+      });
+    } catch (error) {
+      console.error('Preview error:', error);
+      res.status(400).json({
+        error: 'Failed to preview card data',
+        details: error.message
+      });
+    }
+  });
+
   // Get user dashboard settings
   app.get("/api/user-dashboard-settings", requireAuth, async (req, res, next) => {
     try {
@@ -5028,6 +5246,280 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get dashboard card drill-down data  
+  app.get("/api/dashboard/card-drilldown", requireAuth, async (req, res, next) => {
+    try {
+      const { table, cardId, timeRange, aggregation, ...filters } = req.query;
+      
+      if (!table || typeof table !== 'string') {
+        return res.status(400).json({ error: 'Table parameter is required' });
+      }
+
+      // Map table names to Drizzle schemas
+      const tableMap: Record<string, any> = {
+        clients,
+        contracts,
+        services,
+        license_pools: licensePools,
+        hardware_assets: hardwareAssets,
+        service_scopes: serviceScopes,
+        financial_transactions: financialTransactions,
+        users,
+        client_licenses: clientLicenses,
+        individual_licenses: individualLicenses,
+        client_contacts: clientContacts,
+        service_authorization_forms: serviceAuthorizationForms,
+        certificates_of_compliance: certificatesOfCompliance,
+        proposals,
+        audit_logs: auditLogs,
+        documents
+      };
+
+      const tableSchema = tableMap[table];
+      
+      if (!tableSchema) {
+        return res.status(400).json({ error: `Unknown table: ${table}` });
+      }
+
+      // Build where conditions based on filters
+      const whereConditions = [];
+      
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== '' && key !== 'timeRange' && key !== 'cardId') {
+          // Handle different filter types
+          if (key === 'status' && 'status' in tableSchema) {
+            whereConditions.push(eq(tableSchema.status, value as string));
+          } else if (key === 'expiring_in_months' && table === 'contracts') {
+            // Special handling for expiring contracts
+            const months = parseInt(value as string) || 3;
+            const futureDate = new Date();
+            futureDate.setMonth(futureDate.getMonth() + months);
+            whereConditions.push(
+              and(
+                eq(contracts.status, 'active'),
+                lte(contracts.endDate, futureDate.toISOString())
+              )
+            );
+          }
+        }
+      });
+
+      // Add time range filtering if applicable
+      if (timeRange && timeRange !== 'all_time' && 'createdAt' in tableSchema) {
+        const { startDate } = getTimeRangeFilter(timeRange as string);
+        if (startDate) {
+          whereConditions.push(gte(tableSchema.createdAt, startDate));
+        }
+      }
+
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      // Fetch detailed records
+      let items = [];
+      let summary: Record<string, any> = {};
+
+      // Build select query with appropriate joins for table context
+      switch (table) {
+        case 'contracts':
+          const contractItems = await db
+            .select({
+              id: contracts.id,
+              name: contracts.name,
+              clientId: contracts.clientId,
+              clientName: clients.name,
+              status: contracts.status,
+              startDate: contracts.startDate,
+              endDate: contracts.endDate,
+              totalValue: contracts.totalValue,
+              createdAt: contracts.createdAt
+            })
+            .from(contracts)
+            .leftJoin(clients, eq(contracts.clientId, clients.id))
+            .where(whereClause)
+            .orderBy(desc(contracts.createdAt))
+            .limit(100);
+          
+          items = contractItems;
+          summary = {
+            total: contractItems.length,
+            totalValue: contractItems.reduce((sum, item) => sum + (parseFloat(item.totalValue || '0')), 0),
+            uniqueClients: new Set(contractItems.map(item => item.clientId)).size
+          };
+          break;
+
+        case 'clients':
+          const clientItems = await db
+            .select({
+              id: clients.id,
+              name: clients.name,
+              industry: clients.industry,
+              status: clients.status,
+              createdAt: clients.createdAt
+            })
+            .from(clients)
+            .where(whereClause)
+            .orderBy(desc(clients.createdAt))
+            .limit(100);
+          
+          items = clientItems;
+          summary = {
+            total: clientItems.length,
+            industries: new Set(clientItems.map(item => item.industry)).size
+          };
+          break;
+
+        case 'services':
+          const serviceItems = await db
+            .select()
+            .from(services)
+            .where(whereClause)
+            .orderBy(desc(services.createdAt))
+            .limit(100);
+          
+          items = serviceItems;
+          summary = {
+            total: serviceItems.length,
+            totalValue: serviceItems.reduce((sum, item) => sum + (parseFloat(item.price || '0')), 0)
+          };
+          break;
+
+        case 'financial_transactions':
+          const transactionItems = await db
+            .select({
+              id: financialTransactions.id,
+              amount: financialTransactions.amount,
+              type: financialTransactions.type,
+              date: financialTransactions.date,
+              status: financialTransactions.status,
+              clientId: financialTransactions.clientId,
+              clientName: clients.name,
+              createdAt: financialTransactions.createdAt
+            })
+            .from(financialTransactions)
+            .leftJoin(clients, eq(financialTransactions.clientId, clients.id))
+            .where(whereClause)
+            .orderBy(desc(financialTransactions.date))
+            .limit(100);
+          
+          items = transactionItems;
+          summary = {
+            total: transactionItems.length,
+            totalAmount: transactionItems.reduce((sum, item) => sum + (parseFloat(item.amount || '0')), 0)
+          };
+          break;
+
+        default:
+          // Generic handling for other tables
+          const genericItems = await db
+            .select()
+            .from(tableSchema)
+            .where(whereClause)
+            .orderBy(desc(tableSchema.createdAt))
+            .limit(100);
+          
+          items = genericItems;
+          summary = { total: genericItems.length };
+          break;
+      }
+
+      res.json({
+        items,
+        summary,
+        columns: generateTableColumns(table),
+        filters: filters,
+        timestamp: new Date().toISOString()
+      });
+
+         } catch (error) {
+       console.error('Dashboard card drill-down error:', error);
+       next(error);
+     }
+   });
+
+  // Helper function for time range filtering
+  function getTimeRangeFilter(timeRange: string) {
+    const now = new Date();
+    let startDate: Date | null = null;
+
+    switch (timeRange) {
+      case 'ytd':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      case 'current_year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      case 'last_year':
+        startDate = new Date(now.getFullYear() - 1, 0, 1);
+        break;
+      case 'current_quarter':
+        const quarter = Math.floor(now.getMonth() / 3);
+        startDate = new Date(now.getFullYear(), quarter * 3, 1);
+        break;
+      case 'last_3_months':
+        startDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+        break;
+      case 'last_6_months':
+        startDate = new Date(now.getTime() - (180 * 24 * 60 * 60 * 1000));
+        break;
+      case 'last_12_months':
+        startDate = new Date(now.getTime() - (365 * 24 * 60 * 60 * 1000));
+        break;
+      case 'current_month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'last_month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+        break;
+      case '7d':
+        startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+        break;
+    }
+
+    return { startDate };
+  }
+
+  // Helper function to generate table columns for drill-down
+  function generateTableColumns(table: string) {
+    const columnMappings: Record<string, Array<{key: string, label: string, type: string}>> = {
+      contracts: [
+        { key: 'name', label: 'Contract Name', type: 'text' },
+        { key: 'clientName', label: 'Client', type: 'link' },
+        { key: 'status', label: 'Status', type: 'badge' },
+        { key: 'startDate', label: 'Start Date', type: 'date' },
+        { key: 'endDate', label: 'End Date', type: 'date' },
+        { key: 'totalValue', label: 'Value', type: 'currency' }
+      ],
+      clients: [
+        { key: 'name', label: 'Client Name', type: 'text' },
+        { key: 'industry', label: 'Industry', type: 'text' },
+        { key: 'status', label: 'Status', type: 'badge' },
+        { key: 'createdAt', label: 'Created', type: 'date' }
+      ],
+      services: [
+        { key: 'name', label: 'Service Name', type: 'text' },
+        { key: 'type', label: 'Type', type: 'text' },
+        { key: 'price', label: 'Price', type: 'currency' },
+        { key: 'status', label: 'Status', type: 'badge' }
+      ],
+      financial_transactions: [
+        { key: 'amount', label: 'Amount', type: 'currency' },
+        { key: 'type', label: 'Type', type: 'text' },
+        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'status', label: 'Status', type: 'badge' },
+        { key: 'clientName', label: 'Client', type: 'link' }
+      ]
+    };
+
+    return columnMappings[table] || [
+      { key: 'id', label: 'ID', type: 'number' },
+      { key: 'name', label: 'Name', type: 'text' },
+      { key: 'createdAt', label: 'Created', type: 'date' }
+    ];
+  }
+
   // Get widgets manage
   app.get("/api/widgets/manage", requireAuth, async (req, res, next) => {
     try {
@@ -5052,28 +5544,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(customWidgets.createdAt));
 
       // Format widgets to match GlobalWidget interface expected by frontend
-      const formattedWidgets = widgets.map(widget => ({
-        id: widget.id.toString(),
-        systemId: 1, // Default system ID for compatibility
-        systemName: widget.pluginName,
-        pluginName: widget.pluginName,
-        name: widget.name,
-        description: widget.description || '',
-        widgetType: widget.displayType,
-        chartType: widget.chartType || undefined,
-        query: widget.customQuery || '',
-        method: widget.queryMethod,
-        parameters: widget.queryParameters,
-        displayConfig: widget.styling,
-        groupBy: widget.groupBy,
-        refreshInterval: widget.refreshInterval,
-        isActive: widget.isActive,
-        isGlobal: widget.placement === 'global-dashboard',
-        position: 0,
-        createdBy: widget.userId,
-        createdAt: widget.createdAt,
-        updatedAt: widget.updatedAt,
-      }));
+      const formattedWidgets = widgets.map(widget => {
+        console.log(`🔍 LOADING WIDGET ${widget.id} from database:`, {
+          id: widget.id,
+          name: widget.name,
+          customQuery: widget.customQuery,
+          queryMethod: widget.queryMethod,
+          queryParameters: widget.queryParameters,
+          groupBy: widget.groupBy,
+          placement: widget.placement
+        });
+        
+        return {
+          id: widget.id.toString(),
+          systemId: 1, // Default system ID for compatibility
+          systemName: widget.pluginName,
+          pluginName: widget.pluginName,
+          name: widget.name,
+          description: widget.description || '',
+          widgetType: widget.displayType,
+          chartType: widget.chartType || undefined,
+          query: widget.customQuery || '',
+          method: widget.queryMethod,
+          parameters: widget.queryParameters,
+          displayConfig: widget.styling,
+          groupBy: widget.groupBy,
+          refreshInterval: widget.refreshInterval,
+          isActive: widget.isActive,
+          isGlobal: widget.placement === 'global-dashboard',
+          position: 0,
+          createdBy: widget.userId,
+          createdAt: widget.createdAt,
+          updatedAt: widget.updatedAt,
+        };
+      });
 
       res.json(formattedWidgets);
     } catch (error) {
@@ -5208,6 +5712,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive
       } = req.body;
 
+      console.log(`🔍 UPDATE WIDGET ${id} - Request body:`, {
+        name,
+        description,
+        widgetType,
+        query,
+        method,
+        parameters,
+        groupBy,
+        isGlobal
+      });
+
       const updateData = {
         name: name || existingWidget.name,
         description: description || existingWidget.description,
@@ -5226,11 +5741,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: isActive !== undefined ? isActive : existingWidget.isActive,
       };
 
+      console.log(`🔍 UPDATE WIDGET ${id} - Update data being saved:`, {
+        customQuery: updateData.customQuery,
+        queryMethod: updateData.queryMethod,
+        queryParameters: updateData.queryParameters,
+        groupBy: updateData.groupBy,
+        placement: updateData.placement
+      });
+
       const updatedWidget = await storage.updateCustomWidget(id, updateData);
       
       if (!updatedWidget) {
         return res.status(404).json({ message: "Widget not found" });
       }
+
+      console.log(`🔍 UPDATE WIDGET ${id} - Saved widget from database:`, {
+        id: updatedWidget.id,
+        name: updatedWidget.name,
+        customQuery: updatedWidget.customQuery,
+        queryMethod: updatedWidget.queryMethod,
+        queryParameters: updatedWidget.queryParameters,
+        groupBy: updatedWidget.groupBy,
+        placement: updatedWidget.placement
+      });
 
       // Log widget update for dashboard refresh tracking
       console.log(`🔄 Widget ${id} updated - dashboard cards will refresh automatically`);

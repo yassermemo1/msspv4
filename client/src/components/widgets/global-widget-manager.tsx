@@ -45,6 +45,13 @@ interface GlobalWidget {
   method: string;
   parameters: Record<string, any>;
   displayConfig: Record<string, any>;
+  groupBy?: {
+    field: string;
+    valueField?: string;
+    aggregationFunction?: 'count' | 'sum' | 'avg' | 'min' | 'max';
+    limit?: number;
+    sortBy?: 'asc' | 'desc';
+  };
   refreshInterval: number;
   isActive: boolean;
   isGlobal: boolean;
@@ -67,7 +74,7 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
   const [filterGlobal, setFilterGlobal] = useState<'all' | 'global' | 'local'>('all');
   const [filterType, setFilterType] = useState<'all' | 'table' | 'chart' | 'metric' | 'list' | 'gauge'>('all');
   const [showBuilder, setShowBuilder] = useState(false);
-  const [editingWidget, setEditingWidget] = useState<GlobalWidget | undefined>();
+  const [editingWidget, setEditingWidget] = useState<any>();
   const [previewWidget, setPreviewWidget] = useState<GlobalWidget | undefined>();
   const [allPlugins, setAllPlugins] = useState<any[]>([]);
   const [instanceIds, setInstanceIds] = useState<Record<string, string>>({});
@@ -136,42 +143,80 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
     setShowBuilder(true);
   };
 
-  const handleEditWidget = async (widget: GlobalWidget) => {
-    await loadInstanceId(widget.pluginName);
+  const handleEditWidget = (widget: GlobalWidget) => {
+    console.log('🔍 LOAD WIDGET - Original widget from database:', widget);
+    console.log('🔍 LOAD WIDGET - GroupBy configuration from database:', widget.groupBy);
+    
     setEditingWidget(widget);
+    
+    // Convert GlobalWidget format to CustomWidget format for DynamicWidgetBuilder
+    const convertedWidget = {
+      id: widget.id,
+      name: widget.name,
+      description: widget.description,
+      pluginName: widget.pluginName,
+      instanceId: instanceIds[widget.pluginName] || `${widget.pluginName}-main`,
+      queryType: 'custom' as const,
+      customQuery: widget.query,
+      queryMethod: widget.method,
+      queryParameters: widget.parameters || {},
+      displayType: widget.widgetType,
+      refreshInterval: widget.refreshInterval,
+      placement: 'global-dashboard' as const,
+      styling: {
+        width: widget.displayConfig?.width || 'full',
+        height: widget.displayConfig?.height || 'medium',
+        showBorder: widget.displayConfig?.showBorder !== false,
+        showHeader: widget.displayConfig?.showHeader !== false,
+        backgroundColor: widget.displayConfig?.backgroundColor || 'white',
+        textColor: widget.displayConfig?.textColor || 'black'
+      },
+      groupBy: widget.groupBy || undefined,
+      filters: []
+    };
+    
+    console.log('🔍 LOAD WIDGET - Converted widget for DynamicWidgetBuilder:', convertedWidget);
+    console.log('🔍 LOAD WIDGET - Converted groupBy configuration:', convertedWidget.groupBy);
+    
     setShowBuilder(true);
   };
 
   const handleSaveWidget = async (widget: any) => {
-    const url = editingWidget 
-      ? `/api/widgets/manage/${editingWidget.id}`
-      : '/api/widgets/manage';
-    
-    const method = editingWidget ? 'PUT' : 'POST';
-    
     try {
-      // Convert CustomWidget format to GlobalWidget API format
-      const apiPayload = {
+      console.log('🔍 SAVE WIDGET - Full widget object:', widget);
+      console.log('🔍 SAVE WIDGET - GroupBy configuration:', widget.groupBy);
+      
+      const widgetData = {
         name: widget.name,
         description: widget.description,
         pluginName: widget.pluginName,
         widgetType: widget.displayType,
         chartType: widget.chartType,
-        query: widget.customQuery || '',
-        method: widget.queryMethod || 'GET',
-        parameters: widget.queryParameters || {},
-        displayConfig: widget.styling || {},
-        refreshInterval: widget.refreshInterval || 30,
-        isGlobal: widget.placement === 'global-dashboard'
+        query: widget.customQuery,
+        method: widget.queryMethod,
+        parameters: widget.queryParameters,
+        displayConfig: widget.styling,
+        refreshInterval: widget.refreshInterval || 300,
+        isGlobal: true,
+        groupBy: widget.groupBy || undefined,
+        isActive: true
       };
 
+      console.log('🔍 SAVE WIDGET - Final payload being sent:', widgetData);
+
+      const url = editingWidget 
+        ? `/api/widgets/manage/${editingWidget.id}`
+        : '/api/widgets/manage';
+      
+      const method = editingWidget ? 'PUT' : 'POST';
+      
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(apiPayload)
+        body: JSON.stringify(widgetData)
       });
 
       if (!response.ok) {
@@ -556,7 +601,7 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
                 queryType: 'custom' as const,
                 customQuery: editingWidget.query,
                 queryMethod: editingWidget.method,
-                queryParameters: editingWidget.parameters,
+                queryParameters: editingWidget.parameters || {},
                 displayType: editingWidget.widgetType,
                 refreshInterval: editingWidget.refreshInterval,
                 placement: 'global-dashboard' as const,
@@ -566,7 +611,8 @@ export const GlobalWidgetManager: React.FC<GlobalWidgetManagerProps> = ({ onClos
                   showBorder: editingWidget.displayConfig?.showBorder !== false,
                   showHeader: editingWidget.displayConfig?.showHeader !== false
                 },
-                chartType: editingWidget.chartType
+                chartType: editingWidget.chartType,
+                groupBy: editingWidget.groupBy
               } : undefined}
             />
           )}

@@ -38,6 +38,7 @@ import {
   Globe
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { EnhancedCardCreator } from './enhanced-card-creator';
 
 // Global Widget interface for import functionality
 interface GlobalWidget {
@@ -541,12 +542,11 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
             </DialogDescription>
           </DialogHeader>
           
-          <CardCreatorForm
+          <EnhancedCardCreator
             card={newCard}
             onCardChange={setNewCard}
             onSave={handleAddCard}
             onCancel={() => setShowAddCard(false)}
-            getFieldsForDataSource={getFieldsForDataSource}
           />
         </DialogContent>
       </Dialog>
@@ -567,7 +567,7 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
           </DialogHeader>
           
           {editingCard && (
-            <CardCreatorForm
+            <EnhancedCardCreator
               card={{ ...editingCard, ...pendingUpdates }}
               onCardChange={(updatedCard) => {
                 const newUpdates = {
@@ -599,7 +599,6 @@ export function EnhancedDashboardCustomizer({ cards, onCardsChange, onClose }: E
                 setEditingCard(null);
                 setPendingUpdates(null);
               }}
-              getFieldsForDataSource={getFieldsForDataSource}
               isEditing={true}
             />
           )}

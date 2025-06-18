@@ -122,7 +122,7 @@ const JiraProjectCountsWidget: React.FC<{ className?: string }> = ({ className }
         {/* Success State */}
         {projectCounts && !isLoading && !error && (
           <div className="space-y-3">
-            {projectCounts.map((project) => (
+            {projectCounts.map((project: any) => (
               <div
                 key={project.project}
                 className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200"

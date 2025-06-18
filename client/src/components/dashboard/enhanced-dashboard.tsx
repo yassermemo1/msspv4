@@ -72,6 +72,7 @@ import { useDashboardSettings, DashboardCard } from "@/hooks/use-dashboard-setti
 import { formatClientName } from "@/lib/utils";
 import { EnhancedDashboardCustomizer, EnhancedDashboardCard } from "./enhanced-dashboard-customizer";
 import AllWidgetsGrid from "@/components/widgets/all-widgets-grid";
+import { DrillDownTable } from "@/components/ui/drill-down-table";
 // External widget card removed - deprecated
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#a4de6c', '#d084d0', '#8dd1e1', '#ffb347'];
@@ -440,6 +441,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
   const [showDrilldown, setShowDrilldown] = useState(false);
   const [drilldownData, setDrilldownData] = useState<any>(null);
   const [showCustomizer, setShowCustomizer] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   // External widgets removed - deprecated
@@ -607,6 +609,51 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
       setShowDrilldown(true);
     } catch (error) {
       console.error('Failed to fetch drill-down data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load detailed data. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle card click for drill-down
+  const handleCardDrillDown = async (card: DashboardCard) => {
+    try {
+      setIsLoading(true);
+      const params = new URLSearchParams({
+        table: card.dataSource,
+        timeRange: selectedTimeRange,
+        cardId: card.id,
+        aggregation: card.config.aggregation?.toString() || 'count',
+        ...(card.config.filters || {})
+      });
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== '') {
+          params.append(key, Array.isArray(value) ? value.join(',') : String(value));
+        }
+      });
+
+      const res = await apiRequest('GET', `/api/dashboard/card-drilldown?${params.toString()}`);
+      const drillData = await res.json();
+      
+      setDrilldownData({
+        ...drillData,
+        cardTitle: card.title,
+        cardType: card.type,
+        dataSource: card.dataSource
+      });
+      setShowDrilldown(true);
+    } catch (error) {
+      console.error('Failed to fetch drill-down data:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to load detailed data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -854,9 +901,7 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
                     card={card}
                     data={stats}
                     timeRange={selectedTimeRange}
-                    onViewDetails={() => {
-                      console.log('Dashboard card clicked:', card.id, card.type);
-                    }}
+                    onViewDetails={() => handleCardDrillDown(card)}
                   />
                 ))}
             </div>
@@ -948,23 +993,27 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
         </div>
       )}
 
-      {/* Drill-down Modal */}
+      {/* Enhanced Drill-down Modal */}
       {showDrilldown && drilldownData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <Card className="w-full max-w-6xl max-h-[85vh] overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Detailed View - {getCurrentTimeRangeDescription()}</CardTitle>
+                <div>
+                  <CardTitle className="text-xl">
+                    {drilldownData.cardTitle || 'Detailed View'}
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {getCurrentTimeRangeDescription()} • {drilldownData.dataSource}
+                  </p>
+                </div>
                 <Button variant="ghost" onClick={() => setShowDrilldown(false)}>
-                  ✕
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
-              {/* Render drill-down content based on data type */}
-              <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto">
-                {JSON.stringify(drilldownData, null, 2)}
-              </pre>
+            <CardContent className="overflow-auto max-h-[70vh]">
+              <DrillDownTable data={drilldownData} />
             </CardContent>
           </Card>
         </div>

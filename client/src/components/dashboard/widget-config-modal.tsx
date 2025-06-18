@@ -40,7 +40,7 @@ interface DataSource {
 
 interface WidgetConfig {
   aggregation?: {
-    function: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+    function?: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
     field?: string;
   };
   groupBy?: string;
@@ -342,7 +342,7 @@ export function WidgetConfigModal({
               ...prev,
               config: {
                 ...prev.config,
-                aggregation: { ...(prev.config as any).aggregation, function: value }
+                aggregation: { ...(prev.config as any).aggregation, function: value as 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX' }
               }
             }))}
           >

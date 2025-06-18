@@ -15,8 +15,11 @@ import {
   FileText,
   AlertCircle,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
+import { DrillDownTable } from '@/components/ui/drill-down-table';
+import { DynamicWidgetRenderer } from './dynamic-widget-renderer';
 
 interface Widget {
   id: string;
@@ -37,6 +40,7 @@ interface Widget {
   systemName: string;
   createdAt: string;
   updatedAt: string;
+  groupBy?: any;
 }
 
 interface WidgetData {
@@ -67,7 +71,8 @@ const BusinessMetricCard: React.FC<{
   data: WidgetData | null;
   loading: boolean;
   onRefresh: () => void;
-}> = ({ widget, data, loading, onRefresh }) => {
+  onDrillDown: (widget: Widget, data: any) => void;
+}> = ({ widget, data, loading, onRefresh, onDrillDown }) => {
   const { toast } = useToast();
 
   // Business-friendly widget categories and icons
@@ -187,6 +192,9 @@ const BusinessMetricCard: React.FC<{
 
   const handleCardClick = () => {
     if (data?.success && data.data?.totalResults !== undefined) {
+      // Show drill-down modal with widget details
+      onDrillDown(widget, data.data);
+    } else {
       toast({
         title: getBusinessName(widget.name),
         description: `Current value: ${businessValue}`,
@@ -238,14 +246,72 @@ const BusinessMetricCard: React.FC<{
   );
 };
 
+// Staggered Widget Renderer Component
+const StaggeredWidgetRenderer: React.FC<{
+  widget: any;
+  delay: number;
+  className?: string;
+}> = ({ widget, delay, className }) => {
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    // Add staggered delay to prevent simultaneous API calls
+    const timer = setTimeout(() => {
+      setShouldRender(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  // Convert GlobalWidget format to CustomWidget format for DynamicWidgetRenderer
+  const customWidget = {
+    id: widget.id,
+    name: widget.name,
+    description: widget.description,
+    pluginName: widget.pluginName,
+    instanceId: `${widget.pluginName}-main`,
+    queryType: 'custom' as const,
+    customQuery: widget.query,
+    queryMethod: widget.method,
+    queryParameters: widget.parameters || {},
+    displayType: widget.widgetType,
+    chartType: widget.chartType,
+    refreshInterval: widget.refreshInterval || 300,
+    placement: 'global-dashboard' as const,
+    styling: widget.displayConfig || {},
+    groupBy: widget.groupBy,
+    filters: []
+  };
+
+  if (!shouldRender) {
+    return (
+      <Card className={`h-72 ${className}`}>
+        <CardContent className="p-6 flex items-center justify-center">
+          <div className="text-center">
+            <Clock className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">Loading in {Math.ceil((delay) / 1000)}s...</p>
+            <p className="text-xs text-gray-400 mt-1">{widget.name}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <DynamicWidgetRenderer
+      key={widget.id}
+      widget={customWidget}
+      className={className}
+    />
+  );
+};
+
 export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
   className = '',
   maxColumns = 4, // Reduced for better business dashboard layout
   showOnlyActive = true,
   showOnlyGlobal = false,
 }) => {
-  const [widgetData, setWidgetData] = useState<Record<string, WidgetData>>({});
-  const [loadingWidgets, setLoadingWidgets] = useState<Record<string, boolean>>({});
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const { toast } = useToast();
 
@@ -297,68 +363,24 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
     });
   }, [widgets, showOnlyActive, showOnlyGlobal]);
 
-  // Execute widget query to get business data
-  const executeWidgetQuery = async (widget: Widget) => {
-    try {
-      setLoadingWidgets(prev => ({ ...prev, [widget.id]: true }));
-
-      const response = await fetch('/api/plugins/jira/instances/jira-main/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: widget.query,
-          method: widget.method,
-          parameters: widget.parameters,
-        }),
-      });
-
-      const result = await response.json();
-      
-      setWidgetData(prev => ({
-        ...prev,
-        [widget.id]: result
-      }));
-
-    } catch (error) {
-      console.error(`Business metric error for ${widget.name}:`, error);
-      setWidgetData(prev => ({
-        ...prev,
-        [widget.id]: {
-          success: false,
-          message: 'Data temporarily unavailable',
-          error: error
-        }
-      }));
-    } finally {
-      setLoadingWidgets(prev => ({ ...prev, [widget.id]: false }));
-    }
-  };
-
-  // Auto-execute all widgets on load
+  // Set refresh timestamp when widgets load
   useEffect(() => {
     if (filteredWidgets && filteredWidgets.length > 0) {
-      filteredWidgets.forEach(widget => {
-        executeWidgetQuery(widget);
-      });
       setLastRefresh(new Date());
+      console.log(`🎛️  Dashboard loaded with ${filteredWidgets.length} widgets`);
+      console.log('🕐 Staggered loading: 0s, 2s, 4s, 6s, 8s, 10s, 12s, 14s, 16s...');
     }
   }, [filteredWidgets]);
 
-  const refreshWidget = (widget: Widget) => {
-    executeWidgetQuery(widget);
-  };
-
   const refreshAllWidgets = () => {
-    filteredWidgets.forEach(widget => {
-      executeWidgetQuery(widget);
-    });
+    console.log(`🔄 Refreshing ${filteredWidgets.length} widgets with staggered timing...`);
+    
+    // Force refresh by updating timestamp - DynamicWidgetRenderer will handle individual refreshes
     setLastRefresh(new Date());
     toast({
-      title: "Business Metrics Refreshed",
-      description: "All business metrics have been updated with the latest data.",
+      title: "Global Widgets Refreshed",
+      description: "All widgets are updating with fresh data using staggered loading to prevent rate limiting.",
+      duration: 4000,
     });
   };
 
@@ -418,9 +440,8 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             onClick={refreshAllWidgets}
             variant="outline"
             size="sm"
-            disabled={Object.values(loadingWidgets).some(Boolean)}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${Object.values(loadingWidgets).some(Boolean) ? 'animate-spin' : ''}`} />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh All
           </Button>
         </div>
@@ -441,15 +462,19 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
         </Card>
       ) : (
         <div className={`grid gap-6 ${getGridClass()}`}>
-          {filteredWidgets.map((widget) => (
-            <BusinessMetricCard
-              key={widget.id}
-              widget={widget}
-              data={widgetData[widget.id] || null}
-              loading={loadingWidgets[widget.id] || false}
-              onRefresh={() => refreshWidget(widget)}
-            />
-          ))}
+          {filteredWidgets.map((widget: any, index: number) => {
+            // Faster staggering: 0s, 0.5s, 1s, 1.5s, 2s, etc. for immediate visible response
+            const staggerDelay = index * 500; // 0.5 second intervals for fast concurrent loading
+            
+            return (
+              <StaggeredWidgetRenderer
+                key={`${widget.id}-${lastRefresh.getTime()}`}
+                widget={widget}
+                delay={staggerDelay}
+                className="h-72"
+              />
+            );
+          })}
         </div>
       )}
     </div>

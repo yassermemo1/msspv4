@@ -20,7 +20,18 @@ import {
   Activity,
   Hash,
   Percent,
-  Target
+  Target,
+  Minus,
+  Clock,
+  Edit2,
+  Trash2,
+  Users,
+  Shield,
+  FileText,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Calendar
 } from 'lucide-react';
 import {
   BarChart,
@@ -94,6 +105,10 @@ interface DynamicWidgetRendererProps {
   previewData?: any; // For preview mode with test data
 }
 
+// Global rate limiting tracker (shared across all widget instances)
+const widgetLastRequestMap = new Map<string, number>();
+const RATE_LIMIT_INTERVAL = 60000; // 1 minute in milliseconds
+
 export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   widget,
   clientShortName,
@@ -130,7 +145,35 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // Check rate limiting silently - background refresh only
+      const widgetKey = `${widget.pluginName}-${widget.instanceId}-${widget.name}`;
+      const lastRequestTime = widgetLastRequestMap.get(widgetKey) || 0;
+      const timeSinceLastRequest = Date.now() - lastRequestTime;
+      
+      if (timeSinceLastRequest < RATE_LIMIT_INTERVAL) {
+        // Silently skip this request - schedule for later without UI feedback
+        const remainingTime = RATE_LIMIT_INTERVAL - timeSinceLastRequest;
+        console.log(`🔄 Background refresh: Widget "${widget.name}" will retry in ${Math.ceil(remainingTime / 1000)}s`);
+        
+        // Schedule automatic background retry
+        setTimeout(async () => {
+          await fetchData();
+        }, remainingTime + 1000); // Add 1 second buffer
+        
+        // Keep existing data visible, don't show loading or error
+        if (!data) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // Record request time
+      widgetLastRequestMap.set(widgetKey, Date.now());
+      
+      // Only show loading for initial load, not for background refreshes
+      if (!data) {
+        setLoading(true);
+      }
       setError(null);
 
       let endpoint = '';
@@ -230,23 +273,53 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           console.log('   Processed:', result.metadata?.query);
         }
       } else {
-        setError(result.message || 'Failed to fetch data');
-        console.error('❌ Widget API error:', result);
+        // Filter out rate limit errors from UI - handle silently in background
+        const isRateLimit = result.message?.includes('Rate limit') || 
+                          result.message?.includes('429') || 
+                          result.message?.includes('Too Many Requests');
         
-        // Enhanced error logging for parameter issues
-        if (result.message?.includes('parameter') || result.message?.includes('Parameter')) {
-          console.error('🔧 Parameter resolution may have failed. Check:');
-          console.error('   - Parameter configuration:', widget.queryParameters);
-          console.error('   - Available context:', pageContext);
-          console.error('   - Query template:', widget.customQuery || 'Default query');
+        if (isRateLimit) {
+          console.log('⏰ Background refresh rate limited, will retry later');
+          // Schedule retry without showing error to user
+          setTimeout(async () => {
+            await fetchData();
+          }, 65000); // Retry after 65 seconds
+        } else {
+          setError(result.message || 'Failed to fetch data');
+          console.error('❌ Widget API error:', result);
+          
+          // Enhanced error logging for parameter issues
+          if (result.message?.includes('parameter') || result.message?.includes('Parameter')) {
+            console.error('🔧 Parameter resolution may have failed. Check:');
+            console.error('   - Parameter configuration:', widget.queryParameters);
+            console.error('   - Available context:', pageContext);
+            console.error('   - Query template:', widget.customQuery || 'Default query');
+          }
         }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
-      setError(errorMessage);
-      console.error('💥 Widget fetch error:', err);
+      
+      // Filter out rate limit errors from UI
+      const isRateLimit = errorMessage.includes('Rate limit') || 
+                        errorMessage.includes('429') || 
+                        errorMessage.includes('Too Many Requests');
+      
+      if (isRateLimit) {
+        console.log('⏰ Background refresh rate limited, will retry later');
+        // Schedule retry without showing error to user
+        setTimeout(async () => {
+          await fetchData();
+        }, 65000); // Retry after 65 seconds
+      } else {
+        setError(errorMessage);
+        console.error('💥 Widget fetch error:', err);
+      }
     } finally {
-      setLoading(false);
+      // Only clear loading for initial loads or non-rate-limited requests
+      if (!data || !error?.includes('Rate limit')) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1187,6 +1260,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
                 }
               }}
               disabled={loading}
+              title="Refresh widget data"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>

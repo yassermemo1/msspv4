@@ -204,7 +204,7 @@ export function ClientLicenseForm({ clientId, licensePoolId, onSubmit, onCancel,
                       <SelectItem value="none">No Service Scope</SelectItem>
                       {serviceScopes.map((scope) => (
                         <SelectItem key={scope.id} value={scope.id.toString()}>
-                          {scope.name}
+                          {scope.description || `Scope ${scope.id}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
