@@ -146,6 +146,24 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     }
   }, [widget, clientShortName, clientName, clientDomain, previewData]);
 
+  // Add force refresh event listener for smart refresh system
+  useEffect(() => {
+    const handleForceRefresh = (event: CustomEvent) => {
+      const { widgetId, timestamp } = event.detail;
+      if (widgetId === widget.id) {
+        console.log(`🔄 Force refreshing widget: ${widget.name} at ${new Date(timestamp).toLocaleTimeString()}`);
+        fetchData();
+      }
+    };
+
+    // Listen for force refresh events
+    document.addEventListener('forceRefresh', handleForceRefresh as EventListener);
+    
+    return () => {
+      document.removeEventListener('forceRefresh', handleForceRefresh as EventListener);
+    };
+  }, [widget.id, widget.name]);
+
   const fetchData = async () => {
     try {
       // Check rate limiting silently - background refresh only

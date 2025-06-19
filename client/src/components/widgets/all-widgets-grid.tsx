@@ -362,6 +362,8 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [loadingWidgets, setLoadingWidgets] = useState<Set<string>>(new Set());
   const [retryCount, setRetryCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedWidgets, setRefreshedWidgets] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Track individual widget loading states
@@ -436,19 +438,77 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
     }
   }, [filteredWidgets]);
 
-  const refreshAllWidgets = useCallback(() => {
-    console.log(`🔄 Refreshing ${filteredWidgets.length} widgets with parallel loading...`);
+  // Smart staggered refresh that respects rate limits and provides fast feedback
+  const refreshAllWidgets = useCallback(async () => {
+    if (refreshing) return; // Prevent multiple simultaneous refreshes
     
-    // Increment retry count to trigger fresh fetch
-    setRetryCount(prev => prev + 1);
-    setLastRefresh(new Date());
+    setRefreshing(true);
+    setRefreshedWidgets(new Set());
     
+    console.log(`🔄 Smart refresh: ${filteredWidgets.length} widgets with optimized staggering...`);
+    
+    // Show immediate feedback
     toast({
-      title: "Widgets Refreshing",
-      description: `${filteredWidgets.length} widgets are updating simultaneously with fresh data.`,
-      duration: 3000,
+      title: "Smart Refresh Started",
+      description: `Refreshing ${filteredWidgets.length} widgets with optimized timing to prevent overload.`,
+      duration: 4000,
     });
-  }, [filteredWidgets.length, toast]);
+
+    try {
+      // Stagger refreshes to prevent API overload
+      // Group widgets into batches to prevent overwhelming the server
+      const BATCH_SIZE = 3; // Refresh 3 widgets at a time
+      const BATCH_DELAY = 2000; // 2 second delay between batches
+      const WIDGET_DELAY = 200; // 200ms delay between widgets in a batch
+
+      for (let i = 0; i < filteredWidgets.length; i += BATCH_SIZE) {
+        const batch = filteredWidgets.slice(i, i + BATCH_SIZE);
+        
+        // Process batch with internal staggering
+        batch.forEach((widget, batchIndex) => {
+          setTimeout(() => {
+            setRefreshedWidgets(prev => new Set([...prev, widget.id]));
+            
+            // Force widget refresh by updating its key
+            const widgetElement = document.querySelector(`[data-widget-id="${widget.id}"]`);
+            if (widgetElement) {
+              const refreshEvent = new CustomEvent('forceRefresh', { 
+                detail: { widgetId: widget.id, timestamp: Date.now() } 
+              });
+              widgetElement.dispatchEvent(refreshEvent);
+            }
+          }, batchIndex * WIDGET_DELAY);
+        });
+
+        // Wait before processing next batch (except for the last batch)
+        if (i + BATCH_SIZE < filteredWidgets.length) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+        }
+      }
+
+      // Update main refresh timestamp after all batches are scheduled
+      setTimeout(() => {
+        setLastRefresh(new Date());
+        setRefreshing(false);
+        
+        toast({
+          title: "Refresh Complete",
+          description: `All ${filteredWidgets.length} widgets have been refreshed successfully.`,
+          duration: 3000,
+        });
+      }, (Math.ceil(filteredWidgets.length / BATCH_SIZE) - 1) * BATCH_DELAY + BATCH_SIZE * WIDGET_DELAY + 1000);
+
+    } catch (error) {
+      console.error('Refresh error:', error);
+      setRefreshing(false);
+      toast({
+        title: "Refresh Error",
+        description: "Some widgets may not have updated. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
+  }, [filteredWidgets, refreshing, toast]);
 
   const getGridClass = useMemo(() => {
     const cols = Math.min(maxColumns, filteredWidgets.length);
@@ -537,6 +597,12 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
                 {loadingWidgets.size} loading
               </Badge>
             )}
+            {refreshing && (
+              <Badge variant="secondary" className="animate-pulse">
+                <Clock className="h-3 w-3 mr-1" />
+                Smart refresh in progress...
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex items-center space-x-4">
@@ -548,10 +614,10 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             onClick={refreshAllWidgets}
             variant="outline"
             size="sm"
-            disabled={loadingWidgets.size > 0}
+            disabled={refreshing || loadingWidgets.size > 0}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loadingWidgets.size > 0 ? 'animate-spin' : ''}`} />
-            Refresh All
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Smart Refresh'}
           </Button>
         </div>
       </div>
@@ -572,13 +638,18 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
       ) : (
         <div className={`grid gap-6 ${getGridClass}`}>
           {filteredWidgets.map((widget: any, index: number) => (
-            <AsyncWidgetRenderer
+            <div 
               key={`${widget.id}-${lastRefresh.getTime()}`}
-              widget={widget}
-              index={index}
-              className="h-72"
-              onLoadingStateChange={handleWidgetLoadingStateChange}
-            />
+              data-widget-id={widget.id}
+              className={`${refreshedWidgets.has(widget.id) ? 'ring-2 ring-blue-200 ring-opacity-50' : ''} transition-all duration-300`}
+            >
+              <AsyncWidgetRenderer
+                widget={widget}
+                index={index}
+                className="h-72"
+                onLoadingStateChange={handleWidgetLoadingStateChange}
+              />
+            </div>
           ))}
         </div>
       )}
