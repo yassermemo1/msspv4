@@ -8,9 +8,10 @@ import {
   PluginConfig
 } from './plugins/plugin-manager';
 import { db } from './db';
-import { savedQueries } from '@shared/schema';
+import * as schema from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { clients, contracts, services, users, proposals, serviceScopes } from '@shared/schema';
+
+const { savedQueries, clients, contracts, services, users, proposals, serviceScopes } = schema;
 
 const pluginRoutes = express.Router();
 

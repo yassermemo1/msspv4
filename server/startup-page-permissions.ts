@@ -1,5 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { pagePermissions } from '../shared/schema';
+import * as schema from '@shared/schema';
+
+const { pagePermissions } = schema;
 import { eq, inArray } from 'drizzle-orm';
 
 /**

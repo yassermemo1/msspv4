@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 import { storage } from './storage';
-import { Client, Contract, FinancialTransaction, User } from '@shared/schema';
+import * as schema from '@shared/schema';
+
+type Client = schema.Client;
+type Contract = schema.Contract;
+type FinancialTransaction = schema.FinancialTransaction;
+type User = schema.User;
 
 interface EmailConfig {
   host: string;

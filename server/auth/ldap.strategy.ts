@@ -1,7 +1,9 @@
 import { Strategy as LdapStrategy } from 'passport-ldapauth';
 import { getUserByLdapId, getUserByEmail, createUser } from '../storage';
 import { db } from '../db';
-import { companySettings } from '@shared/schema';
+import * as schema from '@shared/schema';
+
+const { companySettings } = schema;
 
 // LDAP Configuration interface
 interface LdapConfig {

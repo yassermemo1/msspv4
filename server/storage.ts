@@ -1,4 +1,7 @@
-import { 
+import * as schema from "@shared/schema";
+
+// Re-export the tables and types we need
+const {
   users, 
   userSettings,
   contracts, 
@@ -26,69 +29,69 @@ import {
   documentVersions,
   documentAccess,
   customWidgets,
-  userPreferences,
-  // clientExternalMappings, // removed deprecated external integrations
+  userPreferences
+} = schema;
 
-  type User,
-  type InsertUser,
-  type Client,
-  type InsertClient,
-  type Contract,
-  type InsertContract,
-  type Service,
-  type InsertService,
-  type FinancialTransaction,
-  type InsertFinancialTransaction,
-  type ClientContact,
-  type InsertClientContact,
-  type AuditLog,
-  type InsertAuditLog,
-  type SystemEvent,
-  type InsertSystemEvent,
-  type LicensePool,
-  type InsertLicensePool,
-  type HardwareAsset,
-  type InsertHardwareAsset,
-  type IndividualLicense,
-  type InsertIndividualLicense,
-  type Proposal,
-  type InsertProposal,
-  type ServiceAuthorizationForm,
-  type InsertServiceAuthorizationForm,
-  type CertificateOfCompliance,
-  type InsertCertificateOfCompliance,
-  type UserDashboardSetting,
-  type InsertUserDashboardSetting,
-  type ClientTeamAssignment,
-  type InsertClientTeamAssignment,
-  type ServiceScope,
-  type InsertServiceScope,
-  type UserSettings,
-  type InsertUserSettings,
-  type ClientHardwareAssignment,
-  type InsertClientHardwareAssignment,
-  type ClientLicense,
-  type InsertClientLicense,
-  type CustomField,
-  type InsertCustomField,
-  type CustomFieldValue,
-  type InsertCustomFieldValue,
-  type Document,
-  type InsertDocument,
-  type DocumentVersion,
-  type InsertDocumentVersion,
-  type DocumentAccess,
-  type InsertDocumentAccess,
-  type CustomWidget,
-  type InsertCustomWidget,
-  type UserPreference,
-  type InsertUserPreference,
-  PaginatedResponse,
-  PaginationParams,
-  ScopeDefinitionTemplateResponse,
-  type ServiceScopeField, 
-  type InsertServiceScopeField
-} from "@shared/schema";
+// Types
+type User = schema.User;
+type InsertUser = schema.InsertUser;
+type Client = schema.Client;
+type InsertClient = schema.InsertClient;
+type Contract = schema.Contract;
+type InsertContract = schema.InsertContract;
+type Service = schema.Service;
+type InsertService = schema.InsertService;
+type FinancialTransaction = schema.FinancialTransaction;
+type InsertFinancialTransaction = schema.InsertFinancialTransaction;
+type ClientContact = schema.ClientContact;
+type InsertClientContact = schema.InsertClientContact;
+type AuditLog = schema.AuditLog;
+type InsertAuditLog = schema.InsertAuditLog;
+type SystemEvent = schema.SystemEvent;
+type InsertSystemEvent = schema.InsertSystemEvent;
+type LicensePool = schema.LicensePool;
+type InsertLicensePool = schema.InsertLicensePool;
+type HardwareAsset = schema.HardwareAsset;
+type InsertHardwareAsset = schema.InsertHardwareAsset;
+type IndividualLicense = schema.IndividualLicense;
+type InsertIndividualLicense = schema.InsertIndividualLicense;
+type Proposal = schema.Proposal;
+type InsertProposal = schema.InsertProposal;
+type ServiceAuthorizationForm = schema.ServiceAuthorizationForm;
+type InsertServiceAuthorizationForm = schema.InsertServiceAuthorizationForm;
+type CertificateOfCompliance = schema.CertificateOfCompliance;
+type InsertCertificateOfCompliance = schema.InsertCertificateOfCompliance;
+type UserDashboardSetting = schema.UserDashboardSetting;
+type InsertUserDashboardSetting = schema.InsertUserDashboardSetting;
+type ClientTeamAssignment = schema.ClientTeamAssignment;
+type InsertClientTeamAssignment = schema.InsertClientTeamAssignment;
+type ServiceScope = schema.ServiceScope;
+type InsertServiceScope = schema.InsertServiceScope;
+type UserSettings = schema.UserSettings;
+type InsertUserSettings = schema.InsertUserSettings;
+type ClientHardwareAssignment = schema.ClientHardwareAssignment;
+type InsertClientHardwareAssignment = schema.InsertClientHardwareAssignment;
+type ClientLicense = schema.ClientLicense;
+type InsertClientLicense = schema.InsertClientLicense;
+type CustomField = schema.CustomField;
+type InsertCustomField = schema.InsertCustomField;
+type CustomFieldValue = schema.CustomFieldValue;
+type InsertCustomFieldValue = schema.InsertCustomFieldValue;
+type Document = schema.Document;
+type InsertDocument = schema.InsertDocument;
+type DocumentVersion = schema.DocumentVersion;
+type InsertDocumentVersion = schema.InsertDocumentVersion;
+type DocumentAccess = schema.DocumentAccess;
+type InsertDocumentAccess = schema.InsertDocumentAccess;
+type CustomWidget = schema.CustomWidget;
+type InsertCustomWidget = schema.InsertCustomWidget;
+type UserPreference = schema.UserPreference;
+type InsertUserPreference = schema.InsertUserPreference;
+type PaginatedResponse<T> = schema.PaginatedResponse<T>;
+type PaginationParams = schema.PaginationParams;
+type ScopeDefinitionTemplateResponse = schema.ScopeDefinitionTemplateResponse;
+type ServiceScopeField = schema.ServiceScopeField;
+type InsertServiceScopeField = schema.InsertServiceScopeField;
 import { db } from "./db";
 import { eq, desc, and, like, or, asc, gte, lte, sql, isNull, isNotNull, ne } from "drizzle-orm";
 import session from "express-session";

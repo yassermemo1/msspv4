@@ -6,21 +6,25 @@ import { scheduler } from "./scheduler";
 
 import passport from "passport";
 import packageJson from "../package.json";
-import { 
+// Import validation schemas and helper functions from schema
+const {
   insertClientSchema, insertClientContactSchema, insertServiceSchema,
   insertContractSchema, insertServiceScopeSchema, insertProposalSchema,
   insertLicensePoolSchema, insertClientLicenseSchema, insertHardwareAssetSchema,
   insertClientHardwareAssignmentSchema, insertFinancialTransactionSchema,
   insertClientTeamAssignmentSchema, insertCustomFieldSchema, insertCustomFieldValueSchema,
   insertDocumentSchema, insertDocumentVersionSchema, insertDocumentAccessSchema,
-  validateSAFClientConsistency, validateProposalClientConsistency, validateContractClientConsistency,
-  // Import all the table schemas needed for Drizzle queries
+  validateSAFClientConsistency, validateProposalClientConsistency, validateContractClientConsistency
+} = schema;
+
+// Import all the table schemas needed for Drizzle queries
+const {
   users, userSettings, companySettings, clients, clientContacts, contracts, proposals, services, serviceScopes, financialTransactions,
   serviceAuthorizationForms, certificatesOfCompliance, hardwareAssets, licensePools, clientLicenses, individualLicenses,
   clientHardwareAssignments, clientTeamAssignments, auditLogs, changeHistory, securityEvents, dataAccessLogs, documents, documentVersions, documentAccess,
   pagePermissions, savedSearches, searchHistory,
   serviceScopeFields, scopeVariableValues, userDashboardSettings, customWidgets
-} from "@shared/schema";
+} = schema;
 import { z } from "zod";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -48,7 +52,7 @@ import { type Client, type InsertClient, type User,
   type ServiceAuthorizationForm, type InsertServiceAuthorizationForm,
   type CertificateOfCompliance, type InsertCertificateOfCompliance,
   type CustomField, type InsertCustomField
-  } from "@shared/schema";
+  } from "../shared/schema";
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import csv from 'csv-parser';
