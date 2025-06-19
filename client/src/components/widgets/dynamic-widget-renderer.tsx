@@ -101,6 +101,7 @@ interface DynamicWidgetRendererProps {
   onEdit?: (widget: CustomWidget) => void;
   onDelete?: (widgetId: string) => void;
   onRefresh?: () => void; // For external refresh requests
+  onLoadingStateChange?: (state: 'loading' | 'loaded' | 'error', errorMessage?: string) => void; // For async loading tracking
   className?: string;
   previewData?: any; // For preview mode with test data
 }
@@ -117,6 +118,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   onEdit,
   onDelete,
   onRefresh,
+  onLoadingStateChange,
   className = '',
   previewData
 }) => {
@@ -131,6 +133,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       setData(previewData);
       setLastUpdate(new Date());
       setLoading(false);
+      onLoadingStateChange?.('loaded');
       return;
     }
     
@@ -173,6 +176,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       // Only show loading for initial load, not for background refreshes
       if (!data) {
         setLoading(true);
+        onLoadingStateChange?.('loading');
       }
       setError(null);
 
@@ -261,6 +265,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if (result.success) {
         setData(result.data);
         setLastUpdate(new Date());
+        onLoadingStateChange?.('loaded');
         console.log('✅ Widget data loaded successfully');
         
         // Log parameter resolution results if available
@@ -286,6 +291,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           }, 65000); // Retry after 65 seconds
         } else {
           setError(result.message || 'Failed to fetch data');
+          onLoadingStateChange?.('error', result.message || 'Failed to fetch data');
           console.error('❌ Widget API error:', result);
           
           // Enhanced error logging for parameter issues
@@ -313,6 +319,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         }, 65000); // Retry after 65 seconds
       } else {
         setError(errorMessage);
+        onLoadingStateChange?.('error', errorMessage);
         console.error('💥 Widget fetch error:', err);
       }
     } finally {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -246,22 +246,40 @@ const BusinessMetricCard: React.FC<{
   );
 };
 
-// Staggered Widget Renderer Component
-const StaggeredWidgetRenderer: React.FC<{
+// Enhanced Asynchronous Widget Renderer Component with independent loading
+const AsyncWidgetRenderer: React.FC<{
   widget: any;
-  delay: number;
+  index: number;
   className?: string;
-}> = ({ widget, delay, className }) => {
-  const [shouldRender, setShouldRender] = useState(false);
+  onLoadingStateChange?: (widgetId: string, isLoading: boolean) => void;
+}> = ({ widget, index, className, onLoadingStateChange }) => {
+  const [loadingState, setLoadingState] = useState<'pending' | 'loading' | 'loaded' | 'error'>('pending');
+  const [shouldMount, setShouldMount] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Add staggered delay to prevent simultaneous API calls
-    const timer = setTimeout(() => {
-      setShouldRender(true);
-    }, delay);
+    // Immediate mounting - no artificial delays
+    // Use RAF to ensure smooth rendering performance
+    const rafId = requestAnimationFrame(() => {
+      setShouldMount(true);
+      setLoadingState('loading');
+      onLoadingStateChange?.(widget.id, true);
+    });
 
-    return () => clearTimeout(timer);
-  }, [delay]);
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [widget.id, onLoadingStateChange]);
+
+  const handleWidgetStateChange = (state: 'loading' | 'loaded' | 'error', errorMessage?: string) => {
+    setLoadingState(state);
+    if (state === 'error' && errorMessage) {
+      setError(errorMessage);
+    }
+    if (state !== 'loading') {
+      onLoadingStateChange?.(widget.id, false);
+    }
+  };
 
   // Convert GlobalWidget format to CustomWidget format for DynamicWidgetRenderer
   const customWidget = {
@@ -283,14 +301,40 @@ const StaggeredWidgetRenderer: React.FC<{
     filters: []
   };
 
-  if (!shouldRender) {
+  if (!shouldMount) {
     return (
-      <Card className={`h-72 ${className}`}>
+      <Card className={`h-72 ${className} opacity-0 animate-in fade-in duration-300`}>
         <CardContent className="p-6 flex items-center justify-center">
           <div className="text-center">
-            <Clock className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">Loading in {Math.ceil((delay) / 1000)}s...</p>
-            <p className="text-xs text-gray-400 mt-1">{widget.name}</p>
+            <div className="w-8 h-8 bg-gray-200 rounded-full mx-auto mb-2 animate-pulse" />
+            <p className="text-sm text-gray-400">Preparing...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loadingState === 'error') {
+    return (
+      <Card className={`h-72 ${className} border-red-200 bg-red-50 animate-in fade-in duration-300`}>
+        <CardContent className="p-6 flex items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-700 font-medium">{widget.name}</p>
+            <p className="text-xs text-red-600 mt-1">{error || 'Failed to load'}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2 text-red-600 border-red-300 hover:bg-red-100"
+              onClick={() => {
+                setLoadingState('loading');
+                setError(null);
+                handleWidgetStateChange('loading');
+              }}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Retry
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -298,33 +342,51 @@ const StaggeredWidgetRenderer: React.FC<{
   }
 
   return (
-    <DynamicWidgetRenderer
-      key={widget.id}
-      widget={customWidget}
-      className={className}
-    />
+    <div className={`animate-in fade-in duration-300 ${className}`} style={{ animationDelay: `${index * 50}ms` }}>
+      <DynamicWidgetRenderer
+        key={widget.id}
+        widget={customWidget}
+        className="h-72"
+        onLoadingStateChange={handleWidgetStateChange}
+      />
+    </div>
   );
 };
 
 export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
   className = '',
-  maxColumns = 4, // Reduced for better business dashboard layout
+  maxColumns = 4,
   showOnlyActive = true,
   showOnlyGlobal = false,
 }) => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [loadingWidgets, setLoadingWidgets] = useState<Set<string>>(new Set());
+  const [retryCount, setRetryCount] = useState(0);
   const { toast } = useToast();
 
-  // Fetch all widgets
-  const { data: widgets, isLoading: widgetsLoading, refetch: refetchWidgets } = useQuery({
-    queryKey: ['business-metrics'],
+  // Track individual widget loading states
+  const handleWidgetLoadingStateChange = useCallback((widgetId: string, isLoading: boolean) => {
+    setLoadingWidgets(prev => {
+      const newSet = new Set(prev);
+      if (isLoading) {
+        newSet.add(widgetId);
+      } else {
+        newSet.delete(widgetId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Fetch all widgets with React Query for better caching and error handling
+  const { data: widgets, isLoading: widgetsLoading, error: widgetsError, refetch: refetchWidgets } = useQuery({
+    queryKey: ['business-metrics', retryCount],
     queryFn: async () => {
       const response = await fetch('/api/widgets/manage', {
         credentials: 'include'
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch business metrics');
+        throw new Error(`Failed to fetch business metrics: ${response.statusText}`);
       }
       
       const data = await response.json();
@@ -332,10 +394,12 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
     },
     staleTime: 60000, // 1 minute for business data
     refetchInterval: 300000, // Auto-refresh every 5 minutes
+    retry: 3,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Filter widgets based on props
-  const filteredWidgets = React.useMemo(() => {
+  // Filter widgets based on props with memoization for performance
+  const filteredWidgets = useMemo(() => {
     if (!widgets) return [];
     
     let filtered = widgets;
@@ -367,24 +431,26 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
   useEffect(() => {
     if (filteredWidgets && filteredWidgets.length > 0) {
       setLastRefresh(new Date());
-      console.log(`🎛️  Dashboard loaded with ${filteredWidgets.length} widgets`);
-      console.log('🕐 Staggered loading: 0s, 2s, 4s, 6s, 8s, 10s, 12s, 14s, 16s...');
+      console.log(`🚀 Dashboard loaded with ${filteredWidgets.length} widgets - PARALLEL LOADING ENABLED`);
+      console.log('⚡ All widgets loading simultaneously for maximum performance');
     }
   }, [filteredWidgets]);
 
-  const refreshAllWidgets = () => {
-    console.log(`🔄 Refreshing ${filteredWidgets.length} widgets with staggered timing...`);
+  const refreshAllWidgets = useCallback(() => {
+    console.log(`🔄 Refreshing ${filteredWidgets.length} widgets with parallel loading...`);
     
-    // Force refresh by updating timestamp - DynamicWidgetRenderer will handle individual refreshes
+    // Increment retry count to trigger fresh fetch
+    setRetryCount(prev => prev + 1);
     setLastRefresh(new Date());
+    
     toast({
-      title: "Global Widgets Refreshed",
-      description: "All widgets are updating with fresh data using staggered loading to prevent rate limiting.",
-      duration: 4000,
+      title: "Widgets Refreshing",
+      description: `${filteredWidgets.length} widgets are updating simultaneously with fresh data.`,
+      duration: 3000,
     });
-  };
+  }, [filteredWidgets.length, toast]);
 
-  const getGridClass = () => {
+  const getGridClass = useMemo(() => {
     const cols = Math.min(maxColumns, filteredWidgets.length);
     const gridCols = {
       1: 'grid-cols-1',
@@ -395,8 +461,9 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
       6: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6',
     };
     return gridCols[cols as keyof typeof gridCols] || 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-  };
+  }, [maxColumns, filteredWidgets.length]);
 
+  // Loading state for initial widget list fetch
   if (widgetsLoading) {
     return (
       <div className={`space-y-6 ${className}`}>
@@ -406,9 +473,9 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             <p className="text-gray-600">Loading business metrics...</p>
           </div>
         </div>
-        <div className={`grid gap-6 ${getGridClass()}`}>
+        <div className={`grid gap-6 ${getGridClass}`}>
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="h-48 animate-pulse">
+            <Card key={i} className="h-72 animate-pulse">
               <CardContent className="p-6">
                 <div className="space-y-4">
                   <div className="h-4 bg-gray-200 rounded w-3/4"></div>
@@ -423,13 +490,54 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
     );
   }
 
+  // Error state for widget list fetch
+  if (widgetsError) {
+    return (
+      <div className={`space-y-6 ${className}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Business Dashboard</h2>
+            <p className="text-red-600">Failed to load business metrics</p>
+          </div>
+        </div>
+        <Card className="p-12 text-center border-red-200 bg-red-50">
+          <div className="space-y-4">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+            <div>
+              <h3 className="text-lg font-medium text-red-900">Unable to Load Widgets</h3>
+              <p className="text-red-700 mt-2">
+                {widgetsError instanceof Error ? widgetsError.message : 'Unknown error occurred'}
+              </p>
+              <Button 
+                onClick={() => refetchWidgets()} 
+                className="mt-4"
+                variant="outline"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Business Dashboard Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Business Dashboard</h2>
-          <p className="text-gray-600">Real-time business metrics and performance indicators</p>
+          <div className="flex items-center space-x-4 mt-1">
+            <p className="text-gray-600">Real-time business metrics and performance indicators</p>
+            {loadingWidgets.size > 0 && (
+              <Badge variant="outline" className="animate-pulse">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                {loadingWidgets.size} loading
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-500">
@@ -440,8 +548,9 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             onClick={refreshAllWidgets}
             variant="outline"
             size="sm"
+            disabled={loadingWidgets.size > 0}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className={`h-4 w-4 mr-2 ${loadingWidgets.size > 0 ? 'animate-spin' : ''}`} />
             Refresh All
           </Button>
         </div>
@@ -461,20 +570,16 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
           </div>
         </Card>
       ) : (
-        <div className={`grid gap-6 ${getGridClass()}`}>
-          {filteredWidgets.map((widget: any, index: number) => {
-            // Faster staggering: 0s, 0.5s, 1s, 1.5s, 2s, etc. for immediate visible response
-            const staggerDelay = index * 500; // 0.5 second intervals for fast concurrent loading
-            
-            return (
-              <StaggeredWidgetRenderer
-                key={`${widget.id}-${lastRefresh.getTime()}`}
-                widget={widget}
-                delay={staggerDelay}
-                className="h-72"
-              />
-            );
-          })}
+        <div className={`grid gap-6 ${getGridClass}`}>
+          {filteredWidgets.map((widget: any, index: number) => (
+            <AsyncWidgetRenderer
+              key={`${widget.id}-${lastRefresh.getTime()}`}
+              widget={widget}
+              index={index}
+              className="h-72"
+              onLoadingStateChange={handleWidgetLoadingStateChange}
+            />
+          ))}
         </div>
       )}
     </div>
