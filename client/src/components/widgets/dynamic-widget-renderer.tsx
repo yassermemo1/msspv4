@@ -62,7 +62,7 @@ interface CustomWidget {
   queryMethod: string;
   queryParameters: Record<string, any>;
   displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
-               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic';
+               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic' | 'cards';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number;
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -87,6 +87,17 @@ interface CustomWidget {
     aggregationFunction?: 'count' | 'sum' | 'avg' | 'min' | 'max';
     limit?: number; // Limit number of groups
     sortBy?: 'asc' | 'desc'; // Sort groups by value
+  };
+  fieldSelection?: {
+    enabled: boolean;
+    selectedFields: string[];
+    excludeNullFields?: boolean;
+  };
+  chainedQuery?: {
+    enabled: boolean;
+    lookupQuery: string;
+    lookupField: string;
+    targetField: string;
   };
   enabled?: boolean;
   createdAt?: string;
@@ -269,7 +280,9 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           method: widget.queryMethod,
           parameters: widget.queryParameters,
           filters: widget.filters || [],
-          context: pageContext
+          context: pageContext,
+          chainedQuery: widget.chainedQuery,
+          fieldSelection: widget.fieldSelection
         };
       } else {
         throw new Error('Invalid widget configuration');
@@ -423,6 +436,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         return renderStatistic();
       case 'summary':
         return renderSummary();
+      case 'cards':
+        return renderCards();
       default:
         return <div>Unsupported display type: {widget.displayType}</div>;
     }
@@ -1248,6 +1263,146 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
             {widget.description}
           </div>
         )}
+      </div>
+    );
+  };
+
+  const renderCards = () => {
+    let cardsData: Record<string, any> = {};
+    
+    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+      // If data is already an object, use it directly
+      cardsData = data;
+    } else if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+      // If data is an array of objects, use the first object
+      cardsData = data[0];
+    } else {
+      // Fallback
+      cardsData = { 'Value': String(data) };
+    }
+
+    // Apply field selection if enabled
+    if (widget.fieldSelection?.enabled && widget.fieldSelection.selectedFields.length > 0) {
+      const selectedData: any = {};
+      widget.fieldSelection.selectedFields.forEach(field => {
+        if (field in cardsData) {
+          selectedData[field] = cardsData[field];
+        }
+      });
+      cardsData = selectedData;
+    }
+
+    // Filter out null/undefined values if configured
+    if (widget.fieldSelection?.excludeNullFields) {
+      const filteredData: any = {};
+      Object.entries(cardsData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+          filteredData[key] = value;
+        }
+      });
+      cardsData = filteredData;
+    }
+
+    // Icon mapping for known field types
+    const getIconForField = (fieldName: string) => {
+      const name = fieldName.toLowerCase();
+      if (name.includes('server')) return <Shield className="h-5 w-5 text-blue-500" />;
+      if (name.includes('workstation') || name.includes('endpoint')) return <Users className="h-5 w-5 text-green-500" />;
+      if (name.includes('online')) return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+      if (name.includes('offline')) return <XCircle className="h-5 w-5 text-red-500" />;
+      if (name.includes('active')) return <Activity className="h-5 w-5 text-blue-500" />;
+      if (name.includes('count') || name.includes('total')) return <Hash className="h-5 w-5 text-purple-500" />;
+      if (name.includes('warning') || name.includes('alert')) return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+      if (name.includes('date') || name.includes('time')) return <Calendar className="h-5 w-5 text-gray-500" />;
+      if (name.includes('contract') || name.includes('scope')) return <FileText className="h-5 w-5 text-indigo-500" />;
+      return <Target className="h-5 w-5 text-gray-400" />;
+    };
+
+    // Format field names for display
+    const formatFieldName = (fieldName: string) => {
+      return fieldName
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase())
+        .replace(/_/g, ' ')
+        .trim();
+    };
+
+    // Format values based on type
+    const formatValue = (value: any, fieldName: string) => {
+      if (value === null || value === undefined) return 'N/A';
+      
+      const name = fieldName.toLowerCase();
+      if (name.includes('date') || name.includes('time')) {
+        try {
+          return new Date(value).toLocaleString();
+        } catch {
+          return String(value);
+        }
+      }
+      
+      if (typeof value === 'number') {
+        return value.toLocaleString();
+      }
+      
+      if (typeof value === 'boolean') {
+        return value ? 'Yes' : 'No';
+      }
+      
+      return String(value);
+    };
+
+    // Get card color based on field name or value
+    const getCardColor = (fieldName: string, value: any) => {
+      const name = fieldName.toLowerCase();
+      
+      if (name.includes('online') && typeof value === 'number' && value > 0) {
+        return 'bg-green-50 border-green-200';
+      }
+      if (name.includes('offline') && typeof value === 'number' && value > 0) {
+        return 'bg-red-50 border-red-200';
+      }
+      if (name.includes('warning') || name.includes('alert')) {
+        return 'bg-yellow-50 border-yellow-200';
+      }
+      if (name.includes('active')) {
+        return 'bg-blue-50 border-blue-200';
+      }
+      
+      return 'bg-gray-50 border-gray-200';
+    };
+
+    const entries = Object.entries(cardsData);
+    
+    if (entries.length === 0) {
+      return (
+        <div className="text-center text-gray-500 py-8">
+          No data to display
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+        {entries.map(([key, value], index) => (
+          <div
+            key={index}
+            className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${getCardColor(key, value)}`}
+          >
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 mt-1">
+                {getIconForField(key)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600 truncate">
+                  {formatFieldName(key)}
+                </p>
+                <p className="text-lg font-semibold text-gray-900 mt-1">
+                  {formatValue(value, key)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   };

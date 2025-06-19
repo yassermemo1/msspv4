@@ -84,7 +84,7 @@ interface CustomWidget {
   queryMethod: string;
   queryParameters: Record<string, any>;
   displayType: 'table' | 'chart' | 'metric' | 'list' | 'gauge' | 'query' | 
-               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic';
+               'number' | 'percentage' | 'progress' | 'trend' | 'summary' | 'statistic' | 'cards';
   chartType?: 'bar' | 'line' | 'pie' | 'area';
   refreshInterval: number; // seconds
   placement: 'client-details' | 'global-dashboard' | 'custom';
@@ -105,6 +105,17 @@ interface CustomWidget {
     aggregationFunction?: 'count' | 'sum' | 'avg' | 'min' | 'max';
     limit?: number; // Limit number of groups
     sortBy?: 'asc' | 'desc'; // Sort groups by value
+  };
+  fieldSelection?: {
+    enabled: boolean;
+    selectedFields: string[];
+    excludeNullFields?: boolean;
+  };
+  chainedQuery?: {
+    enabled: boolean;
+    lookupQuery: string; // First query to get tenant info
+    lookupField: string; // Field to extract from lookup (e.g., 'id')
+    targetField: string; // Where to inject in main query (e.g., 'tenantId')
   };
 }
 
@@ -150,7 +161,12 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
       showBorder: true,
       showHeader: true
     },
-    filters: []
+    filters: [],
+    fieldSelection: {
+      enabled: false,
+      selectedFields: [],
+      excludeNullFields: true
+    }
   });
 
   // Load plugins on component mount
@@ -832,6 +848,31 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                         rows={4}
                         className="font-mono"
                       />
+                      {widget.pluginName === 'generic-api' && (
+                        <div className="mt-2">
+                          {(() => {
+                            try {
+                              if (widget.customQuery) {
+                                JSON.parse(widget.customQuery);
+                                return (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Valid JSON
+                                  </Badge>
+                                );
+                              }
+                            } catch (e) {
+                              return (
+                                <Badge variant="outline" className="bg-red-50 text-red-700">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  Invalid JSON: {(e as Error).message}
+                                </Badge>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="query-method">Method</Label>
@@ -851,6 +892,24 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                       </Select>
                     </div>
                   </div>
+                  
+                  {widget.pluginName === 'generic-api' && (
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800">
+                        <strong>JSON Format Required:</strong> For Generic API, provide a JSON object with these fields:
+                        <pre className="mt-2 text-xs bg-white p-2 rounded border">
+{`{
+  "method": "POST",
+  "endpoint": "/api/path",
+  "headers": { "custom-header": "value" },
+  "body": { "your": "payload" },
+  "verifySsl": false
+}`}
+                        </pre>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               )}
 
@@ -1133,6 +1192,14 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                         <div className="flex items-center">
                           <Eye className="h-4 w-4 mr-2" />
                           Summary Card
+                        </div>
+                      </SelectItem>
+                      
+                      {/* Cards Display */}
+                      <SelectItem value="cards">
+                        <div className="flex items-center">
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Service Detail Cards
                         </div>
                       </SelectItem>
                       
@@ -1660,6 +1727,122 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
               </div>
 
               <Separator />
+
+              {widget.displayType === 'cards' && (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label>Field Selection</Label>
+                      {availableFields.length > 0 && (
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          {availableFields.length} fields available
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-4 mt-2 p-4 border rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="enable-field-selection"
+                          checked={widget.fieldSelection?.enabled || false}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setWidget({
+                                ...widget,
+                                fieldSelection: {
+                                  enabled: true,
+                                  selectedFields: [],
+                                  excludeNullFields: true
+                                }
+                              });
+                            } else {
+                              setWidget({ ...widget, fieldSelection: undefined });
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <Label htmlFor="enable-field-selection" className="text-sm font-medium">
+                          Enable Field Selection
+                        </Label>
+                      </div>
+
+                      {widget.fieldSelection?.enabled && (
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="exclude-null-fields"
+                              checked={widget.fieldSelection.excludeNullFields || false}
+                              onChange={(e) => setWidget({
+                                ...widget,
+                                fieldSelection: {
+                                  ...widget.fieldSelection!,
+                                  excludeNullFields: e.target.checked
+                                }
+                              })}
+                              className="rounded"
+                            />
+                            <Label htmlFor="exclude-null-fields" className="text-sm">
+                              Exclude null/empty fields
+                            </Label>
+                          </div>
+
+                          {availableFields.length > 0 ? (
+                            <div>
+                              <Label>Select Fields to Display</Label>
+                              <div className="mt-2 space-y-2 max-h-48 overflow-y-auto border rounded p-2 bg-white">
+                                {availableFields.map(field => (
+                                  <label key={field} className="flex items-center space-x-2 hover:bg-gray-50 p-1 rounded">
+                                    <input
+                                      type="checkbox"
+                                      checked={widget.fieldSelection?.selectedFields.includes(field) || false}
+                                      onChange={(e) => {
+                                        const fields = widget.fieldSelection?.selectedFields || [];
+                                        if (e.target.checked) {
+                                          setWidget({
+                                            ...widget,
+                                            fieldSelection: {
+                                              ...widget.fieldSelection!,
+                                              selectedFields: [...fields, field]
+                                            }
+                                          });
+                                        } else {
+                                          setWidget({
+                                            ...widget,
+                                            fieldSelection: {
+                                              ...widget.fieldSelection!,
+                                              selectedFields: fields.filter(f => f !== field)
+                                            }
+                                          });
+                                        }
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <span className="text-sm">{field}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {widget.fieldSelection?.selectedFields.length || 0} fields selected
+                                {widget.fieldSelection?.selectedFields.length === 0 && ' (all fields will be shown)'}
+                              </p>
+                            </div>
+                          ) : (
+                            <Alert className="bg-blue-50 border-blue-200">
+                              <Activity className="h-4 w-4 text-blue-600" />
+                              <AlertDescription className="text-blue-800">
+                                Test your query first to populate available fields
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
 
               <div>
                 <Label htmlFor="refresh-interval">Refresh Interval (seconds)</Label>

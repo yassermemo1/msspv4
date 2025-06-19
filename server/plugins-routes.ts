@@ -388,7 +388,7 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/validate-query', requireAu
 pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async (req, res) => {
   try {
     const { pluginName, instanceId } = req.params;
-    const { query, method = 'GET', parameters = {}, filters = [], opts = {}, saveAs, context = {} } = req.body;
+    const { query, method = 'GET', parameters = {}, filters = [], opts = {}, saveAs, context = {}, chainedQuery, fieldSelection } = req.body;
     
     const plugin = getPlugin(pluginName);
     if (!plugin) {
@@ -466,8 +466,17 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
       console.log(`   Query after filters: ${processedQuery}`);
     }
     
+    // Pass widget configuration to plugin
+    const enhancedOpts = {
+      ...opts,
+      parameters,
+      context,
+      chainedQuery,
+      fieldSelection
+    };
+    
     const startTime = Date.now();
-    const data = await plugin.executeQuery(processedQuery, method, instanceId, opts);
+    const data = await plugin.executeQuery(processedQuery, method, instanceId, enhancedOpts);
     const responseTime = Date.now() - startTime;
 
     // Apply post-query filtering if needed (for APIs that don't support query-based filtering)

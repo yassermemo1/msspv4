@@ -22,6 +22,7 @@ import "./plugins/splunk-plugin";
 import "./plugins/elastic-plugin";
 import "./plugins/grafana-plugin";
 import "./plugins/fortigate-plugin";
+import "./plugins/generic-api-plugin";
 // Skip problematic plugins for now
 // import "./plugins/paloalto-plugin";
 // import "./plugins/carbonblack-plugin";

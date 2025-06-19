@@ -52,7 +52,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
-import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
+import { getStatusColor, getStatusIcon, getStatusVariant } from '@/lib/status-utils';
 import { JiraTicketsKpi } from '@/components/widgets/jira-tickets-kpi';
 import { DynamicWidgetRenderer } from '@/components/widgets/dynamic-widget-renderer';
 import { GlobalClientWidgets } from '@/components/widgets/global-client-widgets';
@@ -905,6 +905,7 @@ export default function ClientDetailPage() {
                 <TabsTrigger value="contracts">Contracts</TabsTrigger>
                 <TabsTrigger value="proposals">Proposals ({proposals.length})</TabsTrigger>
                 <TabsTrigger value="services">Services ({clientServiceScopes.length})</TabsTrigger>
+                <TabsTrigger value="mdr-service">MDR Service Details</TabsTrigger>
                 <TabsTrigger value="licenses">Licenses ({clientLicenses.length})</TabsTrigger>
                 <TabsTrigger value="individual-licenses">Individual Licenses ({clientIndividualLicenses.length})</TabsTrigger>
                 <TabsTrigger value="assets">Assets ({clientHardwareAssignments.length})</TabsTrigger>
@@ -1214,8 +1215,117 @@ export default function ClientDetailPage() {
                     )}
                   </CardContent>
                 </Card>
+                            </TabsContent>
+              
+              <TabsContent value="mdr-service">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Shield className="h-5 w-5 mr-2 text-blue-600" />
+                      MDR Service Details
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Real-time MDR tenant visibility and endpoint statistics for {client.name}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {client.shortName ? (
+                      <DynamicWidgetRenderer
+                        widget={{
+                          id: 'mdr-service-details',
+                          name: 'Client Service Details',
+                          description: 'Displays MDR service details for the current client',
+                          pluginName: 'generic-api',
+                          instanceId: 'mdr-main',
+                          queryType: 'custom',
+                          customQuery: JSON.stringify({
+                            method: 'POST',
+                            endpoint: '/tenant-visibility/basic-data',
+                            body: {
+                              paginationAndSorting: {
+                                currentPage: 1,
+                                pageSize: 10,
+                                sortProperty: 'id',
+                                sortDirection: 'ASC'
+                              },
+                              command: {
+                                tenantId: [0]
+                              }
+                            }
+                          }),
+                          queryMethod: 'POST',
+                          queryParameters: {
+                            clientShortName: {
+                              source: 'context',
+                              contextVar: 'clientShortName'
+                            }
+                          },
+                          displayType: 'cards',
+                          refreshInterval: 300,
+                          placement: 'client-details',
+                          styling: {
+                            width: 'full',
+                            height: 'large',
+                            showBorder: false,
+                            showHeader: false
+                          },
+                          fieldSelection: {
+                            enabled: true,
+                            selectedFields: [
+                              'onlineServerEndpointCount',
+                              'onlineWorkstationEndpointCount', 
+                              'activeWorkstationEndpointCount',
+                              'contractScope',
+                              'currentScopeServers',
+                              'currentScopeWorkstations',
+                              'actualScopeServers',
+                              'actualScopeWorkstations',
+                              'lastEndpointUpdate',
+                              'lastNetworkUpdate',
+                              'workstationCount',
+                              'workstationOnlineCount',
+                              'workstationOfflineCount',
+                              'serverCount',
+                              'serverOnlineCount',
+                              'serverOfflineCount'
+                            ],
+                            excludeNullFields: true
+                          },
+                          chainedQuery: {
+                            enabled: true,
+                            lookupQuery: JSON.stringify({
+                              method: 'POST',
+                              endpoint: '/tenant/filter',
+                              body: {
+                                paginationAndSorting: {
+                                  currentPage: 1,
+                                  pageSize: 300,
+                                  sortProperty: 'id',
+                                  sortDirection: 'ASC'
+                                }
+                              }
+                            }),
+                            lookupField: 'id',
+                            targetField: 'tenantId'
+                          }
+                        }}
+                        clientShortName={client.shortName}
+                        clientName={client.name}
+                        clientDomain={client.domain || undefined}
+                      />
+                    ) : (
+                      <div className="text-center py-12">
+                        <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No MDR Service Data</h3>
+                        <p className="text-gray-500">
+                          Client short name is required to fetch MDR service details.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
-
+              
               <TabsContent value="licenses">
                 <Card>
                   <CardHeader>
