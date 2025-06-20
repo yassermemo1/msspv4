@@ -303,21 +303,21 @@ const AsyncWidgetRenderer: React.FC<{
 
   if (!shouldMount) {
     return (
-      <Card className={`h-72 ${className} opacity-0 animate-in fade-in duration-300`}>
-        <CardContent className="p-6 flex items-center justify-center">
+      <div className={`${className} opacity-0 animate-in fade-in duration-300 bg-white rounded-lg shadow-sm border border-gray-200`}>
+        <div className="p-6 flex items-center justify-center h-48">
           <div className="text-center">
             <div className="w-8 h-8 bg-gray-200 rounded-full mx-auto mb-2 animate-pulse" />
             <p className="text-sm text-gray-400">Preparing...</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   if (loadingState === 'error') {
     return (
-      <Card className={`h-72 ${className} border-red-200 bg-red-50 animate-in fade-in duration-300`}>
-        <CardContent className="p-6 flex items-center justify-center">
+      <div className={`${className} border-red-200 bg-red-50 animate-in fade-in duration-300 rounded-lg shadow-sm`}>
+        <div className="p-6 flex items-center justify-center h-48">
           <div className="text-center">
             <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
             <p className="text-sm text-red-700 font-medium">{widget.name}</p>
@@ -336,8 +336,8 @@ const AsyncWidgetRenderer: React.FC<{
               Retry
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -346,7 +346,7 @@ const AsyncWidgetRenderer: React.FC<{
       <DynamicWidgetRenderer
         key={widget.id}
         widget={customWidget}
-        className="h-72"
+        className=""
         onLoadingStateChange={handleWidgetStateChange}
       />
     </div>
@@ -533,17 +533,19 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             <p className="text-gray-600">Loading business metrics...</p>
           </div>
         </div>
-        <div className={`grid gap-6 ${getGridClass}`}>
+        <div className={`grid gap-4 ${getGridClass}`}>
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="h-72 animate-pulse">
-              <CardContent className="p-6">
+            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 animate-pulse">
+              <div className="p-4 border-b border-gray-100">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              </div>
+              <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 h-48">
                 <div className="space-y-4">
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                   <div className="h-8 bg-gray-200 rounded w-1/2"></div>
                   <div className="h-4 bg-gray-200 rounded w-2/3"></div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -636,7 +638,7 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
           </div>
         </Card>
       ) : (
-        <div className={`grid gap-6 ${getGridClass}`}>
+        <div className={`grid gap-4 ${getGridClass}`}>
           {filteredWidgets.map((widget: any, index: number) => (
             <div 
               key={`${widget.id}-${lastRefresh.getTime()}`}
@@ -646,7 +648,7 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
               <AsyncWidgetRenderer
                 widget={widget}
                 index={index}
-                className="h-72"
+                className=""
                 onLoadingStateChange={handleWidgetLoadingStateChange}
               />
             </div>

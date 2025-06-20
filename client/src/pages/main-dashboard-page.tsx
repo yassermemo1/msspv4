@@ -4,7 +4,7 @@ import EnhancedDashboard from '@/components/dashboard/enhanced-dashboard';
 
 export default function MainDashboardPage() {
   return (
-    <AppLayout title="Executive Dashboard" subtitle="Real-time insights and analytics">
+    <AppLayout title="Business Metrics" subtitle="Key performance indicators and analytics">
       <div className="p-6">
         <EnhancedDashboard />
       </div>

@@ -811,69 +811,18 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
   return (
     <div className={className}>
 
-      {/* Dashboard Controls */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Dashboard Overview</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {getCurrentTimeRangeDescription()}
-              {stats?.periodInfo && (
-                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                  {stats.periodInfo.description}
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <Select value={selectedTimeRange} onValueChange={setSelectedTimeRange}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {timeRangeOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div>
-                      <div className="font-medium">{option.label}</div>
-                      <div className="text-xs text-muted-foreground">{option.description}</div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => refetch()} variant="outline" size="sm">
-              <Activity className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <GlobalFilters
-          filters={filterOptions}
-          values={filters}
-          onChange={setFilters}
-          onClear={() => setFilters({})}
-          compact={true}
-          className="mb-4"
-        />
-      </div>
-
-      {/* Dashboard Cards Section - REMOVED: Now integrated into Business Metrics Dashboard */}
-      {/* <div className="mb-8">
-        ...Dashboard Overview section removed...
-      </div> */}
 
       {/* Business Metrics Dashboard */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2">
-            <h2 className="text-xl font-semibold text-gray-900">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
               Business Metrics Dashboard
             </h2>
-            <Badge variant="outline" className="ml-2">
-              {visibleCards.length} dashboard card{visibleCards.length !== 1 ? 's' : ''}
-            </Badge>
+            <p className="text-sm text-gray-600 mt-1">
+              Real-time business metrics and performance indicators
+            </p>
           </div>
           <div className="flex items-center space-x-2">
             <Button
@@ -888,30 +837,10 @@ export default function EnhancedDashboard({ className }: EnhancedDashboardProps)
           </div>
         </div>
         
-        {/* Dashboard Cards from Customizer */}
-        {visibleCards.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Dashboard Cards</h3>
-            <div className={getGridColsClass(visibleCards.length)}>
-              {visibleCards
-                .sort((a, b) => a.position - b.position)
-                .map(card => (
-                  <KPICard
-                    key={card.id}
-                    card={card}
-                    data={stats}
-                    timeRange={selectedTimeRange}
-                    onViewDetails={() => handleCardDrillDown(card)}
-                  />
-                ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Global Widgets */}
+        {/* Global Widgets - The main business metrics display */}
         <AllWidgetsGrid 
           className="w-full"
-          maxColumns={4}
+          maxColumns={3}
           showOnlyActive={true}
           showOnlyGlobal={false}
         />

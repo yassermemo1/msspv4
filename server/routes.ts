@@ -68,6 +68,7 @@ import './plugins/elastic-plugin';
 import './plugins/qradar-plugin';
 import './plugins/grafana-plugin';
 import './plugins/generic-api-plugin';
+import './plugins/sql-plugin';  // Add SQL plugin registration
 // import './plugins/stub-plugins'; // Skip stub plugins for now
 import { router as dynamicServiceScopeRoutes } from './api/dynamic-service-scopes';
 import poolValidationRoutes from './api/pool-validation';

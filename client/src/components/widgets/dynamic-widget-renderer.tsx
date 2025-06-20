@@ -176,188 +176,94 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   }, [widget.id, widget.name]);
 
   const fetchData = async () => {
+    if (previewData !== undefined) {
+      setData(previewData);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    if (onLoadingStateChange) {
+      onLoadingStateChange('loading');
+    }
+
     try {
-      // Check rate limiting silently - background refresh only
-      const widgetKey = `${widget.pluginName}-${widget.instanceId}-${widget.name}`;
-      const lastRequestTime = widgetLastRequestMap.get(widgetKey) || 0;
-      const timeSinceLastRequest = Date.now() - lastRequestTime;
-      
-      if (timeSinceLastRequest < RATE_LIMIT_INTERVAL) {
-        // Silently skip this request - schedule for later without UI feedback
-        const remainingTime = RATE_LIMIT_INTERVAL - timeSinceLastRequest;
-        console.log(`🔄 Background refresh: Widget "${widget.name}" will retry in ${Math.ceil(remainingTime / 1000)}s`);
-        
-        // Schedule automatic background retry
-        setTimeout(async () => {
-          await fetchData();
-        }, remainingTime + 1000); // Add 1 second buffer
-        
-        // Keep existing data visible, don't show loading or error
-        if (!data) {
-          setLoading(false);
-        }
-        return;
-      }
+      const endpoint = widget.queryType === 'custom' 
+        ? `/api/plugins/${widget.pluginName}/${widget.instanceId}/query/custom`
+        : `/api/plugins/${widget.pluginName}/${widget.instanceId}/query/${widget.queryId}`;
 
-      // Record request time
-      widgetLastRequestMap.set(widgetKey, Date.now());
-      
-      // Only show loading for initial load, not for background refreshes
-      if (!data) {
-        setLoading(true);
-        onLoadingStateChange?.('loading');
-      }
-      setError(null);
-
-      let endpoint = '';
-      let body = null;
-
-      // Build enhanced context from current page and props
-      const pageContext: any = {};
-      
-      // Extract context from URL (client ID, contract ID, etc.)
-      const currentPath = window.location.pathname;
-      const pathSegments = currentPath.split('/');
-      
-      // Check for client context (/clients/:id)
-      if (pathSegments.includes('clients') && pathSegments.length > 2) {
-        const clientIndex = pathSegments.indexOf('clients');
-        const clientId = pathSegments[clientIndex + 1];
-        if (clientId && !isNaN(Number(clientId))) {
-          pageContext.clientId = Number(clientId);
-        }
-      }
-      
-      // Check for contract context (/contracts/:id)
-      if (pathSegments.includes('contracts') && pathSegments.length > 2) {
-        const contractIndex = pathSegments.indexOf('contracts');
-        const contractId = pathSegments[contractIndex + 1];
-        if (contractId && !isNaN(Number(contractId))) {
-          pageContext.contractId = Number(contractId);
-        }
-      }
-      
-      // Add client context from props (passed from parent components)
+      // Add client context to parameters if clientShortName is provided
+      const queryParams = widget.queryParameters || {};
       if (clientShortName) {
-        pageContext.clientShortName = clientShortName;
+        queryParams.clientShortName = clientShortName;
       }
       if (clientName) {
-        pageContext.clientName = clientName;
+        queryParams.clientName = clientName;
       }
       if (clientDomain) {
-        pageContext.clientDomain = clientDomain;
+        queryParams.clientDomain = clientDomain;
       }
 
-      console.log('📍 Widget context extracted:', pageContext);
-      console.log('🔧 Widget configuration:', {
-        name: widget.name,
-        queryType: widget.queryType,
-        pluginName: widget.pluginName,
-        instanceId: widget.instanceId,
-        parameters: widget.queryParameters
+      const payload = {
+        query: widget.customQuery || '',
+        parameters: queryParams,
+        filters: widget.filters,
+        aggregation: widget.aggregation,
+        groupBy: widget.groupBy,
+        xAxisField: (widget as any).xAxisField,
+        yAxisField: (widget as any).yAxisField,
+        dynamicFilters: (widget as any).dynamicFilters,
+        fieldSelection: widget.fieldSelection
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
       });
 
-      // Enhanced parameter logging for debugging
-      if (widget.queryParameters && Object.keys(widget.queryParameters).length > 0) {
-        console.log('⚙️ Widget parameters configuration:');
-        Object.entries(widget.queryParameters).forEach(([key, config]) => {
-          console.log(`   - ${key}:`, config);
-        });
-        console.log('📊 Available context for parameter resolution:', pageContext);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`);
       }
 
-      if (widget.queryType === 'default' && widget.queryId) {
-        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/default-query/${widget.queryId}`;
-        body = { 
-          parameters: widget.queryParameters,
-          filters: widget.filters || [],
-          context: pageContext 
-        };
-      } else if (widget.queryType === 'custom' && widget.customQuery) {
-        endpoint = `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/query`;
-        body = {
-          query: widget.customQuery,
-          method: widget.queryMethod,
-          parameters: widget.queryParameters,
-          filters: widget.filters || [],
-          context: pageContext,
-          chainedQuery: widget.chainedQuery,
-          fieldSelection: widget.fieldSelection
-        };
-      } else {
-        throw new Error('Invalid widget configuration');
-      }
-
-      console.log('🚀 Widget API call:', { endpoint, body });
-
-      const response = await apiRequest('POST', endpoint, body);
       const result = await response.json();
       
-      if (result.success) {
-        setData(result.data);
-        setLastUpdate(new Date());
-        onLoadingStateChange?.('loaded');
-        console.log('✅ Widget data loaded successfully');
-        
-        // Log parameter resolution results if available
-        if (result.metadata?.parameters) {
-          console.log('🎯 Parameter resolution results:', result.metadata.parameters);
+      // Extract data from wrapped responses
+      let extractedData = result;
+      
+      // Handle common response wrapper patterns
+      if (result && typeof result === 'object') {
+        // Check for response wrapper (e.g., from generic-api plugin)
+        if ('success' in result && 'response' in result) {
+          extractedData = result.response;
         }
-        if (result.metadata?.query !== result.metadata?.originalQuery) {
-          console.log('🔄 Query transformation:');
-          console.log('   Original:', result.metadata?.originalQuery);
-          console.log('   Processed:', result.metadata?.query);
+        // Check for data wrapper
+        else if ('data' in result && !('value' in result)) {
+          extractedData = result.data;
         }
-      } else {
-        // Filter out rate limit errors from UI - handle silently in background
-        const isRateLimit = result.message?.includes('Rate limit') || 
-                          result.message?.includes('429') || 
-                          result.message?.includes('Too Many Requests');
-        
-        if (isRateLimit) {
-          console.log('⏰ Background refresh rate limited, will retry later');
-          // Schedule retry without showing error to user
-          setTimeout(async () => {
-            await fetchData();
-          }, 65000); // Retry after 65 seconds
-        } else {
-          setError(result.message || 'Failed to fetch data');
-          onLoadingStateChange?.('error', result.message || 'Failed to fetch data');
-          console.error('❌ Widget API error:', result);
-          
-          // Enhanced error logging for parameter issues
-          if (result.message?.includes('parameter') || result.message?.includes('Parameter')) {
-            console.error('🔧 Parameter resolution may have failed. Check:');
-            console.error('   - Parameter configuration:', widget.queryParameters);
-            console.error('   - Available context:', pageContext);
-            console.error('   - Query template:', widget.customQuery || 'Default query');
-          }
+        // Check for results wrapper
+        else if ('results' in result && !('value' in result)) {
+          extractedData = result.results;
         }
+      }
+      
+      setData(extractedData);
+      setLastUpdate(new Date());
+      
+      if (onLoadingStateChange) {
+        onLoadingStateChange('loaded');
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
-      
-      // Filter out rate limit errors from UI
-      const isRateLimit = errorMessage.includes('Rate limit') || 
-                        errorMessage.includes('429') || 
-                        errorMessage.includes('Too Many Requests');
-      
-      if (isRateLimit) {
-        console.log('⏰ Background refresh rate limited, will retry later');
-        // Schedule retry without showing error to user
-        setTimeout(async () => {
-          await fetchData();
-        }, 65000); // Retry after 65 seconds
-      } else {
-        setError(errorMessage);
-        onLoadingStateChange?.('error', errorMessage);
-        console.error('💥 Widget fetch error:', err);
+      console.error('Widget data fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+      if (onLoadingStateChange) {
+        onLoadingStateChange('error', err instanceof Error ? err.message : 'Failed to load data');
       }
     } finally {
-      // Only clear loading for initial loads or non-rate-limited requests
-      if (!data || !error?.includes('Rate limit')) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
@@ -741,8 +647,32 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const renderMetric = () => {
     let value = data;
     let label = 'Value';
+    let icon = null;
+    let color = 'blue';
+    let trend = null;
 
-    if (Array.isArray(data)) {
+    // Handle SQL query results that return an array with a single row
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+      const firstRow = data[0];
+      // Check for common metric fields in the first row
+      if ('value' in firstRow) value = firstRow.value;
+      if ('label' in firstRow) label = firstRow.label;
+      if ('icon' in firstRow) icon = firstRow.icon;
+      if ('color' in firstRow) color = firstRow.color;
+      if ('trend' in firstRow) trend = firstRow.trend;
+      
+      // If no explicit value field, try to extract from other numeric fields
+      if (!('value' in firstRow) && Object.keys(firstRow).length > 0) {
+        // Look for the first numeric value
+        for (const [key, val] of Object.entries(firstRow)) {
+          if (typeof val === 'number') {
+            value = val;
+            label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+            break;
+          }
+        }
+      }
+    } else if (Array.isArray(data)) {
       value = data.length;
       label = 'Count';
     } else if (typeof data === 'object' && data !== null) {
@@ -755,30 +685,107 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         label = 'Total';
       } else if ('value' in data) {
         value = data.value;
-        label = 'Value';
+        if ('label' in data) label = data.label;
+        if ('icon' in data) icon = data.icon;
+        if ('color' in data) color = data.color;
+        if ('trend' in data) trend = data.trend;
       } else {
-        value = Object.keys(data).length;
-        label = 'Properties';
+        // Try to find the first numeric value in the object
+        for (const [key, val] of Object.entries(data)) {
+          if (typeof val === 'number') {
+            value = val;
+            label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+            break;
+          }
+        }
+        // If still no numeric value, show object keys count
+        if (value === data) {
+          value = Object.keys(data).length;
+          label = 'Properties';
+        }
       }
     }
 
     const formatValue = (val: any) => {
       if (typeof val === 'number') {
+        if (val >= 1000000) {
+          return `${(val / 1000000).toFixed(1)}M`;
+        } else if (val >= 1000) {
+          return `${(val / 1000).toFixed(1)}K`;
+        }
         return val.toLocaleString();
       }
       return String(val);
     };
 
+    const getIconComponent = (iconName: string) => {
+      const iconMap: { [key: string]: any } = {
+        'Shield': Shield,
+        'Users': Users,
+        'FileText': FileText,
+        'Calendar': Calendar,
+        'AlertCircle': AlertCircle,
+        'CheckCircle': CheckCircle,
+        'TrendingUp': TrendingUp,
+        'TrendingDown': TrendingDown,
+        'Activity': Activity,
+        'Target': Target,
+        'AlertTriangle': AlertTriangle
+      };
+      return iconMap[iconName] || Target;
+    };
+
+    const getColorClasses = (colorName: string) => {
+      const colorMap: { [key: string]: { bg: string, text: string, icon: string } } = {
+        'blue': { bg: 'bg-blue-50', text: 'text-blue-900', icon: 'text-blue-600' },
+        'green': { bg: 'bg-green-50', text: 'text-green-900', icon: 'text-green-600' },
+        'red': { bg: 'bg-red-50', text: 'text-red-900', icon: 'text-red-600' },
+        'yellow': { bg: 'bg-yellow-50', text: 'text-yellow-900', icon: 'text-yellow-600' },
+        'purple': { bg: 'bg-purple-50', text: 'text-purple-900', icon: 'text-purple-600' },
+        'orange': { bg: 'bg-orange-50', text: 'text-orange-900', icon: 'text-orange-600' },
+        'gray': { bg: 'bg-gray-50', text: 'text-gray-900', icon: 'text-gray-600' }
+      };
+      return colorMap[colorName] || colorMap['blue'];
+    };
+
+    const colors = getColorClasses(color);
+    const IconComponent = icon ? getIconComponent(icon) : null;
+
     return (
-      <div className="text-center py-8">
-        <div className="text-4xl font-bold text-blue-600 mb-2">
-          {formatValue(value)}
-        </div>
-        <div className="text-lg text-gray-600">
-          {label}
+      <div className={`p-6 rounded-lg ${colors.bg} h-full flex flex-col justify-between`}>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            {IconComponent && (
+              <div className={`p-2 rounded-lg bg-white shadow-sm`}>
+                <IconComponent className={`h-6 w-6 ${colors.icon}`} />
+              </div>
+            )}
+            {trend !== null && trend !== undefined && (
+              <div className={`flex items-center space-x-1 text-sm font-medium ${
+                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+              }`}>
+                {trend > 0 ? (
+                  <TrendingUp className="h-4 w-4" />
+                ) : trend < 0 ? (
+                  <TrendingDown className="h-4 w-4" />
+                ) : (
+                  <Minus className="h-4 w-4" />
+                )}
+                <span>{Math.abs(trend)}%</span>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className={`text-3xl font-bold ${colors.text} mb-1`}>
+              {formatValue(value)}
+            </div>
+            <div className={`text-sm font-medium ${colors.icon}`}>
+              {label}
+            </div>
+          </div>
         </div>
         {widget.description && (
-          <div className="text-sm text-gray-500 mt-2">
+          <div className="text-xs text-gray-600 mt-4">
             {widget.description}
           </div>
         )}
@@ -949,12 +956,36 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     );
   };
 
-    const renderNumber = () => {
+  const renderNumber = () => {
     let value = data;
     let label = 'Count';
+    let trend = null;
+    let previousValue = null;
 
+    // Handle SQL query results that return an array with a single row
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+      const firstRow = data[0];
+      // Check for common numeric fields in the first row
+      if ('value' in firstRow) value = firstRow.value;
+      else if ('count' in firstRow) value = firstRow.count;
+      else if ('total' in firstRow) value = firstRow.total;
+      else if ('sum' in firstRow) value = firstRow.sum;
+      else {
+        // Look for the first numeric value
+        for (const [key, val] of Object.entries(firstRow)) {
+          if (typeof val === 'number') {
+            value = val;
+            label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+            break;
+          }
+        }
+      }
+      if ('label' in firstRow) label = firstRow.label;
+      if ('trend' in firstRow) trend = firstRow.trend;
+      if ('previous' in firstRow) previousValue = firstRow.previous;
+    }
     // Handle aggregation results
-    if (widget.aggregation) {
+    else if (widget.aggregation) {
       if (typeof data === 'object' && data !== null) {
         if (widget.aggregation.function === 'count') {
           value = data.totalResults || data.length || data.count || 0;
@@ -970,31 +1001,79 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     } else if (Array.isArray(data)) {
       value = data.length;
       label = 'Count';
-    } else if (typeof data === 'object' && data !== null && 'totalResults' in data) {
-      value = data.totalResults;
-      label = 'Total Results';
+    } else if (typeof data === 'object' && data !== null) {
+      if ('totalResults' in data) {
+        value = data.totalResults;
+        label = 'Total Results';
+      }
+      else if ('value' in data) value = data.value;
+      else if ('count' in data) value = data.count;
+      else if ('total' in data) value = data.total;
+      else {
+        // Try to find the first numeric value in the object
+        for (const [key, val] of Object.entries(data)) {
+          if (typeof val === 'number') {
+            value = val;
+            label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+            break;
+          }
+        }
+      }
+      if ('label' in data) label = data.label;
+      if ('trend' in data) trend = data.trend;
+      if ('previous' in data) previousValue = data.previous;
     }
 
     const formatNumber = (num: any) => {
       if (typeof num === 'number') {
+        if (num >= 1000000) {
+          return `${(num / 1000000).toFixed(1)}M`;
+        } else if (num >= 1000) {
+          return `${(num / 1000).toFixed(1)}K`;
+        }
         return num.toLocaleString();
       }
       return String(num);
     };
 
+    // Calculate trend if we have previous value
+    if (trend === null && previousValue !== null && typeof value === 'number' && typeof previousValue === 'number') {
+      trend = previousValue !== 0 ? ((value - previousValue) / previousValue) * 100 : 0;
+    }
+
     return (
-      <div className="text-center py-8">
-        <div className="flex items-center justify-center mb-4">
-          <Hash className="h-6 w-6 text-blue-500 mr-2" />
-          <div className="text-6xl font-bold text-blue-600">
-            {formatNumber(value)}
+      <div className="p-6 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 h-full flex flex-col justify-between">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-white shadow-sm">
+              <Hash className="h-6 w-6 text-indigo-600" />
+            </div>
+            {trend !== null && (
+              <div className={`flex items-center space-x-1 text-sm font-medium ${
+                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+              }`}>
+                {trend > 0 ? (
+                  <TrendingUp className="h-4 w-4" />
+                ) : trend < 0 ? (
+                  <TrendingDown className="h-4 w-4" />
+                ) : (
+                  <Minus className="h-4 w-4" />
+                )}
+                <span>{Math.abs(Math.round(trend))}%</span>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-indigo-900 mb-1">
+              {formatNumber(value)}
+            </div>
+            <div className="text-sm font-medium text-indigo-600">
+              {label}
+            </div>
           </div>
         </div>
-        <div className="text-xl text-gray-600 font-medium">
-          {label}
-        </div>
         {widget.description && (
-          <div className="text-sm text-gray-500 mt-2">
+          <div className="text-xs text-gray-600 mt-4">
             {widget.description}
           </div>
         )}
@@ -1005,6 +1084,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const renderPercentage = () => {
     let value = 0;
     let label = 'Percentage';
+    let trend = null;
+    let target = 100;
 
     // Handle aggregation results
     if (widget.aggregation) {
@@ -1026,28 +1107,67 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if ('percentage' in data) value = data.percentage;
       else if ('percent' in data) value = data.percent;
       else if ('rate' in data) value = data.rate;
+      if ('label' in data) label = data.label;
+      if ('trend' in data) trend = data.trend;
+      if ('target' in data) target = data.target;
     }
 
-    const getColor = () => {
-      if (value >= 90) return 'text-green-600';
-      if (value >= 70) return 'text-blue-600';
-      if (value >= 50) return 'text-yellow-600';
-      return 'text-red-600';
+    const getColorScheme = () => {
+      if (value >= 90) return { bg: 'from-green-50 to-emerald-50', text: 'text-green-900', icon: 'text-green-600' };
+      if (value >= 70) return { bg: 'from-blue-50 to-sky-50', text: 'text-blue-900', icon: 'text-blue-600' };
+      if (value >= 50) return { bg: 'from-yellow-50 to-amber-50', text: 'text-yellow-900', icon: 'text-yellow-600' };
+      return { bg: 'from-red-50 to-rose-50', text: 'text-red-900', icon: 'text-red-600' };
     };
 
+    const colors = getColorScheme();
+    const progressPercentage = Math.min((value / target) * 100, 100);
+
     return (
-      <div className="text-center py-8">
-        <div className="flex items-center justify-center mb-4">
-          <Percent className="h-6 w-6 text-green-500 mr-2" />
-          <div className={`text-6xl font-bold ${getColor()}`}>
-            {Math.round(value)}%
+      <div className={`p-6 rounded-lg bg-gradient-to-br ${colors.bg} h-full flex flex-col justify-between`}>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-white shadow-sm">
+              <Percent className={`h-6 w-6 ${colors.icon}`} />
+            </div>
+            {trend !== null && (
+              <div className={`flex items-center space-x-1 text-sm font-medium ${
+                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+              }`}>
+                {trend > 0 ? (
+                  <TrendingUp className="h-4 w-4" />
+                ) : trend < 0 ? (
+                  <TrendingDown className="h-4 w-4" />
+                ) : (
+                  <Minus className="h-4 w-4" />
+                )}
+                <span>{Math.abs(Math.round(trend))}%</span>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="text-xl text-gray-600 font-medium">
-          {label}
+          <div>
+            <div className={`text-3xl font-bold ${colors.text} mb-1`}>
+              {Math.round(value)}%
+            </div>
+            <div className={`text-sm font-medium ${colors.icon}`}>
+              {label}
+            </div>
+          </div>
+          {target !== 100 && (
+            <div className="mt-3">
+              <div className="w-full bg-white/50 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full bg-gradient-to-r ${colors.bg} opacity-80`}
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-600 mt-1">
+                Target: {target}%
+              </div>
+            </div>
+          )}
         </div>
         {widget.description && (
-          <div className="text-sm text-gray-500 mt-2">
+          <div className="text-xs text-gray-600 mt-4">
             {widget.description}
           </div>
         )}
@@ -1125,26 +1245,39 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if ('previous' in data) previous = data.previous;
       if ('value' in data) value = data.value;
       if ('baseline' in data) previous = data.baseline;
+      if ('label' in data) label = data.label;
       if ('trend' in data) {
         // If trend is already calculated
         const trend = data.trend;
+        const colorScheme = trend > 0 
+          ? { bg: 'from-green-50 to-emerald-50', text: 'text-green-900', icon: 'text-green-600' }
+          : trend < 0 
+          ? { bg: 'from-red-50 to-rose-50', text: 'text-red-900', icon: 'text-red-600' }
+          : { bg: 'from-gray-50 to-slate-50', text: 'text-gray-900', icon: 'text-gray-600' };
+        
         return (
-          <div className="text-center py-8">
-            <div className="flex items-center justify-center mb-4">
-              {trend > 0 ? (
-                <TrendingUp className="h-8 w-8 text-green-500 mr-2" />
-              ) : trend < 0 ? (
-                <TrendingDown className="h-8 w-8 text-red-500 mr-2" />
-              ) : (
-                <Activity className="h-8 w-8 text-gray-500 mr-2" />
-              )}
-              <div className={`text-4xl font-bold ${
-                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
-              }`}>
-                {trend > 0 ? '+' : ''}{trend}%
+          <div className={`p-6 rounded-lg bg-gradient-to-br ${colorScheme.bg} h-full flex flex-col justify-between`}>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 rounded-lg bg-white shadow-sm">
+                  {trend > 0 ? (
+                    <TrendingUp className={`h-6 w-6 ${colorScheme.icon}`} />
+                  ) : trend < 0 ? (
+                    <TrendingDown className={`h-6 w-6 ${colorScheme.icon}`} />
+                  ) : (
+                    <Activity className={`h-6 w-6 ${colorScheme.icon}`} />
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className={`text-3xl font-bold ${colorScheme.text} mb-1`}>
+                  {trend > 0 ? '+' : ''}{trend}%
+                </div>
+                <div className={`text-sm font-medium ${colorScheme.icon}`}>
+                  {label}
+                </div>
               </div>
             </div>
-            <div className="text-lg text-gray-600">{label}</div>
           </div>
         );
       }
@@ -1155,26 +1288,54 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     const change = previous !== 0 ? ((value - previous) / previous) * 100 : 0;
     const isPositive = change > 0;
     const isNegative = change < 0;
+    
+    const colorScheme = isPositive 
+      ? { bg: 'from-green-50 to-emerald-50', text: 'text-green-900', icon: 'text-green-600' }
+      : isNegative 
+      ? { bg: 'from-red-50 to-rose-50', text: 'text-red-900', icon: 'text-red-600' }
+      : { bg: 'from-gray-50 to-slate-50', text: 'text-gray-900', icon: 'text-gray-600' };
+
+    const formatValue = (val: number) => {
+      if (val >= 1000000) {
+        return `${(val / 1000000).toFixed(1)}M`;
+      } else if (val >= 1000) {
+        return `${(val / 1000).toFixed(1)}K`;
+      }
+      return val.toLocaleString();
+    };
 
     return (
-      <div className="text-center py-8">
-        <div className="flex items-center justify-center mb-4">
-          {isPositive ? (
-            <TrendingUp className="h-8 w-8 text-green-500 mr-2" />
-          ) : isNegative ? (
-            <TrendingDown className="h-8 w-8 text-red-500 mr-2" />
-          ) : (
-            <Activity className="h-8 w-8 text-gray-500 mr-2" />
-          )}
-          <div className={`text-4xl font-bold ${
-            isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'
-          }`}>
-            {change > 0 ? '+' : ''}{Math.round(change)}%
+      <div className={`p-6 rounded-lg bg-gradient-to-br ${colorScheme.bg} h-full flex flex-col justify-between`}>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-white shadow-sm">
+              {isPositive ? (
+                <TrendingUp className={`h-6 w-6 ${colorScheme.icon}`} />
+              ) : isNegative ? (
+                <TrendingDown className={`h-6 w-6 ${colorScheme.icon}`} />
+              ) : (
+                <Activity className={`h-6 w-6 ${colorScheme.icon}`} />
+              )}
+            </div>
           </div>
-        </div>
-        <div className="text-lg text-gray-600">{label}</div>
-        <div className="text-sm text-gray-500 mt-2">
-          Current: {value.toLocaleString()} | Previous: {previous.toLocaleString()}
+          <div>
+            <div className={`text-3xl font-bold ${colorScheme.text} mb-1`}>
+              {change > 0 ? '+' : ''}{Math.round(change)}%
+            </div>
+            <div className={`text-sm font-medium ${colorScheme.icon} mb-3`}>
+              {label}
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-600">Current</span>
+                <span className="font-medium text-gray-900">{formatValue(value)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-600">Previous</span>
+                <span className="font-medium text-gray-900">{formatValue(previous)}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1199,28 +1360,57 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       }
     }
 
+    const formatStat = (value: number) => {
+      if (value >= 1000000) {
+        return `${(value / 1000000).toFixed(1)}M`;
+      } else if (value >= 1000) {
+        return `${(value / 1000).toFixed(1)}K`;
+      }
+      return value.toLocaleString();
+    };
+
     return (
-      <div className="py-6">
+      <div className="p-6">
         <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg border">
-            <div className="text-2xl font-bold text-blue-600">{stats.min.toLocaleString()}</div>
-            <div className="text-sm text-blue-800">Minimum</div>
+          <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-1.5 rounded-md bg-white shadow-sm">
+                <TrendingDown className="h-4 w-4 text-blue-600" />
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-blue-900">{formatStat(stats.min)}</div>
+            <div className="text-xs font-medium text-blue-600">Minimum</div>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg border">
-            <div className="text-2xl font-bold text-green-600">{stats.max.toLocaleString()}</div>
-            <div className="text-sm text-green-800">Maximum</div>
+          <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-1.5 rounded-md bg-white shadow-sm">
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-green-900">{formatStat(stats.max)}</div>
+            <div className="text-xs font-medium text-green-600">Maximum</div>
           </div>
-          <div className="text-center p-4 bg-yellow-50 rounded-lg border">
-            <div className="text-2xl font-bold text-yellow-600">{Math.round(stats.avg).toLocaleString()}</div>
-            <div className="text-sm text-yellow-800">Average</div>
+          <div className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-1.5 rounded-md bg-white shadow-sm">
+                <Activity className="h-4 w-4 text-yellow-600" />
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-yellow-900">{formatStat(Math.round(stats.avg))}</div>
+            <div className="text-xs font-medium text-yellow-600">Average</div>
           </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg border">
-            <div className="text-2xl font-bold text-purple-600">{stats.count.toLocaleString()}</div>
-            <div className="text-sm text-purple-800">Count</div>
+          <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-1.5 rounded-md bg-white shadow-sm">
+                <Hash className="h-4 w-4 text-purple-600" />
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-purple-900">{formatStat(stats.count)}</div>
+            <div className="text-xs font-medium text-purple-600">Count</div>
           </div>
         </div>
         {widget.description && (
-          <div className="text-sm text-gray-500 text-center mt-4">
+          <div className="text-xs text-gray-600 text-center mt-4">
             {widget.description}
           </div>
         )}
@@ -1303,21 +1493,6 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       cardsData = filteredData;
     }
 
-    // Icon mapping for known field types
-    const getIconForField = (fieldName: string) => {
-      const name = fieldName.toLowerCase();
-      if (name.includes('server')) return <Shield className="h-5 w-5 text-blue-500" />;
-      if (name.includes('workstation') || name.includes('endpoint')) return <Users className="h-5 w-5 text-green-500" />;
-      if (name.includes('online')) return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      if (name.includes('offline')) return <XCircle className="h-5 w-5 text-red-500" />;
-      if (name.includes('active')) return <Activity className="h-5 w-5 text-blue-500" />;
-      if (name.includes('count') || name.includes('total')) return <Hash className="h-5 w-5 text-purple-500" />;
-      if (name.includes('warning') || name.includes('alert')) return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-      if (name.includes('date') || name.includes('time')) return <Calendar className="h-5 w-5 text-gray-500" />;
-      if (name.includes('contract') || name.includes('scope')) return <FileText className="h-5 w-5 text-indigo-500" />;
-      return <Target className="h-5 w-5 text-gray-400" />;
-    };
-
     // Format field names for display
     const formatFieldName = (fieldName: string) => {
       return fieldName
@@ -1334,13 +1509,18 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       const name = fieldName.toLowerCase();
       if (name.includes('date') || name.includes('time')) {
         try {
-          return new Date(value).toLocaleString();
+          return new Date(value).toLocaleDateString();
         } catch {
           return String(value);
         }
       }
       
       if (typeof value === 'number') {
+        if (value >= 1000000) {
+          return `${(value / 1000000).toFixed(1)}M`;
+        } else if (value >= 1000) {
+          return `${(value / 1000).toFixed(1)}K`;
+        }
         return value.toLocaleString();
       }
       
@@ -1349,26 +1529,6 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       }
       
       return String(value);
-    };
-
-    // Get card color based on field name or value
-    const getCardColor = (fieldName: string, value: any) => {
-      const name = fieldName.toLowerCase();
-      
-      if (name.includes('online') && typeof value === 'number' && value > 0) {
-        return 'bg-green-50 border-green-200';
-      }
-      if (name.includes('offline') && typeof value === 'number' && value > 0) {
-        return 'bg-red-50 border-red-200';
-      }
-      if (name.includes('warning') || name.includes('alert')) {
-        return 'bg-yellow-50 border-yellow-200';
-      }
-      if (name.includes('active')) {
-        return 'bg-blue-50 border-blue-200';
-      }
-      
-      return 'bg-gray-50 border-gray-200';
     };
 
     const entries = Object.entries(cardsData);
@@ -1381,28 +1541,24 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       );
     }
 
+    // Use a simple list layout instead of nested cards
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-        {entries.map(([key, value], index) => (
-          <div
-            key={index}
-            className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${getCardColor(key, value)}`}
-          >
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0 mt-1">
-                {getIconForField(key)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-600 truncate">
-                  {formatFieldName(key)}
-                </p>
-                <p className="text-lg font-semibold text-gray-900 mt-1">
-                  {formatValue(value, key)}
-                </p>
-              </div>
+      <div className="p-6">
+        <div className="space-y-3">
+          {entries.map(([key, value], index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
+            >
+              <span className="text-sm font-medium text-gray-600">
+                {formatFieldName(key)}
+              </span>
+              <span className="text-sm font-semibold text-gray-900">
+                {formatValue(value, key)}
+              </span>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   };
@@ -1410,8 +1566,9 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const cardClasses = [
     className,
     getWidthClass(),
-    widget.styling?.showBorder !== false ? 'border' : 'border-0',
-    'transition-all duration-200 hover:shadow-md'
+    'bg-white rounded-lg shadow-sm',
+    widget.styling?.showBorder !== false ? 'border border-gray-200' : '',
+    'transition-all duration-200 hover:shadow-lg'
   ].filter(Boolean).join(' ');
 
   const contentClasses = [
@@ -1419,15 +1576,17 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     'overflow-hidden'
   ].join(' ');
 
+  const isMetricType = ['metric', 'number', 'percentage', 'trend', 'statistic'].includes(widget.displayType);
+
   return (
-    <Card className={cardClasses}>
+    <div className={cardClasses}>
       {(widget.styling?.showHeader !== false) && (
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700">
             {widget.name}
-          </CardTitle>
+          </h3>
           <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs text-gray-500">
               {widget.pluginName}
             </Badge>
             <Button
@@ -1441,29 +1600,31 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
               }}
               disabled={loading}
               title="Refresh widget data"
+              className="h-8 w-8 p-0"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
             </Button>
             {onEdit && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => onEdit(widget)}
+                className="h-8 w-8 p-0"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4 text-gray-500" />
               </Button>
             )}
           </div>
-        </CardHeader>
+        </div>
       )}
-      <CardContent className={contentClasses}>
+      <div className={`${contentClasses} ${isMetricType ? '' : 'p-4'}`}>
         {renderContent()}
-        {lastUpdate && (
-          <div className="text-xs text-gray-500 mt-2 text-center">
+        {lastUpdate && !isMetricType && (
+          <div className="text-xs text-gray-400 mt-2 text-center">
             Last updated: {lastUpdate.toLocaleTimeString()}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }; 
