@@ -287,7 +287,7 @@ const AsyncWidgetRenderer: React.FC<{
     name: widget.name,
     description: widget.description,
     pluginName: widget.pluginName,
-    instanceId: `${widget.pluginName}-main`,
+    instanceId: widget.pluginName === 'generic-api' ? 'mdr-main' : `${widget.pluginName}-main`,
     queryType: 'custom' as const,
     customQuery: widget.query,
     queryMethod: widget.method,

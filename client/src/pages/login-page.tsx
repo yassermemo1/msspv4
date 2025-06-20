@@ -19,6 +19,32 @@ export default function LoginPage() {
   // Check if we're in development mode
   const isDevelopment = import.meta.env.DEV || import.meta.env.NODE_ENV === 'development';
 
+  // Quick login function
+  const quickLogin = (email: string, password: string) => {
+    setLocalCredentials({
+      email,
+      password,
+      rememberMe: false
+    });
+    // Trigger form submission after state update
+    setTimeout(() => {
+      loginMutation.mutate({ email, password, rememberMe: false });
+    }, 100);
+  };
+
+  // Quick LDAP login function
+  const quickLdapLogin = (username: string, password: string) => {
+    setLdapCredentials({
+      username,
+      password,
+      rememberMe: false
+    });
+    // Trigger form submission after state update
+    setTimeout(() => {
+      ldapLoginMutation.mutate({ username, password, rememberMe: false });
+    }, 100);
+  };
+
   // Redirect if already logged in or after successful login
   useEffect(() => {
     if (user) {
@@ -141,73 +167,56 @@ export default function LoginPage() {
                 </Button>
                 
                 {/* Quick Login Buttons for Development */}
-                {isDevelopment && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600 font-medium text-center">Quick Login (Dev Mode)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        size="sm"
-                        disabled={isLoading}
-                        onClick={() => {
-                          setLocalCredentials({
-                            email: "admin@mssp.local",
-                            password: "admin123",
-                            rememberMe: false
-                          });
-                        }}
-                      >
-                        👑 Admin
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        size="sm"
-                        disabled={isLoading}
-                        onClick={() => {
-                          setLocalCredentials({
-                            email: "manager@mssp.local",
-                            password: "admin123",
-                            rememberMe: false
-                          });
-                        }}
-                      >
-                        🏢 Manager
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        size="sm"
-                        disabled={isLoading}
-                        onClick={() => {
-                          setLocalCredentials({
-                            email: "engineer@mssp.local",
-                            password: "admin123",
-                            rememberMe: false
-                          });
-                        }}
-                      >
-                        🔧 Engineer
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        size="sm"
-                        disabled={isLoading}
-                        onClick={() => {
-                          setLocalCredentials({
-                            email: "user@mssp.local",
-                            password: "admin123",
-                            rememberMe: false
-                          });
-                        }}
-                      >
-                        👤 User
-                      </Button>
-                    </div>
+                <div className="space-y-2 mt-4 pt-4 border-t">
+                  <p className="text-sm text-gray-600 font-medium text-center">Quick Access</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading}
+                      onClick={() => quickLogin("admin@mssp.local", "admin123")}
+                      className="hover:bg-purple-50 hover:border-purple-300"
+                      title="Full system access"
+                    >
+                      👑 Admin
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading}
+                      onClick={() => quickLogin("manager@mssp.local", "admin123")}
+                      className="hover:bg-blue-50 hover:border-blue-300"
+                      title="Client and financial management"
+                    >
+                      🏢 Manager
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading}
+                      onClick={() => quickLogin("engineer@mssp.local", "admin123")}
+                      className="hover:bg-green-50 hover:border-green-300"
+                      title="Technical operations"
+                    >
+                      🔧 Engineer
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading}
+                      onClick={() => quickLogin("user@mssp.local", "admin123")}
+                      className="hover:bg-gray-50 hover:border-gray-300"
+                      title="Basic access"
+                    >
+                      👤 User
+                    </Button>
                   </div>
-                )}
+                  <p className="text-xs text-gray-500 text-center mt-2">Click any button for instant login</p>
+                </div>
               </form>
             </TabsContent>
 
@@ -264,23 +273,16 @@ export default function LoginPage() {
                 </Button>
                 
                 {/* Quick Login Button for LDAP Development */}
-                {isDevelopment && (
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    className="w-full" 
-                    disabled={isLoading}
-                    onClick={() => {
-                      setLdapCredentials({
-                        username: "einstein",
-                        password: "password",
-                        rememberMe: false
-                      });
-                    }}
-                  >
-                    🚀 Quick LDAP Login (Dev)
-                  </Button>
-                )}
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  className="w-full mt-4" 
+                  disabled={isLoading}
+                  onClick={() => quickLdapLogin("einstein", "password")}
+                  title="Test LDAP account"
+                >
+                  🚀 Quick LDAP Login (einstein)
+                </Button>
               </form>
             </TabsContent>
           </Tabs>

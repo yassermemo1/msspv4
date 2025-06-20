@@ -15,6 +15,7 @@ import { GlobalErrorProvider, useGlobalError } from "@/hooks/use-global-error";
 // import { SimpleDebugButton } from "@/components/debug/simple-debug-button";
 
 // Page imports
+import AuthPage from "@/pages/auth-page";
 import LoginPage from "@/pages/login-page";
 import RegisterPage from "@/pages/register-page";
 import MainDashboardPage from "@/pages/main-dashboard-page";
