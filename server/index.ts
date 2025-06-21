@@ -7,6 +7,7 @@ import { scheduler } from "./scheduler";
 import { setupVite, serveStatic } from "./vite";
 import { environmentConfig } from "./lib/environment-config";
 import { setupDatabaseAutoSync } from "./db-auto-sync";
+import { mdrClientSync } from "./services/mdr-client-sync";
 // import { initializeDefaultIntegrations } from "./startup-integrations"; // TODO: Create this module
 import { initializeDefaultPagePermissions } from "./startup-page-permissions";
 import compression from "compression";
@@ -111,6 +112,10 @@ type WithError = {
   scheduler.start();
   console.log('Starting scheduled tasks...');
   
+  // Start MDR client sync service
+  mdrClientSync.startScheduler();
+  console.log('MDR client sync scheduler started (hourly sync)');
+  
   // Initialize email service if configured
   if (config.email.enabled) {
     try {
@@ -137,6 +142,10 @@ type WithError = {
     // Stop scheduled tasks
     scheduler.stop();
     console.log('Stopping scheduled tasks...');
+    
+    // Stop MDR sync
+    mdrClientSync.stopScheduler();
+    console.log('Stopping MDR client sync...');
 
     // Close the HTTP server
     httpServer.close(() => {

@@ -400,6 +400,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ========================================
+  // MDR SYNC MANAGEMENT ENDPOINTS
+  // ========================================
+  
+  // Get MDR sync status
+  app.get("/api/admin/mdr-sync/status", requireAdmin, async (req, res, next) => {
+    try {
+      const { mdrClientSync } = await import("./services/mdr-client-sync");
+      const status = await mdrClientSync.getSyncStatus();
+      
+      // Calculate next sync time (hourly)
+      let nextSync = null;
+      if (status?.lastSync) {
+        const lastSyncTime = new Date(status.lastSync);
+        nextSync = new Date(lastSyncTime.getTime() + 3600000); // Add 1 hour
+      }
+      
+      res.json({
+        ...status,
+        nextSync,
+        isRunning: false // TODO: Add running state tracking
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Trigger MDR sync manually
+  app.post("/api/admin/mdr-sync/trigger", requireAdmin, async (req, res, next) => {
+    try {
+      const { mdrClientSync } = await import("./services/mdr-client-sync");
+      
+      // Trigger sync in background
+      mdrClientSync.syncAllClients().catch(console.error);
+      
+      res.json({
+        success: true,
+        message: "MDR sync triggered successfully. This may take several minutes."
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ========================================
   // FIELD VISIBILITY CONFIGURATION ENDPOINTS
   // ========================================
 
@@ -7268,6 +7312,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]
     });
   });
+
+  // Get database schema for widget builder
+  app.get("/api/database-schema", requireAuth, async (req, res, next) => {
+    try {
+      // Query to get all tables and their columns from the PostgreSQL information schema
+      const schemaQuery = `
+        SELECT 
+          table_name,
+          column_name,
+          data_type,
+          is_nullable,
+          column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name NOT IN ('drizzle_migrations', 'drizzle_migrations_journal')
+        ORDER BY table_name, ordinal_position
+      `;
+      
+      const result = await db.execute(sql.raw(schemaQuery));
+      
+      // Group columns by table
+      const schema: Record<string, Array<{
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+        column_default: string | null;
+      }>> = {};
+      
+      for (const row of result.rows) {
+        const tableName = row.table_name as string;
+        if (!schema[tableName]) {
+          schema[tableName] = [];
+        }
+        schema[tableName].push({
+          column_name: row.column_name as string,
+          data_type: row.data_type as string,
+          is_nullable: row.is_nullable as string,
+          column_default: row.column_default as string | null
+        });
+      }
+      
+      // Format for easier consumption by frontend
+      const formattedSchema = Object.entries(schema).map(([tableName, columns]) => ({
+        tableName,
+        columns: columns.map(col => ({
+          name: col.column_name,
+          type: col.data_type,
+          nullable: col.is_nullable === 'YES',
+          default: col.column_default
+        }))
+      }));
+      
+      res.json({
+        tables: formattedSchema,
+        tableCount: formattedSchema.length,
+        totalColumns: formattedSchema.reduce((sum, table) => sum + table.columns.length, 0)
+      });
+    } catch (error) {
+      console.error('Failed to fetch database schema:', error);
+      next(error);
+    }
+  });
+
+  // ========================================
+  // CUSTOM WIDGETS ENDPOINTS
+  // ========================================
 
   return httpServer;
 } // end registerRoutes function
