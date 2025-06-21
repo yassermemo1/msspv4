@@ -7,6 +7,13 @@ import { TenantLookupSyncService } from "./tenant-lookup-sync";
 export class MDRClientSyncService {
   private static instance: MDRClientSyncService;
   private syncInterval: NodeJS.Timeout | null = null;
+  private syncErrors: Array<{
+    tenantId: number;
+    tenantName: string;
+    shortName: string | null;
+    error: string;
+    timestamp: string;
+  }> = [];
   
   static getInstance(): MDRClientSyncService {
     if (!this.instance) {
@@ -55,6 +62,9 @@ export class MDRClientSyncService {
     console.log('🔄 Starting comprehensive MDR client sync...');
     const startTime = Date.now();
     
+    // Clear previous errors
+    this.syncErrors = [];
+    
     try {
       // Step 1: Fetch all tenants from MDR API
       const tenantsQuery = {
@@ -98,6 +108,14 @@ export class MDRClientSyncService {
             // Skip tenants without shortName
             if (!tenant.shortName) {
               console.warn(`⚠️ Skipping tenant ${tenant.id} - no shortName`);
+              this.syncErrors.push({
+                tenantId: tenant.id,
+                tenantName: tenant.name || 'Unknown',
+                shortName: null,
+                error: 'Tenant has no shortName configured',
+                timestamp: new Date().toISOString()
+              });
+              errors++;
               continue;
             }
             
@@ -161,8 +179,18 @@ export class MDRClientSyncService {
             // Step 5: Update or create service scope definitions
             await this.updateServiceScopes(clientId, tenant, visibilityData);
           
-        } catch (error) {
+        } catch (error: any) {
           console.error(`❌ Failed to sync tenant ${tenant.id} (${tenant.shortName}):`, error);
+          
+          // Store detailed error information
+          this.syncErrors.push({
+            tenantId: tenant.id,
+            tenantName: tenant.name || 'Unknown',
+            shortName: tenant.shortName,
+            error: this.formatErrorMessage(error),
+            timestamp: new Date().toISOString()
+          });
+          
           errors++;
         }
       }
@@ -174,7 +202,7 @@ export class MDRClientSyncService {
         // Show SIEM pool status after sync
         await this.showSiemPoolStatus(totalSiemEpsAssigned);
         
-        // Update sync statistics
+        // Update sync statistics with error details
         await this.updateSyncStats(created, updated, errors, duration);
       
     } catch (error) {
@@ -408,10 +436,29 @@ export class MDRClientSyncService {
                            (visibilityData.onlineWorkstationEndpointCount || 0);
     
     if (onlineEndpoints === 0 && visibilityData.contractScope > 0) {
-      return 'pending'; // Has contract but no active endpoints
+      return 'awaiting'; // Has contract but no active endpoints - use valid status
     }
     
     return 'active';
+  }
+
+  /**
+   * Format error message for better readability
+   */
+  private formatErrorMessage(error: any): string {
+    if (error.code === '42703' && error.message.includes('column "service_type"')) {
+      return 'Database schema mismatch: service_type column not found (should use category)';
+    }
+    
+    if (error.code === '23514' && error.constraint === 'clients_status_check') {
+      return 'Invalid client status: "pending" is not a valid status. Valid statuses are: active, inactive, prospect, or awaiting';
+    }
+    
+    if (error.message?.includes('Cannot read properties of null')) {
+      return 'Null value error: Some required tenant data is missing';
+    }
+    
+    return error.message || error.toString();
   }
 
   /**
@@ -424,6 +471,7 @@ export class MDRClientSyncService {
         created,
         updated,
         errors,
+        errorDetails: this.syncErrors,
         duration,
         status: errors === 0 ? 'success' : 'partial'
       });
@@ -483,6 +531,14 @@ export class MDRClientSyncService {
     } catch (error) {
       console.error('Failed to show SIEM pool status:', error);
     }
+  }
+
+  /**
+   * Get detailed error information from the last sync
+   */
+  async getSyncErrors() {
+    const status = await this.getSyncStatus();
+    return status?.errorDetails || [];
   }
 }
 

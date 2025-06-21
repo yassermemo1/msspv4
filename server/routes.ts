@@ -443,6 +443,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get MDR sync errors
+  app.get("/api/admin/mdr-sync/errors", requireAdmin, async (req, res, next) => {
+    try {
+      const { mdrClientSync } = await import("./services/mdr-client-sync");
+      const errors = await mdrClientSync.getSyncErrors();
+      
+      res.json({
+        errors,
+        count: errors.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ========================================
   // FIELD VISIBILITY CONFIGURATION ENDPOINTS
   // ========================================
@@ -7381,4 +7396,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 } // end registerRoutes function
+
 
