@@ -199,8 +199,8 @@ export class MDRClientSyncService {
         console.log(`✅ MDR client sync completed in ${duration}ms: ${created} created, ${updated} updated, ${errors} errors`);
         console.log(`📊 Total SIEM EPS assigned: ${totalSiemEpsAssigned}`);
         
-        // Show SIEM pool status after sync
-        await this.showSiemPoolStatus(totalSiemEpsAssigned);
+        // Show license pool status after sync
+        await this.showLicensePoolStatus();
         
         // Update sync statistics with error details
         await this.updateSyncStats(created, updated, errors, duration);
@@ -298,12 +298,15 @@ export class MDRClientSyncService {
     // Get license pools - use raw queries to avoid type issues
     const siemPoolQuery = "SELECT id FROM license_pools WHERE LOWER(name) LIKE '%siem%' LIMIT 1";
     const edrPoolQuery = "SELECT id FROM license_pools WHERE LOWER(name) LIKE '%edr%' LIMIT 1";
+    const ndrPoolQuery = "SELECT id FROM license_pools WHERE LOWER(name) LIKE '%ndr%' LIMIT 1";
     
     const siemPoolResult = await (db as any).query(siemPoolQuery);
     const edrPoolResult = await (db as any).query(edrPoolQuery);
+    const ndrPoolResult = await (db as any).query(ndrPoolQuery);
     
     const siemPoolId = siemPoolResult.rows[0]?.id;
     const edrPoolId = edrPoolResult.rows[0]?.id;
+    const ndrPoolId = ndrPoolResult.rows[0]?.id;
     
     let siemEpsAssigned = 0;
     
@@ -328,6 +331,23 @@ export class MDRClientSyncService {
       if (edrCount > 0) {
         await this.upsertLicenseAssignment(clientId, edrPoolId, edrCount,
           `MDR Sync: ${edrCount} endpoints (${visibilityData.actualScopeWorkstations} workstations + ${visibilityData.actualScopeServers || 0} servers)`);
+      }
+    }
+    
+    // Update NDR license assignment
+    if (ndrPoolId) {
+      // Check for various possible NDR-related fields
+      // Could be: ntdLicenses, ndrLicenses, networkLicenses, or derived from other fields
+      const ndrCount = detailedData.ntdLicenses || detailedData.ndrLicenses || detailedData.networkLicenses || 0;
+      
+      if (ndrCount > 0) {
+        await this.upsertLicenseAssignment(clientId, ndrPoolId, ndrCount,
+          `MDR Sync: ${ndrCount} NDR licenses allocated from tenant details (API: /tenant/details/${tenant.id})`);
+        
+        console.log(`✅ Assigned ${ndrCount} NDR licenses to client ${tenant.shortName}`);
+      } else if (detailedData.ntdLicenseExpirationDate) {
+        // If we have an expiration date but no count, log it for investigation
+        console.log(`ℹ️ Client ${tenant.shortName} has NTD license expiration date but no license count found`);
       }
     }
     
@@ -501,35 +521,47 @@ export class MDRClientSyncService {
   }
 
   /**
-   * Show SIEM pool status after sync
+   * Show license pool status after sync
    */
-  private async showSiemPoolStatus(totalAssigned: number) {
+  private async showLicensePoolStatus() {
     try {
       const poolQuery = `
         SELECT 
           lp.name,
           lp.total_licenses,
           COALESCE(SUM(cl.assigned_licenses), 0) as assigned_licenses,
-          lp.total_licenses - COALESCE(SUM(cl.assigned_licenses), 0) as available_licenses
+          lp.total_licenses - COALESCE(SUM(cl.assigned_licenses), 0) as available_licenses,
+          ROUND((COALESCE(SUM(cl.assigned_licenses), 0)::numeric / NULLIF(lp.total_licenses, 0) * 100)::numeric, 1) as usage_percentage
         FROM license_pools lp
         LEFT JOIN client_licenses cl ON cl.license_pool_id = lp.id
-        WHERE LOWER(lp.name) LIKE '%siem%'
+        WHERE LOWER(lp.name) LIKE '%siem%' 
+           OR LOWER(lp.name) LIKE '%edr%'
+           OR LOWER(lp.name) LIKE '%ndr%'
         GROUP BY lp.id, lp.name, lp.total_licenses
+        ORDER BY lp.id
       `;
       
       const result = await (db as any).query(poolQuery);
       
       if (result.rows.length > 0) {
-        const pool = result.rows[0];
-        console.log(`\n📊 SIEM EPS Pool Status:`);
-        console.log(`   Pool: ${pool.name}`);
-        console.log(`   Total Licenses: ${pool.total_licenses}`);
-        console.log(`   Assigned: ${pool.assigned_licenses}`);
-        console.log(`   Available: ${pool.available_licenses}`);
-        console.log(`   Usage: ${Math.round((pool.assigned_licenses / pool.total_licenses) * 100)}%\n`);
+        console.log(`\n📊 License Pool Status Summary:`);
+        console.log(`   ${'='.repeat(60)}`);
+        
+        for (const pool of result.rows) {
+          const icon = pool.name.toLowerCase().includes('siem') ? '🔍' : 
+                       pool.name.toLowerCase().includes('edr') ? '🛡️' : 
+                       pool.name.toLowerCase().includes('ndr') ? '🌐' : '📊';
+          
+          console.log(`   ${icon} ${pool.name}:`);
+          console.log(`      Total: ${pool.total_licenses.toLocaleString()}`);
+          console.log(`      Used:  ${pool.assigned_licenses.toLocaleString()} (${pool.usage_percentage}%)`);
+          console.log(`      Free:  ${pool.available_licenses.toLocaleString()}`);
+          console.log(`   ${'─'.repeat(60)}`);
+        }
+        console.log('');
       }
     } catch (error) {
-      console.error('Failed to show SIEM pool status:', error);
+      console.error('Failed to show license pool status:', error);
     }
   }
 
