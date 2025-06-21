@@ -55,6 +55,7 @@ import { formatDate } from '@/lib/utils';
 import { getStatusColor, getStatusIcon, getStatusVariant } from '@/lib/status-utils';
 import { JiraTicketsKpi } from '@/components/widgets/jira-tickets-kpi';
 import { DynamicWidgetRenderer } from '@/components/widgets/dynamic-widget-renderer';
+import { PowerBIMetricCard } from '@/components/widgets/powerbi-metric-card';
 import { GlobalClientWidgets } from '@/components/widgets/global-client-widgets';
 import { GlobalWidgetManager } from '@/components/widgets/global-widget-manager';
 import { BarChart3 } from 'lucide-react';
@@ -1230,89 +1231,382 @@ export default function ClientDetailPage() {
                   </CardHeader>
                   <CardContent>
                     {client.shortName ? (
-                      <DynamicWidgetRenderer
-                        widget={{
-                          id: 'mdr-service-details',
-                          name: 'Client Service Details',
-                          description: 'Displays MDR service details for the current client',
-                          pluginName: 'generic-api',
-                          instanceId: 'mdr-main',
-                          queryType: 'custom',
-                          customQuery: JSON.stringify({
-                            method: 'POST',
-                            endpoint: '/tenant-visibility/basic-data',
-                            body: {
-                              paginationAndSorting: {
-                                currentPage: 1,
-                                pageSize: 10,
-                                sortProperty: 'id',
-                                sortDirection: 'ASC'
-                              },
-                              command: {
-                                tenantId: [0]
-                              }
-                            }
-                          }),
-                          queryMethod: 'POST',
-                          queryParameters: {
-                            clientShortName: {
-                              source: 'context',
-                              contextVar: 'clientShortName'
-                            }
-                          },
-                          displayType: 'cards',
-                          refreshInterval: 300,
-                          placement: 'client-details',
-                          styling: {
-                            width: 'full',
-                            height: 'large',
-                            showBorder: false,
-                            showHeader: false
-                          },
-                          fieldSelection: {
-                            enabled: true,
-                            selectedFields: [
-                              'onlineServerEndpointCount',
-                              'onlineWorkstationEndpointCount', 
-                              'activeWorkstationEndpointCount',
-                              'contractScope',
-                              'currentScopeServers',
-                              'currentScopeWorkstations',
-                              'actualScopeServers',
-                              'actualScopeWorkstations',
-                              'lastEndpointUpdate',
-                              'lastNetworkUpdate',
-                              'workstationCount',
-                              'workstationOnlineCount',
-                              'workstationOfflineCount',
-                              'serverCount',
-                              'serverOnlineCount',
-                              'serverOfflineCount'
-                            ],
-                            excludeNullFields: true
-                          },
-                          chainedQuery: {
-                            enabled: true,
-                            lookupQuery: JSON.stringify({
-                              method: 'POST',
-                              endpoint: '/tenant/filter',
-                              body: {
-                                paginationAndSorting: {
-                                  currentPage: 1,
-                                  pageSize: 300,
-                                  sortProperty: 'id',
-                                  sortDirection: 'ASC'
+                      <div className="space-y-6">
+                        {/* MDR Key Metrics */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          {/* Total Endpoints */}
+                          <PowerBIMetricCard
+                            widget={{
+                              id: 'mdr-total-endpoints',
+                              name: 'Total Endpoints',
+                              description: 'Total MDR endpoints',
+                              pluginName: 'generic-api',
+                              instanceId: 'mdr-main',
+                              queryType: 'custom',
+                              customQuery: JSON.stringify({
+                                method: 'POST',
+                                endpoint: '/tenant-visibility/basic-data',
+                                body: {
+                                  paginationAndSorting: {
+                                    currentPage: 1,
+                                    pageSize: 10,
+                                    sortProperty: 'id',
+                                    sortDirection: 'ASC'
+                                  },
+                                  command: {
+                                    tenantId: [0]
+                                  }
                                 }
+                              }),
+                              queryMethod: 'POST',
+                              queryParameters: {
+                                clientShortName: {
+                                  source: 'context',
+                                  contextVar: 'clientShortName'
+                                }
+                              },
+                              displayType: 'metric',
+                              refreshInterval: 300,
+                              placement: 'client-details',
+                              styling: {
+                                width: 'full',
+                                height: 'small',
+                                showBorder: false,
+                                showHeader: false
+                              },
+                              fieldSelection: {
+                                enabled: true,
+                                selectedFields: ['totalEndpointCount'],
+                                excludeNullFields: true
+                              },
+                              chainedQuery: {
+                                enabled: true,
+                                lookupQuery: JSON.stringify({
+                                  method: 'POST',
+                                  endpoint: '/tenant/filter',
+                                  body: {
+                                    paginationAndSorting: {
+                                      currentPage: 1,
+                                      pageSize: 300,
+                                      sortProperty: 'id',
+                                      sortDirection: 'ASC'
+                                    }
+                                  }
+                                }),
+                                lookupField: 'id',
+                                targetField: 'tenantId'
                               }
-                            }),
-                            lookupField: 'id',
-                            targetField: 'tenantId'
-                          }
-                        }}
-                        clientShortName={client.shortName}
-                        clientName={client.name}
-                        clientDomain={client.domain || undefined}
-                      />
+                            }}
+                            title="Total Endpoints"
+                            colorScheme="blue"
+                            icon="Activity"
+                            clientShortName={client.shortName}
+                            clientName={client.name}
+                            clientDomain={client.domain || undefined}
+                          />
+                          
+                          {/* Online Endpoints */}
+                          <PowerBIMetricCard
+                            widget={{
+                              id: 'mdr-online-endpoints',
+                              name: 'Online Endpoints',
+                              description: 'Currently online endpoints',
+                              pluginName: 'generic-api',
+                              instanceId: 'mdr-main',
+                              queryType: 'custom',
+                              customQuery: JSON.stringify({
+                                method: 'POST',
+                                endpoint: '/tenant-visibility/basic-data',
+                                body: {
+                                  paginationAndSorting: {
+                                    currentPage: 1,
+                                    pageSize: 10,
+                                    sortProperty: 'id',
+                                    sortDirection: 'ASC'
+                                  },
+                                  command: {
+                                    tenantId: [0]
+                                  }
+                                }
+                              }),
+                              queryMethod: 'POST',
+                              queryParameters: {
+                                clientShortName: {
+                                  source: 'context',
+                                  contextVar: 'clientShortName'
+                                }
+                              },
+                              displayType: 'metric',
+                              refreshInterval: 300,
+                              placement: 'client-details',
+                              styling: {
+                                width: 'full',
+                                height: 'small',
+                                showBorder: false,
+                                showHeader: false
+                              },
+                              fieldSelection: {
+                                enabled: true,
+                                selectedFields: ['onlineEndpointCount'],
+                                excludeNullFields: true
+                              },
+                              chainedQuery: {
+                                enabled: true,
+                                lookupQuery: JSON.stringify({
+                                  method: 'POST',
+                                  endpoint: '/tenant/filter',
+                                  body: {
+                                    paginationAndSorting: {
+                                      currentPage: 1,
+                                      pageSize: 300,
+                                      sortProperty: 'id',
+                                      sortDirection: 'ASC'
+                                    }
+                                  }
+                                }),
+                                lookupField: 'id',
+                                targetField: 'tenantId'
+                              }
+                            }}
+                            title="Online Endpoints"
+                            colorScheme="green"
+                            icon="Shield"
+                            clientShortName={client.shortName}
+                            clientName={client.name}
+                            clientDomain={client.domain || undefined}
+                          />
+                          
+                          {/* Offline Endpoints */}
+                          <PowerBIMetricCard
+                            widget={{
+                              id: 'mdr-offline-endpoints',
+                              name: 'Offline Endpoints',
+                              description: 'Currently offline endpoints',
+                              pluginName: 'generic-api',
+                              instanceId: 'mdr-main',
+                              queryType: 'custom',
+                              customQuery: JSON.stringify({
+                                method: 'POST',
+                                endpoint: '/tenant-visibility/basic-data',
+                                body: {
+                                  paginationAndSorting: {
+                                    currentPage: 1,
+                                    pageSize: 10,
+                                    sortProperty: 'id',
+                                    sortDirection: 'ASC'
+                                  },
+                                  command: {
+                                    tenantId: [0]
+                                  }
+                                }
+                              }),
+                              queryMethod: 'POST',
+                              queryParameters: {
+                                clientShortName: {
+                                  source: 'context',
+                                  contextVar: 'clientShortName'
+                                }
+                              },
+                              displayType: 'metric',
+                              refreshInterval: 300,
+                              placement: 'client-details',
+                              styling: {
+                                width: 'full',
+                                height: 'small',
+                                showBorder: false,
+                                showHeader: false
+                              },
+                              fieldSelection: {
+                                enabled: true,
+                                selectedFields: ['offlineEndpointCount'],
+                                excludeNullFields: true
+                              },
+                              chainedQuery: {
+                                enabled: true,
+                                lookupQuery: JSON.stringify({
+                                  method: 'POST',
+                                  endpoint: '/tenant/filter',
+                                  body: {
+                                    paginationAndSorting: {
+                                      currentPage: 1,
+                                      pageSize: 300,
+                                      sortProperty: 'id',
+                                      sortDirection: 'ASC'
+                                    }
+                                  }
+                                }),
+                                lookupField: 'id',
+                                targetField: 'tenantId'
+                              }
+                            }}
+                            title="Offline Endpoints"
+                            colorScheme="red"
+                            icon="AlertCircle"
+                            clientShortName={client.shortName}
+                            clientName={client.name}
+                            clientDomain={client.domain || undefined}
+                          />
+                          
+                          {/* EPS Rate */}
+                          <PowerBIMetricCard
+                            widget={{
+                              id: 'mdr-eps-rate',
+                              name: 'EPS Rate',
+                              description: 'Events per second',
+                              pluginName: 'generic-api',
+                              instanceId: 'mdr-main',
+                              queryType: 'custom',
+                              customQuery: JSON.stringify({
+                                method: 'POST',
+                                endpoint: '/tenant-visibility/basic-data',
+                                body: {
+                                  paginationAndSorting: {
+                                    currentPage: 1,
+                                    pageSize: 10,
+                                    sortProperty: 'id',
+                                    sortDirection: 'ASC'
+                                  },
+                                  command: {
+                                    tenantId: [0]
+                                  }
+                                }
+                              }),
+                              queryMethod: 'POST',
+                              queryParameters: {
+                                clientShortName: {
+                                  source: 'context',
+                                  contextVar: 'clientShortName'
+                                }
+                              },
+                              displayType: 'metric',
+                              refreshInterval: 300,
+                              placement: 'client-details',
+                              styling: {
+                                width: 'full',
+                                height: 'small',
+                                showBorder: false,
+                                showHeader: false
+                              },
+                              fieldSelection: {
+                                enabled: true,
+                                selectedFields: ['epsRate'],
+                                excludeNullFields: true
+                              },
+                              chainedQuery: {
+                                enabled: true,
+                                lookupQuery: JSON.stringify({
+                                  method: 'POST',
+                                  endpoint: '/tenant/filter',
+                                  body: {
+                                    paginationAndSorting: {
+                                      currentPage: 1,
+                                      pageSize: 300,
+                                      sortProperty: 'id',
+                                      sortDirection: 'ASC'
+                                    }
+                                  }
+                                }),
+                                lookupField: 'id',
+                                targetField: 'tenantId'
+                              }
+                            }}
+                            title="EPS Rate"
+                            colorScheme="purple"
+                            icon="Activity"
+                            clientShortName={client.shortName}
+                            clientName={client.name}
+                            clientDomain={client.domain || undefined}
+                          />
+                        </div>
+                        
+                        {/* Detailed MDR Information */}
+                        <div className="mt-6">
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">Detailed Endpoint Information</h3>
+                          <DynamicWidgetRenderer
+                            widget={{
+                              id: 'mdr-service-details',
+                              name: 'Client Service Details',
+                              description: 'Displays MDR service details for the current client',
+                              pluginName: 'generic-api',
+                              instanceId: 'mdr-main',
+                              queryType: 'custom',
+                              customQuery: JSON.stringify({
+                                method: 'POST',
+                                endpoint: '/tenant-visibility/basic-data',
+                                body: {
+                                  paginationAndSorting: {
+                                    currentPage: 1,
+                                    pageSize: 10,
+                                    sortProperty: 'id',
+                                    sortDirection: 'ASC'
+                                  },
+                                  command: {
+                                    tenantId: [0]
+                                  }
+                                }
+                              }),
+                              queryMethod: 'POST',
+                              queryParameters: {
+                                clientShortName: {
+                                  source: 'context',
+                                  contextVar: 'clientShortName'
+                                }
+                              },
+                              displayType: 'cards',
+                              refreshInterval: 300,
+                              placement: 'client-details',
+                              styling: {
+                                width: 'full',
+                                height: 'large',
+                                showBorder: false,
+                                showHeader: false
+                              },
+                              fieldSelection: {
+                                enabled: true,
+                                selectedFields: [
+                                  'onlineServerEndpointCount',
+                                  'onlineWorkstationEndpointCount', 
+                                  'activeWorkstationEndpointCount',
+                                  'contractScope',
+                                  'currentScopeServers',
+                                  'currentScopeWorkstations',
+                                  'actualScopeServers',
+                                  'actualScopeWorkstations',
+                                  'lastEndpointUpdate',
+                                  'lastNetworkUpdate',
+                                  'workstationCount',
+                                  'workstationOnlineCount',
+                                  'workstationOfflineCount',
+                                  'serverCount',
+                                  'serverOnlineCount',
+                                  'serverOfflineCount'
+                                ],
+                                excludeNullFields: true
+                              },
+                              chainedQuery: {
+                                enabled: true,
+                                lookupQuery: JSON.stringify({
+                                  method: 'POST',
+                                  endpoint: '/tenant/filter',
+                                  body: {
+                                    paginationAndSorting: {
+                                      currentPage: 1,
+                                      pageSize: 300,
+                                      sortProperty: 'id',
+                                      sortDirection: 'ASC'
+                                    }
+                                  }
+                                }),
+                                lookupField: 'id',
+                                targetField: 'tenantId'
+                              }
+                            }}
+                            clientShortName={client.shortName}
+                            clientName={client.name}
+                            clientDomain={client.domain || undefined}
+                          />
+                        </div>
+                      </div>
                     ) : (
                       <div className="text-center py-12">
                         <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />

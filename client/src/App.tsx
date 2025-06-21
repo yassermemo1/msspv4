@@ -19,6 +19,7 @@ import AuthPage from "@/pages/auth-page";
 import LoginPage from "@/pages/login-page";
 import RegisterPage from "@/pages/register-page";
 import MainDashboardPage from "@/pages/main-dashboard-page";
+import PowerBIDashboardPage from "@/pages/powerbi-dashboard-page";
 import ClientsPage from "@/pages/clients-page";
 import ClientDetailPage from "@/pages/client-detail-page";
 import ContractsPage from "@/pages/contracts-page";
@@ -198,6 +199,13 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/settings">
                         <SettingsPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/powerbi-dashboard" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/powerbi-dashboard">
+                        <PowerBIDashboardPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />

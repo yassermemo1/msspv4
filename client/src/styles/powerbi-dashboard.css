@@ -1,0 +1,254 @@
+/* PowerBI Dashboard Styles */
+
+/* Card animations and effects */
+.powerbi-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+/* Hover effects to show cards are clickable */
+.powerbi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Gradient overlays */
+.powerbi-gradient-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.powerbi-gradient-green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.powerbi-gradient-purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.powerbi-gradient-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+}
+
+.powerbi-gradient-teal {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+}
+
+/* Icon containers */
+.powerbi-icon-container {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 8px;
+  transition: all 0.3s ease;
+}
+
+/* Icon hover effect */
+.powerbi-card:hover .powerbi-icon-container {
+  transform: scale(1.1);
+}
+
+/* Value animations */
+.powerbi-metric-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Trend indicators */
+.powerbi-trend {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.powerbi-trend-up {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.powerbi-trend-down {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+/* Loading states */
+.powerbi-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.powerbi-skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: powerbi-shimmer 2s infinite;
+}
+
+@keyframes powerbi-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Error states */
+.powerbi-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+/* Refresh button */
+.powerbi-refresh-btn {
+  transition: all 0.3s ease;
+}
+
+.powerbi-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.powerbi-refresh-btn:not(:disabled):hover {
+  transform: rotate(180deg);
+}
+
+/* Grid responsive adjustments */
+@media (max-width: 1536px) {
+  .powerbi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .powerbi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .powerbi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Details panel */
+.powerbi-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.powerbi-details.open {
+  max-height: 200px;
+  transition: max-height 0.3s ease-in;
+}
+
+/* Expanded card with details */
+.powerbi-card-expanded {
+  max-height: 600px;
+}
+
+.powerbi-card-expanded .powerbi-content {
+  overflow-y: auto;
+  max-height: 500px;
+}
+
+/* Query details styling */
+.powerbi-query-details {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #2d3748;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Time display */
+.powerbi-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Background patterns */
+.powerbi-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.05;
+  background-image: 
+    repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,.5) 35px, rgba(255,255,255,.5) 70px);
+  pointer-events: none;
+}
+
+/* Hover effects for interactive elements */
+.powerbi-interactive {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.powerbi-interactive:hover {
+  filter: brightness(1.05);
+}
+
+.powerbi-interactive:active {
+  transform: scale(0.98);
+}
+
+/* Custom scrollbar */
+.powerbi-scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb #f9fafb;
+}
+
+.powerbi-scrollable::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.powerbi-scrollable::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.powerbi-scrollable::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.powerbi-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+} 

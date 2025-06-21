@@ -390,6 +390,15 @@ pluginRoutes.post('/:pluginName/instances/:instanceId/query', requireAuth, async
     const { pluginName, instanceId } = req.params;
     const { query, method = 'GET', parameters = {}, filters = [], opts = {}, saveAs, context = {}, chainedQuery, fieldSelection } = req.body;
     
+    // Debug logging
+    console.log(`📥 Received query request for ${pluginName}/${instanceId}:`, {
+      query: query,
+      method: method,
+      parametersKeys: Object.keys(parameters),
+      hasFilters: filters.length > 0,
+      context: context
+    });
+    
     const plugin = getPlugin(pluginName);
     if (!plugin) {
       return res.status(404).json({ message: 'Plugin not found' });

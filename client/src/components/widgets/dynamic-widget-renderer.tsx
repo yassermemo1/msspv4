@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Calendar
+  Calendar,
+  DollarSign
 } from 'lucide-react';
 import {
   BarChart,
@@ -134,48 +135,84 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   previewData
 }) => {
   const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Rate limiting: track last request time per widget
+  const lastRequestTimeRef = useRef<number>(0);
+  const RATE_LIMIT_MS = 60000; // 1 minute
+  const [nextUpdateTime, setNextUpdateTime] = useState<Date | null>(null);
 
   useEffect(() => {
-    // If we have preview data, use it directly
-    if (previewData) {
-      setData(previewData);
-      setLastUpdate(new Date());
-      setLoading(false);
-      onLoadingStateChange?.('loaded');
-      return;
-    }
-    
+    // Initial fetch
     fetchData();
-    
-    // Set up auto-refresh (only if not in preview mode)
-    if (widget.refreshInterval > 0 && !previewData) {
+
+    // Set up interval if specified
+    if (widget.refreshInterval > 0) {
       const interval = setInterval(fetchData, widget.refreshInterval * 1000);
       return () => clearInterval(interval);
     }
-  }, [widget, clientShortName, clientName, clientDomain, previewData]);
+  }, [widget.id, widget.customQuery, widget.queryId, clientShortName]);
 
-  // Add force refresh event listener for smart refresh system
+  // Listen for force refresh events
   useEffect(() => {
     const handleForceRefresh = (event: CustomEvent) => {
-      const { widgetId, timestamp } = event.detail;
-      if (widgetId === widget.id) {
-        console.log(`🔄 Force refreshing widget: ${widget.name} at ${new Date(timestamp).toLocaleTimeString()}`);
+      if (event.detail.widgetId === widget.id) {
         fetchData();
       }
     };
 
-    // Listen for force refresh events
-    document.addEventListener('forceRefresh', handleForceRefresh as EventListener);
-    
+    window.addEventListener('force-widget-refresh' as any, handleForceRefresh);
     return () => {
-      document.removeEventListener('forceRefresh', handleForceRefresh as EventListener);
+      window.removeEventListener('force-widget-refresh' as any, handleForceRefresh);
     };
-  }, [widget.id, widget.name]);
+  }, [widget.id]);
+
+  // Handle external refresh requests
+  useEffect(() => {
+    if (onRefresh) {
+      onRefresh();
+    }
+  }, [onRefresh]);
+
+  // Update next update time display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (lastRequestTimeRef.current > 0) {
+        const nextUpdate = new Date(lastRequestTimeRef.current + RATE_LIMIT_MS);
+        if (nextUpdate > new Date()) {
+          setNextUpdateTime(nextUpdate);
+        } else {
+          setNextUpdateTime(null);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchData = async () => {
+    // Rate limiting check
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTimeRef.current;
+    
+    if (timeSinceLastRequest < RATE_LIMIT_MS && lastRequestTimeRef.current > 0) {
+      const remainingTime = Math.ceil((RATE_LIMIT_MS - timeSinceLastRequest) / 1000);
+      console.log(`⏳ Rate limit: Widget "${widget.name}" - waiting ${remainingTime}s before next request`);
+      
+      // Update next update time
+      setNextUpdateTime(new Date(lastRequestTimeRef.current + RATE_LIMIT_MS));
+      return;
+    }
+    
+    // Update last request time
+    lastRequestTimeRef.current = now;
+    setNextUpdateTime(new Date(now + RATE_LIMIT_MS));
+    console.log(`🔄 Fetching data for widget: ${widget.name}`);
+
+    // Use preview data if available
     if (previewData !== undefined) {
       setData(previewData);
       return;
@@ -189,8 +226,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
     try {
       const endpoint = widget.queryType === 'custom' 
-        ? `/api/plugins/${widget.pluginName}/${widget.instanceId}/query/custom`
-        : `/api/plugins/${widget.pluginName}/${widget.instanceId}/query/${widget.queryId}`;
+        ? `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/query`
+        : `/api/plugins/${widget.pluginName}/instances/${widget.instanceId}/default-query/${widget.queryId}`;
 
       // Add client context to parameters if clientShortName is provided
       const queryParams = widget.queryParameters || {};
@@ -215,6 +252,15 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         dynamicFilters: (widget as any).dynamicFilters,
         fieldSelection: widget.fieldSelection
       };
+
+      // Debug logging
+      console.log('📤 Sending widget query:', {
+        widgetName: widget.name,
+        pluginName: widget.pluginName,
+        queryType: widget.queryType,
+        customQuery: widget.customQuery,
+        payload: payload
+      });
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -243,6 +289,14 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         // Check for data wrapper
         else if ('data' in result && !('value' in result)) {
           extractedData = result.data;
+          
+          // Special handling for SQL plugin responses which have nested data.data structure
+          if (extractedData && typeof extractedData === 'object' && 
+              'data' in extractedData && 'rows' in extractedData.data) {
+            // SQL plugin returns { status, statusText, data: { rows, rowCount, fields }, timestamp }
+            // We want to extract the rows array for most display types
+            extractedData = extractedData.data.rows;
+          }
         }
         // Check for results wrapper
         else if ('results' in result && !('value' in result)) {
@@ -279,40 +333,41 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   };
 
   const getHeightClass = () => {
-    const height = widget.styling?.height || 'medium';
-    switch (height) {
-      case 'small': return 'h-48';
-      case 'medium': return 'h-72';
-      case 'large': return 'h-96';
-      default: return 'h-72';
-    }
+    // Force all cards to have the same height for consistency
+    return 'h-64'; // Fixed height of 16rem (256px)
   };
 
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center h-32">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <span className="ml-2 text-gray-600">Loading...</span>
+        <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+            <span className="text-sm text-gray-500 mt-2">Loading...</span>
+          </div>
         </div>
       );
     }
 
     if (error) {
       return (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
-            {error}
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+            <div className="text-sm text-red-600 font-medium">Error loading widget</div>
+            <div className="text-xs text-gray-500 mt-1">{error}</div>
+          </div>
+        </div>
       );
     }
 
     if (!data) {
       return (
-        <div className="text-center text-gray-500 py-8">
-          No data available
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <Activity className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+            <div className="text-sm text-gray-500">No data available</div>
+          </div>
         </div>
       );
     }
@@ -650,6 +705,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     let icon = null;
     let color = 'blue';
     let trend = null;
+    let drilldownUrl = null;
 
     // Handle SQL query results that return an array with a single row
     if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
@@ -660,6 +716,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if ('icon' in firstRow) icon = firstRow.icon;
       if ('color' in firstRow) color = firstRow.color;
       if ('trend' in firstRow) trend = firstRow.trend;
+      if ('drilldown_url' in firstRow) drilldownUrl = firstRow.drilldown_url;
       
       // If no explicit value field, try to extract from other numeric fields
       if (!('value' in firstRow) && Object.keys(firstRow).length > 0) {
@@ -689,6 +746,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         if ('icon' in data) icon = data.icon;
         if ('color' in data) color = data.color;
         if ('trend' in data) trend = data.trend;
+        if ('drilldown_url' in data) drilldownUrl = data.drilldown_url;
       } else {
         // Try to find the first numeric value in the object
         for (const [key, val] of Object.entries(data)) {
@@ -730,7 +788,8 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
         'TrendingDown': TrendingDown,
         'Activity': Activity,
         'Target': Target,
-        'AlertTriangle': AlertTriangle
+        'AlertTriangle': AlertTriangle,
+        'DollarSign': DollarSign
       };
       return iconMap[iconName] || Target;
     };
@@ -750,43 +809,62 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
     const colors = getColorClasses(color);
     const IconComponent = icon ? getIconComponent(icon) : null;
+    
+    const handleClick = () => {
+      if (drilldownUrl) {
+        window.location.href = drilldownUrl;
+      }
+    };
 
     return (
-      <div className={`p-6 rounded-lg ${colors.bg} h-full flex flex-col justify-between`}>
+      <div 
+        className={`p-4 rounded-lg ${colors.bg} h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+        onClick={drilldownUrl ? handleClick : undefined}
+      >
+        <div className="flex items-center justify-between mb-3">
+          {IconComponent && (
+            <div className={`p-2 rounded-lg bg-white shadow-sm`}>
+              <IconComponent className={`h-5 w-5 ${colors.icon}`} />
+            </div>
+          )}
+          {trend !== null && trend !== undefined && (
+            <div className={`flex items-center space-x-1 text-xs font-medium ${
+              trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {trend > 0 ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : trend < 0 ? (
+                <TrendingDown className="h-3.5 w-3.5" />
+              ) : (
+                <Minus className="h-3.5 w-3.5" />
+              )}
+              <span>{Math.abs(trend)}%</span>
+            </div>
+          )}
+        </div>
         <div>
-          <div className="flex items-center justify-between mb-4">
-            {IconComponent && (
-              <div className={`p-2 rounded-lg bg-white shadow-sm`}>
-                <IconComponent className={`h-6 w-6 ${colors.icon}`} />
-              </div>
-            )}
-            {trend !== null && trend !== undefined && (
-              <div className={`flex items-center space-x-1 text-sm font-medium ${
-                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
-              }`}>
-                {trend > 0 ? (
-                  <TrendingUp className="h-4 w-4" />
-                ) : trend < 0 ? (
-                  <TrendingDown className="h-4 w-4" />
-                ) : (
-                  <Minus className="h-4 w-4" />
-                )}
-                <span>{Math.abs(trend)}%</span>
-              </div>
-            )}
+          <div className={`text-2xl font-bold ${colors.text} mb-1`}>
+            {formatValue(value)}
           </div>
-          <div>
-            <div className={`text-3xl font-bold ${colors.text} mb-1`}>
-              {formatValue(value)}
-            </div>
-            <div className={`text-sm font-medium ${colors.icon}`}>
-              {label}
-            </div>
+          <div className={`text-sm font-medium ${colors.icon}`}>
+            {label}
           </div>
         </div>
-        {widget.description && (
-          <div className="text-xs text-gray-600 mt-4">
-            {widget.description}
+        {(widget.description || drilldownUrl) && (
+          <div className="mt-3">
+            {widget.description && (
+              <div className="text-xs text-gray-600 line-clamp-1">
+                {widget.description}
+              </div>
+            )}
+            {drilldownUrl && (
+              <div className="text-xs text-gray-500 mt-1 flex items-center">
+                <span>View details</span>
+                <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -961,6 +1039,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     let label = 'Count';
     let trend = null;
     let previousValue = null;
+    let drilldownUrl = null;
 
     // Handle SQL query results that return an array with a single row
     if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
@@ -983,6 +1062,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if ('label' in firstRow) label = firstRow.label;
       if ('trend' in firstRow) trend = firstRow.trend;
       if ('previous' in firstRow) previousValue = firstRow.previous;
+      if ('drilldown_url' in firstRow) drilldownUrl = firstRow.drilldown_url;
     }
     // Handle aggregation results
     else if (widget.aggregation) {
@@ -1022,6 +1102,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       if ('label' in data) label = data.label;
       if ('trend' in data) trend = data.trend;
       if ('previous' in data) previousValue = data.previous;
+      if ('drilldown_url' in data) drilldownUrl = data.drilldown_url;
     }
 
     const formatNumber = (num: any) => {
@@ -1040,41 +1121,60 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     if (trend === null && previousValue !== null && typeof value === 'number' && typeof previousValue === 'number') {
       trend = previousValue !== 0 ? ((value - previousValue) / previousValue) * 100 : 0;
     }
+    
+    const handleClick = () => {
+      if (drilldownUrl) {
+        window.location.href = drilldownUrl;
+      }
+    };
 
     return (
-      <div className="p-6 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 h-full flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 rounded-lg bg-white shadow-sm">
-              <Hash className="h-6 w-6 text-indigo-600" />
-            </div>
-            {trend !== null && (
-              <div className={`flex items-center space-x-1 text-sm font-medium ${
-                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
-              }`}>
-                {trend > 0 ? (
-                  <TrendingUp className="h-4 w-4" />
-                ) : trend < 0 ? (
-                  <TrendingDown className="h-4 w-4" />
-                ) : (
-                  <Minus className="h-4 w-4" />
-                )}
-                <span>{Math.abs(Math.round(trend))}%</span>
-              </div>
-            )}
+      <div 
+        className={`p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+        onClick={drilldownUrl ? handleClick : undefined}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="p-2 rounded-lg bg-white shadow-sm">
+            <Hash className="h-5 w-5 text-indigo-600" />
           </div>
-          <div>
-            <div className="text-3xl font-bold text-indigo-900 mb-1">
-              {formatNumber(value)}
+          {trend !== null && (
+            <div className={`flex items-center space-x-1 text-xs font-medium ${
+              trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {trend > 0 ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : trend < 0 ? (
+                <TrendingDown className="h-3.5 w-3.5" />
+              ) : (
+                <Minus className="h-3.5 w-3.5" />
+              )}
+              <span>{Math.abs(Math.round(trend))}%</span>
             </div>
-            <div className="text-sm font-medium text-indigo-600">
-              {label}
-            </div>
+          )}
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-indigo-900 mb-1">
+            {formatNumber(value)}
+          </div>
+          <div className="text-sm font-medium text-indigo-600">
+            {label}
           </div>
         </div>
-        {widget.description && (
-          <div className="text-xs text-gray-600 mt-4">
-            {widget.description}
+        {(widget.description || drilldownUrl) && (
+          <div className="mt-3">
+            {widget.description && (
+              <div className="text-xs text-gray-600 line-clamp-1">
+                {widget.description}
+              </div>
+            )}
+            {drilldownUrl && (
+              <div className="text-xs text-gray-500 mt-1 flex items-center">
+                <span>View details</span>
+                <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1123,51 +1223,49 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     const progressPercentage = Math.min((value / target) * 100, 100);
 
     return (
-      <div className={`p-6 rounded-lg bg-gradient-to-br ${colors.bg} h-full flex flex-col justify-between`}>
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 rounded-lg bg-white shadow-sm">
-              <Percent className={`h-6 w-6 ${colors.icon}`} />
-            </div>
-            {trend !== null && (
-              <div className={`flex items-center space-x-1 text-sm font-medium ${
-                trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
-              }`}>
-                {trend > 0 ? (
-                  <TrendingUp className="h-4 w-4" />
-                ) : trend < 0 ? (
-                  <TrendingDown className="h-4 w-4" />
-                ) : (
-                  <Minus className="h-4 w-4" />
-                )}
-                <span>{Math.abs(Math.round(trend))}%</span>
-              </div>
-            )}
+      <div className={`p-4 rounded-lg bg-gradient-to-br ${colors.bg} h-full flex flex-col justify-center`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="p-2 rounded-lg bg-white shadow-sm">
+            <Percent className={`h-5 w-5 ${colors.icon}`} />
           </div>
-          <div>
-            <div className={`text-3xl font-bold ${colors.text} mb-1`}>
-              {Math.round(value)}%
-            </div>
-            <div className={`text-sm font-medium ${colors.icon}`}>
-              {label}
-            </div>
-          </div>
-          {target !== 100 && (
-            <div className="mt-3">
-              <div className="w-full bg-white/50 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full bg-gradient-to-r ${colors.bg} opacity-80`}
-                  style={{ width: `${progressPercentage}%` }}
-                />
-              </div>
-              <div className="text-xs text-gray-600 mt-1">
-                Target: {target}%
-              </div>
+          {trend !== null && (
+            <div className={`flex items-center space-x-1 text-xs font-medium ${
+              trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {trend > 0 ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : trend < 0 ? (
+                <TrendingDown className="h-3.5 w-3.5" />
+              ) : (
+                <Minus className="h-3.5 w-3.5" />
+              )}
+              <span>{Math.abs(Math.round(trend))}%</span>
             </div>
           )}
         </div>
+        <div>
+          <div className={`text-2xl font-bold ${colors.text} mb-1`}>
+            {Math.round(value)}%
+          </div>
+          <div className={`text-sm font-medium ${colors.icon}`}>
+            {label}
+          </div>
+        </div>
+        {target !== 100 && (
+          <div className="mt-2">
+            <div className="w-full bg-white/50 rounded-full h-1.5">
+              <div 
+                className={`h-1.5 rounded-full bg-gradient-to-r ${colors.bg} opacity-80`}
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+            <div className="text-xs text-gray-600 mt-1">
+              Target: {target}%
+            </div>
+          </div>
+        )}
         {widget.description && (
-          <div className="text-xs text-gray-600 mt-4">
+          <div className="text-xs text-gray-600 mt-2 line-clamp-1">
             {widget.description}
           </div>
         )}
@@ -1207,27 +1305,25 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     };
 
     return (
-      <div className="py-8 px-4">
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-lg font-medium text-gray-700">{label}</span>
-            <span className="text-2xl font-bold text-gray-900">
-              {value} / {max}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-6">
-            <div 
-              className={`h-6 rounded-full transition-all duration-500 ${getBarColor()}`}
-              style={{ width: `${percentage}%` }}
-            >
-              <div className="h-full flex items-center justify-center text-white font-medium text-sm">
-                {Math.round(percentage)}%
-              </div>
+      <div className="flex flex-col justify-center h-full p-4">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-lg font-bold text-gray-900">
+            {value} / {max}
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+          <div 
+            className={`h-4 rounded-full transition-all duration-500 ${getBarColor()}`}
+            style={{ width: `${percentage}%` }}
+          >
+            <div className="h-full flex items-center justify-center text-white font-medium text-xs">
+              {Math.round(percentage)}%
             </div>
           </div>
         </div>
         {widget.description && (
-          <div className="text-sm text-gray-500 text-center">
+          <div className="text-xs text-gray-500 text-center line-clamp-1">
             {widget.description}
           </div>
         )}
@@ -1305,35 +1401,33 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     };
 
     return (
-      <div className={`p-6 rounded-lg bg-gradient-to-br ${colorScheme.bg} h-full flex flex-col justify-between`}>
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 rounded-lg bg-white shadow-sm">
-              {isPositive ? (
-                <TrendingUp className={`h-6 w-6 ${colorScheme.icon}`} />
-              ) : isNegative ? (
-                <TrendingDown className={`h-6 w-6 ${colorScheme.icon}`} />
-              ) : (
-                <Activity className={`h-6 w-6 ${colorScheme.icon}`} />
-              )}
-            </div>
+      <div className={`p-4 rounded-lg bg-gradient-to-br ${colorScheme.bg} h-full flex flex-col justify-center`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="p-2 rounded-lg bg-white shadow-sm">
+            {isPositive ? (
+              <TrendingUp className={`h-5 w-5 ${colorScheme.icon}`} />
+            ) : isNegative ? (
+              <TrendingDown className={`h-5 w-5 ${colorScheme.icon}`} />
+            ) : (
+              <Activity className={`h-5 w-5 ${colorScheme.icon}`} />
+            )}
           </div>
-          <div>
-            <div className={`text-3xl font-bold ${colorScheme.text} mb-1`}>
-              {change > 0 ? '+' : ''}{Math.round(change)}%
+        </div>
+        <div>
+          <div className={`text-2xl font-bold ${colorScheme.text} mb-1`}>
+            {change > 0 ? '+' : ''}{Math.round(change)}%
+          </div>
+          <div className={`text-sm font-medium ${colorScheme.icon} mb-2`}>
+            {label}
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-600">Current</span>
+              <span className="font-medium text-gray-900">{formatValue(value)}</span>
             </div>
-            <div className={`text-sm font-medium ${colorScheme.icon} mb-3`}>
-              {label}
-            </div>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-600">Current</span>
-                <span className="font-medium text-gray-900">{formatValue(value)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-600">Previous</span>
-                <span className="font-medium text-gray-900">{formatValue(previous)}</span>
-              </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-600">Previous</span>
+              <span className="font-medium text-gray-900">{formatValue(previous)}</span>
             </div>
           </div>
         </div>
@@ -1370,47 +1464,39 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     };
 
     return (
-      <div className="p-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-1.5 rounded-md bg-white shadow-sm">
-                <TrendingDown className="h-4 w-4 text-blue-600" />
-              </div>
+      <div className="flex flex-col justify-center h-full p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+            <div className="p-1 rounded-md bg-white shadow-sm mb-1.5 inline-block">
+              <TrendingDown className="h-3.5 w-3.5 text-blue-600" />
             </div>
-            <div className="text-2xl font-bold text-blue-900">{formatStat(stats.min)}</div>
+            <div className="text-lg font-bold text-blue-900">{formatStat(stats.min)}</div>
             <div className="text-xs font-medium text-blue-600">Minimum</div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-1.5 rounded-md bg-white shadow-sm">
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              </div>
+          <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg">
+            <div className="p-1 rounded-md bg-white shadow-sm mb-1.5 inline-block">
+              <TrendingUp className="h-3.5 w-3.5 text-green-600" />
             </div>
-            <div className="text-2xl font-bold text-green-900">{formatStat(stats.max)}</div>
+            <div className="text-lg font-bold text-green-900">{formatStat(stats.max)}</div>
             <div className="text-xs font-medium text-green-600">Maximum</div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-1.5 rounded-md bg-white shadow-sm">
-                <Activity className="h-4 w-4 text-yellow-600" />
-              </div>
+          <div className="p-3 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg">
+            <div className="p-1 rounded-md bg-white shadow-sm mb-1.5 inline-block">
+              <Activity className="h-3.5 w-3.5 text-yellow-600" />
             </div>
-            <div className="text-2xl font-bold text-yellow-900">{formatStat(Math.round(stats.avg))}</div>
+            <div className="text-lg font-bold text-yellow-900">{formatStat(Math.round(stats.avg))}</div>
             <div className="text-xs font-medium text-yellow-600">Average</div>
           </div>
-          <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-1.5 rounded-md bg-white shadow-sm">
-                <Hash className="h-4 w-4 text-purple-600" />
-              </div>
+          <div className="p-3 bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg">
+            <div className="p-1 rounded-md bg-white shadow-sm mb-1.5 inline-block">
+              <Hash className="h-3.5 w-3.5 text-purple-600" />
             </div>
-            <div className="text-2xl font-bold text-purple-900">{formatStat(stats.count)}</div>
+            <div className="text-lg font-bold text-purple-900">{formatStat(stats.count)}</div>
             <div className="text-xs font-medium text-purple-600">Count</div>
           </div>
         </div>
         {widget.description && (
-          <div className="text-xs text-gray-600 text-center mt-4">
+          <div className="text-xs text-gray-600 text-center mt-2 line-clamp-1">
             {widget.description}
           </div>
         )}
@@ -1573,7 +1659,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
   const contentClasses = [
     getHeightClass(),
-    'overflow-hidden'
+    'overflow-auto'
   ].join(' ');
 
   const isMetricType = ['metric', 'number', 'percentage', 'trend', 'statistic'].includes(widget.displayType);
@@ -1581,12 +1667,24 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   return (
     <div className={cardClasses}>
       {(widget.styling?.showHeader !== false) && (
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700">
-            {widget.name}
-          </h3>
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="text-xs text-gray-500">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-gray-700 truncate">
+              {widget.name}
+            </h3>
+            {nextUpdateTime && nextUpdateTime > new Date() && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                Next in {Math.ceil((nextUpdateTime.getTime() - new Date().getTime()) / 1000)}s
+              </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-1.5 ml-2">
+            {lastUpdate && (
+              <span className="text-xs text-gray-400 hidden lg:inline">
+                {lastUpdate.toLocaleTimeString()}
+              </span>
+            )}
+            <Badge variant="outline" className="text-xs text-gray-500 py-0.5 px-1.5">
               {widget.pluginName}
             </Badge>
             <Button
@@ -1598,20 +1696,26 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
                   onRefresh();
                 }
               }}
-              disabled={loading}
-              title="Refresh widget data"
-              className="h-8 w-8 p-0"
+              disabled={loading || (nextUpdateTime !== null && nextUpdateTime > new Date())}
+              title={nextUpdateTime && nextUpdateTime > new Date() 
+                ? `Rate limited. Next update allowed at ${nextUpdateTime.toLocaleTimeString()}`
+                : "Refresh widget data"}
+              className="h-7 w-7 p-0"
             >
-              <RefreshCw className={`h-4 w-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${
+                loading ? 'animate-spin text-blue-500' : 
+                (nextUpdateTime && nextUpdateTime > new Date()) ? 'text-gray-300' : 
+                'text-gray-500 hover:text-gray-700'
+              }`} />
             </Button>
             {onEdit && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => onEdit(widget)}
-                className="h-8 w-8 p-0"
+                className="h-7 w-7 p-0"
               >
-                <Settings className="h-4 w-4 text-gray-500" />
+                <Settings className="h-3.5 w-3.5 text-gray-500" />
               </Button>
             )}
           </div>
@@ -1619,7 +1723,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       )}
       <div className={`${contentClasses} ${isMetricType ? '' : 'p-4'}`}>
         {renderContent()}
-        {lastUpdate && !isMetricType && (
+        {lastUpdate && !isMetricType && !widget.styling?.showHeader && (
           <div className="text-xs text-gray-400 mt-2 text-center">
             Last updated: {lastUpdate.toLocaleTimeString()}
           </div>

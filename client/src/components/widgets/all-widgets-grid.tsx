@@ -643,12 +643,12 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
             <div 
               key={`${widget.id}-${lastRefresh.getTime()}`}
               data-widget-id={widget.id}
-              className={`${refreshedWidgets.has(widget.id) ? 'ring-2 ring-blue-200 ring-opacity-50' : ''} transition-all duration-300`}
+              className={`h-72 ${refreshedWidgets.has(widget.id) ? 'ring-2 ring-blue-200 ring-opacity-50' : ''} transition-all duration-300`}
             >
               <AsyncWidgetRenderer
                 widget={widget}
                 index={index}
-                className=""
+                className="h-full"
                 onLoadingStateChange={handleWidgetLoadingStateChange}
               />
             </div>
