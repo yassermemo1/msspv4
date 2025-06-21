@@ -436,7 +436,7 @@ export class MDRClientSyncService {
                            (visibilityData.onlineWorkstationEndpointCount || 0);
     
     if (onlineEndpoints === 0 && visibilityData.contractScope > 0) {
-      return 'awaiting'; // Has contract but no active endpoints - use valid status
+      return 'pending'; // Has contract but no active endpoints
     }
     
     return 'active';
@@ -451,7 +451,7 @@ export class MDRClientSyncService {
     }
     
     if (error.code === '23514' && error.constraint === 'clients_status_check') {
-      return 'Invalid client status: "pending" is not a valid status. Valid statuses are: active, inactive, prospect, or awaiting';
+      return 'Invalid client status. Valid statuses are: prospect, active, inactive, suspended, archived, pending, awaiting';
     }
     
     if (error.message?.includes('Cannot read properties of null')) {
