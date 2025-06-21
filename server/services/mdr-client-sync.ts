@@ -405,8 +405,8 @@ export class MDRClientSyncService {
       
       const updateQuery = `
         UPDATE service_scopes
-        SET metadata = jsonb_set(
-          COALESCE(metadata::jsonb, '{}'::jsonb),
+        SET scope_definition = jsonb_set(
+          COALESCE(scope_definition::jsonb, '{}'::jsonb),
           '{mdrData}',
           $1::jsonb
         )
