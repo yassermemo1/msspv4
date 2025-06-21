@@ -37,6 +37,7 @@ import PluginsPage from "@/pages/plugins-page";
 import ComprehensiveBulkImportPage from "@/pages/comprehensive-bulk-import";
 
 import FieldVisibilityManagerPage from "@/pages/field-visibility-manager";
+import MDRSyncPage from "@/pages/admin/mdr-sync-page";
 
 import ServiceScopesPage from "@/pages/service-scopes-page";
 import ProposalsPage from "@/pages/proposals-page";
@@ -192,6 +193,13 @@ function App() {
                     <AuthGuard>
                       <PageGuard pageUrl="/field-visibility">
                         <FieldVisibilityManagerPage />
+                      </PageGuard>
+                    </AuthGuard>
+                  )} />
+                  <Route path="/admin/mdr-sync" component={() => (
+                    <AuthGuard>
+                      <PageGuard pageUrl="/admin/mdr-sync">
+                        <MDRSyncPage />
                       </PageGuard>
                     </AuthGuard>
                   )} />

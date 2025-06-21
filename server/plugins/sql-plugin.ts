@@ -31,6 +31,29 @@ const sqlPlugin: QueryPlugin = {
     
     try {
       console.log('🔍 SQL Plugin - Query:', query);
+      console.log('🔍 SQL Plugin - Type of query:', typeof query);
+      
+      // Handle test connection queries
+      if (query === 'test' || query === '__health_check__') {
+        try {
+          // Run a simple test query to verify database connection
+          const testResult = await db.execute(sql`SELECT 1 as test_connection, NOW() as timestamp`);
+          
+          return {
+            status: 200,
+            statusText: 'OK',
+            data: {
+              rows: testResult.rows || [{ test_connection: 1, timestamp: new Date().toISOString() }],
+              rowCount: 1,
+              fields: testResult.fields || []
+            },
+            timestamp: new Date().toISOString()
+          };
+        } catch (error) {
+          console.error('❌ SQL Plugin Test Connection Failed:', error);
+          throw new Error('Database connection test failed');
+        }
+      }
       
       // Parse the query - expecting a SQL string
       if (typeof query === 'string') {
@@ -48,33 +71,33 @@ const sqlPlugin: QueryPlugin = {
       }
       
       // Basic security check - allow SELECT queries and CTEs (WITH clause)
-      const trimmedQuery = sqlQuery.trim().toUpperCase();
-      if (!trimmedQuery.startsWith('SELECT') && !trimmedQuery.startsWith('WITH')) {
+      const trimmedQuery = sqlQuery.trim();
+      const upperQuery = trimmedQuery.toUpperCase();
+      
+      // Check if it starts with SELECT or WITH (case-insensitive)
+      if (!upperQuery.match(/^\s*(SELECT|WITH)\s/i)) {
         throw new Error('Only SELECT queries and CTEs (WITH clause) are allowed');
       }
       
-      // Check for dangerous keywords - use word boundaries to avoid false positives
-      const dangerousKeywords = ['DELETE', 'DROP', 'TRUNCATE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'EXEC', 'EXECUTE'];
+      // Check for dangerous keywords - more precise checking to avoid false positives
+      const dangerousPatterns = [
+        // Match statements that actually modify data (not in strings or column names)
+        /^\s*(DELETE|DROP|TRUNCATE|UPDATE|INSERT|ALTER|EXEC|EXECUTE)\s+/i,
+        /;\s*(DELETE|DROP|TRUNCATE|UPDATE|INSERT|ALTER|CREATE|EXEC|EXECUTE)\s+/i,
+        // Check for multiple statements (SQL injection risk)
+        /;\s*SELECT/i
+      ];
       
-      // Create a regex pattern that matches whole words only
-      for (const keyword of dangerousKeywords) {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-        if (regex.test(sqlQuery)) {
-          // Check if it's a false positive (like CREATE in created_at or CREATED)
-          const lowerQuery = sqlQuery.toLowerCase();
-          const keywordLower = keyword.toLowerCase();
-          
-          // Skip if it's part of a column name like created_at, created_date, etc.
-          if (keywordLower === 'create' && 
-              (lowerQuery.includes('created_at') || 
-               lowerQuery.includes('created_date') || 
-               lowerQuery.includes('created_by') ||
-               lowerQuery.includes('created'))) {
-            continue;
-          }
-          
-          throw new Error(`Query contains forbidden keyword: ${keyword}`);
+      // Check each pattern
+      for (const pattern of dangerousPatterns) {
+        if (pattern.test(sqlQuery)) {
+          throw new Error('Query contains forbidden SQL statements');
         }
+      }
+      
+      // Additional check for CREATE keyword specifically (but allow created_at, etc.)
+      if (/\bCREATE\s+(TABLE|DATABASE|INDEX|VIEW|PROCEDURE|FUNCTION)\b/i.test(sqlQuery)) {
+        throw new Error('Query contains forbidden DDL statements');
       }
       
       console.log('🔍 Executing SQL:', sqlQuery);

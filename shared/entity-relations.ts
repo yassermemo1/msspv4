@@ -212,7 +212,7 @@ export const ENTITY_DEFINITIONS: Record<EntityType, EntityDefinition> = {
     displayName: 'License Pool',
     pluralName: 'License Pools',
     icon: 'Key',
-    urlPath: '/license-pools',
+    urlPath: '/assets',
     primaryField: 'name',
     secondaryField: 'totalLicenses',
     statusField: 'status',

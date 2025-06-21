@@ -511,17 +511,9 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
   }, [filteredWidgets, refreshing, toast]);
 
   const getGridClass = useMemo(() => {
-    const cols = Math.min(maxColumns, filteredWidgets.length);
-    const gridCols = {
-      1: 'grid-cols-1',
-      2: 'grid-cols-1 md:grid-cols-2',
-      3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-      4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-      5: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
-      6: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6',
-    };
-    return gridCols[cols as keyof typeof gridCols] || 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-  }, [maxColumns, filteredWidgets.length]);
+    // Use a responsive grid that adapts better to available space
+    return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
+  }, []);
 
   // Loading state for initial widget list fetch
   if (widgetsLoading) {
@@ -638,21 +630,40 @@ export const AllWidgetsGrid: React.FC<AllWidgetsGridProps> = ({
           </div>
         </Card>
       ) : (
-        <div className={`grid gap-4 ${getGridClass}`}>
-          {filteredWidgets.map((widget: any, index: number) => (
-            <div 
-              key={`${widget.id}-${lastRefresh.getTime()}`}
-              data-widget-id={widget.id}
-              className={`h-72 ${refreshedWidgets.has(widget.id) ? 'ring-2 ring-blue-200 ring-opacity-50' : ''} transition-all duration-300`}
-            >
-              <AsyncWidgetRenderer
-                widget={widget}
-                index={index}
-                className="h-full"
-                onLoadingStateChange={handleWidgetLoadingStateChange}
-              />
-            </div>
-          ))}
+        <div className={`grid gap-6 ${getGridClass}`}>
+          {filteredWidgets.map((widget: any, index: number) => {
+            // Determine widget size based on display type
+            const getWidgetHeight = () => {
+              switch (widget.widgetType) {
+                case 'metric':
+                case 'number':
+                  return 'min-h-[200px]'; // Smaller for simple metrics
+                case 'chart':
+                  return 'min-h-[350px]'; // Taller for charts
+                case 'table':
+                  return 'min-h-[400px]'; // Tallest for tables
+                case 'cards':
+                  return 'min-h-[250px]'; // Medium for card displays
+                default:
+                  return 'min-h-[300px]'; // Default height
+              }
+            };
+
+            return (
+              <div 
+                key={`${widget.id}-${lastRefresh.getTime()}`}
+                data-widget-id={widget.id}
+                className={`${getWidgetHeight()} ${refreshedWidgets.has(widget.id) ? 'ring-2 ring-blue-200 ring-opacity-50' : ''} transition-all duration-300`}
+              >
+                <AsyncWidgetRenderer
+                  widget={widget}
+                  index={index}
+                  className="h-full"
+                  onLoadingStateChange={handleWidgetLoadingStateChange}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

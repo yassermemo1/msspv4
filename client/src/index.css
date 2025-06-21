@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import widget styles */
+@import './styles/widgets.css';
+
 :root {
   --background: 0 0% 100%; /* #FFFFFF */
   --foreground: 222.2 84% 4.9%; /* #0F172A */

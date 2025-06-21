@@ -333,8 +333,14 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   };
 
   const getHeightClass = () => {
-    // Force all cards to have the same height for consistency
-    return 'h-64'; // Fixed height of 16rem (256px)
+    // Dynamic height based on widget type
+    const height = widget.styling?.height || 'medium';
+    switch (height) {
+      case 'small': return 'min-h-[200px]';
+      case 'medium': return 'min-h-[300px]';
+      case 'large': return 'min-h-[400px]';
+      default: return 'min-h-[300px]';
+    }
   };
 
   const renderContent = () => {
@@ -419,9 +425,9 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
       <div className="overflow-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b bg-gray-50">
               {columns.map((col) => (
-                <th key={col} className="text-left p-2 font-medium">
+                <th key={col} className="text-left px-4 py-3 font-semibold text-gray-700">
                   {col}
                 </th>
               ))}
@@ -429,9 +435,9 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           </thead>
           <tbody>
             {data.slice(0, 10).map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50">
+              <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
                 {columns.map((col) => (
-                  <td key={col} className="p-2">
+                  <td key={col} className="px-4 py-3">
                     {String(row[col])}
                   </td>
                 ))}
@@ -440,7 +446,7 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           </tbody>
         </table>
         {data.length > 10 && (
-          <div className="text-xs text-gray-500 mt-2 text-center">
+          <div className="text-xs text-gray-500 mt-3 text-center py-2 border-t">
             Showing 10 of {data.length} rows
           </div>
         )}
@@ -485,25 +491,28 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     switch (widget.chartType) {
       case 'bar':
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey={xKey} 
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                interval={0}
-                fontSize={12}
-              />
-              <YAxis />
-              <Tooltip 
-                formatter={(value, name) => [formatChartValue(value), name]}
-                labelFormatter={(label) => `${widget.groupBy?.field || 'Category'}: ${label}`}
-              />
-              <Bar dataKey={yKey} fill={colors[0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="p-4 h-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey={xKey} 
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  interval={0}
+                  fontSize={12}
+                  tick={{ fill: '#6b7280' }}
+                />
+                <YAxis tick={{ fill: '#6b7280' }} />
+                <Tooltip 
+                  formatter={(value, name) => [formatChartValue(value), name]}
+                  labelFormatter={(label) => `${widget.groupBy?.field || 'Category'}: ${label}`}
+                />
+                <Bar dataKey={yKey} fill={colors[0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         );
 
       case 'line':
@@ -818,35 +827,35 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
     return (
       <div 
-        className={`p-4 rounded-lg ${colors.bg} h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+        className={`p-6 rounded-lg ${colors.bg} h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
         onClick={drilldownUrl ? handleClick : undefined}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           {IconComponent && (
-            <div className={`p-2 rounded-lg bg-white shadow-sm`}>
-              <IconComponent className={`h-5 w-5 ${colors.icon}`} />
+            <div className={`p-3 rounded-lg bg-white shadow-sm`}>
+              <IconComponent className={`h-6 w-6 ${colors.icon}`} />
             </div>
           )}
           {trend !== null && trend !== undefined && (
-            <div className={`flex items-center space-x-1 text-xs font-medium ${
+            <div className={`flex items-center space-x-1 text-sm font-medium ${
               trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
             }`}>
               {trend > 0 ? (
-                <TrendingUp className="h-3.5 w-3.5" />
+                <TrendingUp className="h-4 w-4" />
               ) : trend < 0 ? (
-                <TrendingDown className="h-3.5 w-3.5" />
+                <TrendingDown className="h-4 w-4" />
               ) : (
-                <Minus className="h-3.5 w-3.5" />
+                <Minus className="h-4 w-4" />
               )}
               <span>{Math.abs(trend)}%</span>
             </div>
           )}
         </div>
         <div>
-          <div className={`text-2xl font-bold ${colors.text} mb-1`}>
+          <div className={`text-4xl font-bold ${colors.text} mb-2`}>
             {formatValue(value)}
           </div>
-          <div className={`text-sm font-medium ${colors.icon}`}>
+          <div className={`text-base font-medium ${colors.icon}`}>
             {label}
           </div>
         </div>
@@ -1130,33 +1139,33 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
 
     return (
       <div 
-        className={`p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+        className={`p-6 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 h-full flex flex-col justify-center ${drilldownUrl ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
         onClick={drilldownUrl ? handleClick : undefined}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="p-2 rounded-lg bg-white shadow-sm">
-            <Hash className="h-5 w-5 text-indigo-600" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="p-3 rounded-lg bg-white shadow-sm">
+            <Hash className="h-6 w-6 text-indigo-600" />
           </div>
           {trend !== null && (
-            <div className={`flex items-center space-x-1 text-xs font-medium ${
+            <div className={`flex items-center space-x-1 text-sm font-medium ${
               trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-600'
             }`}>
               {trend > 0 ? (
-                <TrendingUp className="h-3.5 w-3.5" />
+                <TrendingUp className="h-4 w-4" />
               ) : trend < 0 ? (
-                <TrendingDown className="h-3.5 w-3.5" />
+                <TrendingDown className="h-4 w-4" />
               ) : (
-                <Minus className="h-3.5 w-3.5" />
+                <Minus className="h-4 w-4" />
               )}
               <span>{Math.abs(Math.round(trend))}%</span>
             </div>
           )}
         </div>
         <div>
-          <div className="text-2xl font-bold text-indigo-900 mb-1">
+          <div className="text-4xl font-bold text-indigo-900 mb-2">
             {formatNumber(value)}
           </div>
-          <div className="text-sm font-medium text-indigo-600">
+          <div className="text-base font-medium text-indigo-600">
             {label}
           </div>
         </div>
@@ -1244,10 +1253,10 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
           )}
         </div>
         <div>
-          <div className={`text-2xl font-bold ${colors.text} mb-1`}>
+          <div className={`text-4xl font-bold ${colors.text} mb-2`}>
             {Math.round(value)}%
           </div>
-          <div className={`text-sm font-medium ${colors.icon}`}>
+          <div className={`text-base font-medium ${colors.icon}`}>
             {label}
           </div>
         </div>
@@ -1630,13 +1639,13 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
     // Use a simple list layout instead of nested cards
     return (
       <div className="p-6">
-        <div className="space-y-3">
+        <div className="space-y-4">
           {entries.map(([key, value], index) => (
             <div
               key={index}
-              className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
+              className="flex items-center justify-between py-3 px-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
             >
-              <span className="text-sm font-medium text-gray-600">
+              <span className="text-sm font-medium text-gray-700">
                 {formatFieldName(key)}
               </span>
               <span className="text-sm font-semibold text-gray-900">
@@ -1652,9 +1661,10 @@ export const DynamicWidgetRenderer: React.FC<DynamicWidgetRendererProps> = ({
   const cardClasses = [
     className,
     getWidthClass(),
-    'bg-white rounded-lg shadow-sm',
-    widget.styling?.showBorder !== false ? 'border border-gray-200' : '',
-    'transition-all duration-200 hover:shadow-lg'
+    'bg-white rounded-xl shadow-md',
+    widget.styling?.showBorder !== false ? 'border border-gray-100' : '',
+    'transition-all duration-200 hover:shadow-xl hover:scale-[1.02]',
+    'overflow-hidden'
   ].filter(Boolean).join(' ');
 
   const contentClasses = [

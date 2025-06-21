@@ -19,7 +19,7 @@ import {
   Eye,
   EyeOff,
   Shield,
-  ShieldCheck,
+  AlertTriangle,
   Settings2
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -31,8 +31,6 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-
-// Add Dialog imports
 import {
   Dialog,
   DialogContent,
@@ -42,12 +40,8 @@ import {
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-
-// Additional imports for widget management
 import { GlobalWidgetManager } from '@/components/widgets/global-widget-manager';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus } from 'lucide-react';
 
 // Rate limiting helper
 class RateLimiter {
@@ -138,8 +132,7 @@ interface MetricData {
   label: string;
   trend?: number;
   previousValue?: number;
-  icon?: string;
-  color?: string;
+  details?: any;
 }
 
 interface WidgetConfig {
@@ -148,22 +141,24 @@ interface WidgetConfig {
   query: string;
   colorScheme: keyof typeof colorSchemes;
   icon: React.ElementType;
+  plugin: 'sql' | 'jira';
   formatter?: (value: number) => string;
-  trendCalculation?: (current: number, previous: number) => number;
   description?: string;
   drilldownUrl?: string;
 }
 
-// Widget configurations with tested queries
+// Widget configurations - both SQL and Jira
 const widgetConfigs: WidgetConfig[] = [
+  // SQL Widgets
   {
     id: 'total-clients',
     title: 'Total Clients',
     query: `SELECT COUNT(*) as value, 'Total Clients' as label FROM clients`,
     colorScheme: 'blue',
     icon: Users,
+    plugin: 'sql',
     formatter: (value) => value.toLocaleString(),
-    description: 'Total number of active client organizations currently being managed in the MSSP portal. This includes all clients regardless of their contract status or service scope.',
+    description: 'Total number of client organizations',
     drilldownUrl: '/clients'
   },
   {
@@ -172,70 +167,56 @@ const widgetConfigs: WidgetConfig[] = [
     query: `SELECT COUNT(*) as value, 'Active Contracts' as label FROM contracts WHERE status = 'active'`,
     colorScheme: 'green',
     icon: FileText,
+    plugin: 'sql',
     formatter: (value) => value.toLocaleString(),
-    description: 'Number of contracts with \'active\' status, representing ongoing service agreements that are currently in effect.',
+    description: 'Number of active contracts',
     drilldownUrl: '/contracts'
   },
   {
     id: 'total-revenue',
     title: 'Total Revenue',
-    query: `SELECT COALESCE(SUM("totalValue"), 0) as value, 'Total Revenue' as label FROM contracts WHERE status = 'active' AND "totalValue" IS NOT NULL`,
+    query: `SELECT COALESCE(SUM("totalValue"), 0) as value, 'Total Revenue' as label FROM contracts WHERE status = 'active'`,
     colorScheme: 'purple',
     icon: DollarSign,
+    plugin: 'sql',
     formatter: (value) => `$${value.toLocaleString()}`,
-    description: 'Combined total value of all active contracts, calculated by summing the totalValue field from contracts with active status.',
+    description: 'Combined value of active contracts',
     drilldownUrl: '/financial-dashboard'
   },
+  // Jira Widgets - TEMPORARILY DISABLED DUE TO CONNECTION ISSUES
+  // Uncomment these when Jira connection is fixed
+  /*
   {
-    id: 'service-scopes',
-    title: 'Service Scopes',
-    query: `SELECT COUNT(*) as value, 'Service Scopes' as label FROM service_scopes WHERE status = 'active'`,
-    colorScheme: 'orange',
-    icon: Target,
-    formatter: (value) => value.toLocaleString(),
-    description: 'Total count of active service scopes across all clients, showing the breadth of services being delivered.',
-    drilldownUrl: '/service-scopes'
-  },
-  {
-    id: 'expiring-soon',
-    title: 'Expiring Soon',
-    query: `SELECT COUNT(*) as value, 'Expiring Soon' as label FROM contracts WHERE status = 'active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
-    colorScheme: 'teal',
-    icon: AlertCircle,
-    formatter: (value) => value.toLocaleString(),
-    description: 'Number of active contracts that will expire within the next 90 days (3 months). This helps identify contracts that need renewal attention with a longer lead time for planning.',
-    drilldownUrl: '/contracts?filter=expiring'
-  },
-  {
-    id: 'expired-contracts',
-    title: 'Expired Contracts',
-    query: `SELECT COUNT(*) as value, 'Expired Contracts' as label FROM contracts WHERE "endDate" < CURRENT_DATE AND status = 'active'`,
+    id: 'open-issues',
+    title: 'Open Issues',
+    query: `status not in (Closed, Resolved) ORDER BY created DESC`,
     colorScheme: 'red',
-    icon: Calendar,
+    icon: AlertCircle,
+    plugin: 'jira',
     formatter: (value) => value.toLocaleString(),
-    description: 'Number of contracts that have passed their end date but are still marked as active. These contracts need immediate attention for renewal or closure.',
-    drilldownUrl: '/contracts?filter=expired'
+    description: 'Total open Jira issues'
   },
   {
-    id: 'license-pool-total',
-    title: 'Total Licenses',
-    query: `SELECT COALESCE(SUM("total_licenses"), 0) as value, 'Total Licenses in Pools' as label FROM license_pools WHERE "is_active" = true`,
-    colorScheme: 'indigo',
-    icon: Shield,
-    formatter: (value: number) => value.toLocaleString(),
-    description: 'Total number of licenses available across all active license pools.',
-    drilldownUrl: '/license-pools'
+    id: 'critical-high',
+    title: 'Critical & High Priority',
+    query: `priority in (Critical, High) AND status not in (Closed, Resolved)`,
+    colorScheme: 'orange',
+    icon: AlertTriangle,
+    plugin: 'jira',
+    formatter: (value) => value.toLocaleString(),
+    description: 'Critical and high priority open issues'
   },
   {
-    id: 'license-pool-available',
-    title: 'Available Licenses',
-    query: `SELECT COALESCE(SUM("available_licenses"), 0) as value, 'Available Licenses' as label FROM license_pools WHERE "is_active" = true`,
-    colorScheme: 'green',
-    icon: ShieldCheck,
-    formatter: (value: number) => value.toLocaleString(),
-    description: 'Number of licenses currently available for allocation across all pools.',
-    drilldownUrl: '/license-pools'
+    id: 'this-week',
+    title: "This Week's Issues",
+    query: `created >= startOfWeek() ORDER BY created DESC`,
+    colorScheme: 'teal',
+    icon: TrendingUp,
+    plugin: 'jira',
+    formatter: (value) => value.toLocaleString(),
+    description: 'Issues created this week'
   }
+  */
 ];
 
 // PowerBI-style metric card component
@@ -287,11 +268,17 @@ const MetricCard: React.FC<{
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowDetails(!showDetails)}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                setShowDetails(!showDetails);
+              }}>
                 {showDetails ? 'Hide' : 'Show'} Details
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onClick={onRefresh} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRefresh();
+                }} 
                 disabled={!canRefresh}
                 className={!canRefresh ? 'opacity-50' : ''}
               >
@@ -314,6 +301,14 @@ const MetricCard: React.FC<{
             <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
             <p className="text-sm text-red-600">Failed to load data</p>
             <p className="text-xs text-gray-500 mt-1">{error.message}</p>
+            {error.message.includes('Authentication required') && (
+              <a 
+                href="/login" 
+                className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Click here to log in
+              </a>
+            )}
           </div>
         ) : (
           <>
@@ -333,29 +328,22 @@ const MetricCard: React.FC<{
             {showDetails && data && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="space-y-4">
-                  {/* Metric Details */}
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="text-gray-500">Last Update:</div>
                     <div className="text-gray-900">{new Date().toLocaleTimeString()}</div>
-                    {data.previousValue !== undefined && (
-                      <>
-                        <div className="text-gray-500">Previous:</div>
-                        <div className="text-gray-900">{config.formatter!(data.previousValue)}</div>
-                      </>
-                    )}
+                    <div className="text-gray-500">Plugin:</div>
+                    <div className="text-gray-900">{config.plugin.toUpperCase()}</div>
                   </div>
                   
-                  {/* Business Description */}
                   {config.description && (
                     <div className="space-y-2">
-                      <h4 className="text-sm font-medium text-gray-700">Business Description</h4>
+                      <h4 className="text-sm font-medium text-gray-700">Description</h4>
                       <p className="text-xs text-gray-600 leading-relaxed">{config.description}</p>
                     </div>
                   )}
                   
-                  {/* Query Details */}
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-700">Query Details</h4>
+                    <h4 className="text-sm font-medium text-gray-700">Query</h4>
                     <pre className="powerbi-query-details">
 {config.query}
                     </pre>
@@ -377,22 +365,20 @@ export default function PowerBIDashboardPage() {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, Error | null>>({});
   const [refreshTriggers, setRefreshTriggers] = useState<Record<string, number>>({});
+  const [showVisibilityDialog, setShowVisibilityDialog] = useState(false);
+  const [showWidgetManager, setShowWidgetManager] = useState(false);
   
-  // Add visibility state
+  // Widget visibility state
   const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>(() => {
-    // Load saved visibility settings from localStorage
     const saved = localStorage.getItem('powerbi-widget-visibility');
     if (saved) {
       return JSON.parse(saved);
     }
-    // Default all widgets to visible
     return widgetConfigs.reduce((acc, config) => ({
       ...acc,
       [config.id]: true
     }), {});
   });
-  
-  const [showVisibilityDialog, setShowVisibilityDialog] = useState(false);
 
   // Toggle widget visibility
   const toggleWidgetVisibility = (widgetId: string) => {
@@ -401,7 +387,6 @@ export default function PowerBIDashboardPage() {
         ...prev,
         [widgetId]: !prev[widgetId]
       };
-      // Save to localStorage
       localStorage.setItem('powerbi-widget-visibility', JSON.stringify(newVisibility));
       return newVisibility;
     });
@@ -410,149 +395,74 @@ export default function PowerBIDashboardPage() {
   // Fetch data for a widget
   const fetchData = async (config: WidgetConfig) => {
     if (!rateLimiter.canRequest(config.id)) {
-      const nextRequest = rateLimiter.getTimeUntilNextRequest(config.id);
       toast({
         title: `Rate limit for ${config.title}`,
-        description: `Please wait ${nextRequest} seconds before refreshing.`,
+        description: `Please wait before refreshing.`,
         variant: 'destructive'
       });
       return;
     }
 
     setLoading(prev => ({ ...prev, [config.id]: true }));
+    setErrors(prev => ({ ...prev, [config.id]: null }));
     
     try {
-      // Determine if this is a dynamic widget or hardcoded
-      const isDynamic = config.id.startsWith('dynamic-');
+      let endpoint = '';
+      let body = {};
       
-      if (isDynamic) {
-        // Extract the actual widget ID
-        const widgetId = config.id.replace('dynamic-', '');
-        
-        // Load the full widget configuration from the API
-        const widgetResponse = await fetch(`/api/widgets/manage/${widgetId}`, {
-          credentials: 'include'
-        });
-        
-        if (!widgetResponse.ok) {
-          throw new Error('Failed to load widget configuration');
-        }
-        
-        const widget = await widgetResponse.json();
-        
-        // Execute the query through the appropriate plugin
-        const response = await fetch(`/api/plugins/${widget.pluginName}/${widget.instanceId || `${widget.pluginName}-main`}/query`, {
-          method: widget.method || 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            query: widget.query,
-            ...widget.parameters
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('Query failed');
-        }
-
-        const result = await response.json();
-        
-        // Extract data based on widget type and plugin
-        let value = 0;
-        let label = config.title;
-        let previousValue: number | undefined;
-        let trendPercentage: number | undefined;
-        
-        if (widget.pluginName === 'sql' || widget.pluginName === 'sql-plugin') {
-          // SQL query result
-          if (result.data?.rows?.[0]) {
-            const row = result.data.rows[0];
-            value = Number(row.value) || 0;
-            label = row.label || label;
-            previousValue = row.previous_value ? Number(row.previous_value) : undefined;
-          }
-        } else {
-          // Other plugin results
-          if (result.data?.value !== undefined) {
-            value = Number(result.data.value) || 0;
-          } else if (result.data?.total !== undefined) {
-            value = Number(result.data.total) || 0;
-          } else if (result.data?.count !== undefined) {
-            value = Number(result.data.count) || 0;
-          } else if (Array.isArray(result.data)) {
-            value = result.data.length;
-          }
-        }
-        
-        // Calculate trend if previous value exists
-        if (previousValue !== undefined && value > 0) {
-          trendPercentage = ((value - previousValue) / previousValue) * 100;
-        }
-        
-        setWidgetData(prev => ({
-          ...prev,
-          [config.id]: {
-            value,
-            label,
-            previousValue,
-            trendPercentage,
-            lastUpdate: new Date()
-          }
-        }));
-      } else {
-        // Original hardcoded SQL query
-        const response = await fetch('/api/plugins/sql/sql-main/query', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ query: config.query })
-        });
-
-        if (!response.ok) {
-          throw new Error('Query failed');
-        }
-
-        const result = await response.json();
-        
-        if (result.data?.rows?.[0]) {
-          const row = result.data.rows[0];
-          const value = Number(row.value) || 0;
-          
-          setWidgetData(prev => {
-            const prevData = prev[config.id];
-            const prevValue = prevData?.value;
-            
-            return {
-              ...prev,
-              [config.id]: {
-                value,
-                label: row.label || config.title,
-                previousValue: prevValue,
-                trendPercentage: prevValue && value > 0
-                  ? ((value - prevValue) / prevValue) * 100
-                  : undefined,
-                lastUpdate: new Date()
-              }
-            };
-          });
-        }
+      if (config.plugin === 'sql') {
+        endpoint = '/api/plugins/sql/instances/sql-main/query';
+        body = { query: config.query };
+      } else if (config.plugin === 'jira') {
+        endpoint = '/api/plugins/jira/instances/jira-main/query';
+        body = { jql: config.query };
       }
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        // Check if it's an authentication error
+        if (response.status === 401) {
+          throw new Error('Authentication required. Please log in to view data.');
+        }
+        throw new Error('Query failed');
+      }
+
+      const result = await response.json();
+      
+      let value = 0;
+      let label = config.title;
+      
+      if (config.plugin === 'sql' && result.data?.rows?.[0]) {
+        const row = result.data.rows[0];
+        value = Number(row.value) || 0;
+        label = row.label || label;
+      } else if (config.plugin === 'jira') {
+        value = result.data?.total || 0;
+      }
+      
+      setWidgetData(prev => ({
+        ...prev,
+        [config.id]: {
+          value,
+          label,
+          details: result.data
+        }
+      }));
       
       rateLimiter.recordRequest(config.id);
     } catch (error) {
       console.error(`Failed to fetch data for ${config.title}:`, error);
-      setWidgetData(prev => ({
+      setErrors(prev => ({
         ...prev,
-        [config.id]: {
-          value: 0,
-          label: config.title,
-          error: error instanceof Error ? error.message : 'Failed to load data',
-          lastUpdate: new Date()
-        }
+        [config.id]: error as Error
       }));
     } finally {
       setLoading(prev => ({ ...prev, [config.id]: false }));
@@ -561,60 +471,33 @@ export default function PowerBIDashboardPage() {
 
   // Initial load
   useEffect(() => {
-    allWidgets.forEach(config => {
-      fetchData(config);
+    widgetConfigs.forEach(config => {
+      if (widgetVisibility[config.id]) {
+        fetchData(config);
+      }
     });
-  }, []); // Empty dependency - only run on mount
+  }, []);
 
   // Refresh individual widget
   const refreshWidget = useCallback((configId: string) => {
     const config = widgetConfigs.find(c => c.id === configId);
-    if (!config) return;
-
-    if (!rateLimiter.canRequest(configId)) {
-      toast({
-        title: "Rate Limited",
-        description: `Please wait ${Math.ceil(rateLimiter.getTimeUntilNextRequest(configId) / 1000)} seconds before refreshing.`,
-        variant: "destructive"
-      });
-      return;
+    if (config) {
+      fetchData(config);
     }
-
-    setRefreshTriggers(prev => ({
-      ...prev,
-      [configId]: (prev[configId] || 0) + 1
-    }));
-
-    fetchData(config);
-
-    toast({
-      title: "Refreshing",
-      description: "Widget data is being updated...",
-    });
-  }, [toast, fetchData]);
+  }, []);
 
   // Refresh all widgets
   const handleRefreshAll = useCallback(() => {
-    const canRefreshAll = widgetConfigs.every(config => rateLimiter.canRequest(config.id));
-    
-    if (!canRefreshAll) {
-      toast({
-        title: "Rate Limited",
-        description: "Some widgets are still rate limited. Please wait.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     widgetConfigs.forEach(config => {
-      fetchData(config);
+      if (widgetVisibility[config.id]) {
+        fetchData(config);
+      }
     });
-
     toast({
       title: "Refreshing All",
       description: "All dashboard data is being updated...",
     });
-  }, [toast, fetchData]);
+  }, [widgetVisibility]);
 
   // Update timer for rate limit display
   const [, forceUpdate] = useState({});
@@ -623,104 +506,29 @@ export default function PowerBIDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // New states for dynamic widgets
-  const [dynamicWidgets, setDynamicWidgets] = useState<WidgetConfig[]>([]);
-  const [showWidgetManager, setShowWidgetManager] = useState(false);
-  const [loadingDynamicWidgets, setLoadingDynamicWidgets] = useState(true);
-  
-  // Combine hardcoded and dynamic widgets
-  const allWidgets = [...widgetConfigs, ...dynamicWidgets];
-
-  // Load dynamic widgets from database
-  const loadDynamicWidgets = async () => {
-    try {
-      setLoadingDynamicWidgets(true);
-      const response = await fetch('/api/widgets/manage?placement=powerbi-dashboard', {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to load widgets');
-      }
-      
-      const widgets = await response.json();
-      
-      // Convert database widgets to PowerBI widget format
-      const powerbiWidgets = widgets
-        .filter((w: any) => w.isActive && w.placement === 'powerbi-dashboard')
-        .map((w: any) => ({
-          id: `dynamic-${w.id}`,
-          title: w.name,
-          query: w.query,
-          colorScheme: getColorSchemeForPlugin(w.pluginName),
-          icon: getIconForPlugin(w.pluginName),
-          formatter: (value: number) => value.toLocaleString(),
-          description: w.description,
-          drilldownUrl: w.displayConfig?.drilldownUrl
-        }));
-      
-      setDynamicWidgets(powerbiWidgets);
-      
-      // Update visibility state for new widgets
-      setWidgetVisibility(prev => {
-        const updated = { ...prev };
-        powerbiWidgets.forEach((widget: WidgetConfig) => {
-          if (!(widget.id in updated)) {
-            updated[widget.id] = true;
-          }
-        });
-        return updated;
-      });
-    } catch (error) {
-      console.error('Failed to load dynamic widgets:', error);
-      toast({
-        title: 'Failed to load custom widgets',
-        description: 'Some widgets may not be displayed',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoadingDynamicWidgets(false);
-    }
-  };
-
-  // Helper function to get color scheme based on plugin name
-  const getColorSchemeForPlugin = (pluginName: string): keyof typeof colorSchemes => {
-    const colorMap: Record<string, keyof typeof colorSchemes> = {
-      'jira': 'blue',
-      'sql': 'green',
-      'confluence': 'purple',
-      'carbonblack': 'red',
-      'fortigate': 'orange',
-      'palo-alto': 'teal',
-      'generic-api': 'indigo'
-    };
-    return colorMap[pluginName] || 'blue';
-  };
-
-  // Helper function to get icon based on plugin name
-  const getIconForPlugin = (pluginName: string) => {
-    const iconMap: Record<string, any> = {
-      'jira': AlertCircle,
-      'sql': Target,
-      'confluence': FileText,
-      'carbonblack': Shield,
-      'fortigate': ShieldCheck,
-      'palo-alto': Shield,
-      'generic-api': Activity
-    };
-    return iconMap[pluginName] || Activity;
-  };
-
-  useEffect(() => {
-    loadDynamicWidgets();
-  }, []);
+  // Check if any errors are authentication errors
+  const hasAuthenticationError = Object.values(errors).some(
+    error => error?.message.includes('Authentication required')
+  );
 
   return (
     <AppLayout 
-      title="Business Intelligence Dashboard" 
-      subtitle="Real-time metrics and KPIs powered by PowerBI-style design"
+      title="PowerBI Dashboard" 
+      subtitle="Business intelligence metrics with PowerBI-style visualization"
     >
       <div className="min-h-screen bg-gray-50">
+        {/* Authentication Alert */}
+        {hasAuthenticationError && (
+          <Alert className="mx-6 mt-4 mb-0 border-orange-200 bg-orange-50">
+            <Shield className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <strong>Authentication Required:</strong> Please{' '}
+              <a href="/login" className="underline font-medium">log in</a>{' '}
+              to view real-time dashboard data. Use credentials: admin@test.mssp.local / admin123
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Action Bar */}
         <div className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -763,27 +571,25 @@ export default function PowerBIDashboardPage() {
         {/* Main Content */}
         <div className="p-6">
           {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 powerbi-grid">
-            {allWidgets
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 powerbi-grid">
+            {widgetConfigs
               .filter(config => widgetVisibility[config.id])
-              .map((config) => {
-                return (
-                  <MetricCard
-                    key={config.id}
-                    config={config}
-                    data={widgetData[config.id] || null}
-                    loading={loading[config.id] || false}
-                    error={errors[config.id]}
-                    onRefresh={() => refreshWidget(config.id)}
-                    canRefresh={rateLimiter.canRequest(config.id)}
-                    timeUntilRefresh={rateLimiter.getTimeUntilNextRequest(config.id)}
-                  />
-                );
-              })}
+              .map((config) => (
+                <MetricCard
+                  key={config.id}
+                  config={config}
+                  data={widgetData[config.id] || null}
+                  loading={loading[config.id] || false}
+                  error={errors[config.id]}
+                  onRefresh={() => refreshWidget(config.id)}
+                  canRefresh={rateLimiter.canRequest(config.id)}
+                  timeUntilRefresh={rateLimiter.getTimeUntilNextRequest(config.id)}
+                />
+              ))}
           </div>
 
           {/* Show message if no widgets are visible */}
-          {allWidgets.every(config => !widgetVisibility[config.id]) && (
+          {widgetConfigs.every(config => !widgetVisibility[config.id]) && (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <EyeOff className="h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Widgets Visible</h3>
@@ -796,25 +602,20 @@ export default function PowerBIDashboardPage() {
               </Button>
             </div>
           )}
-
-          {/* Additional sections can be added here */}
         </div>
       </div>
 
       {/* Widget Visibility Dialog */}
       <Dialog open={showVisibilityDialog} onOpenChange={setShowVisibilityDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Eye className="h-5 w-5 mr-2" />
-              Show/Hide Dashboard Widgets
-            </DialogTitle>
+            <DialogTitle>Show/Hide Dashboard Widgets</DialogTitle>
             <DialogDescription>
-              Choose which widgets to display on your dashboard. Changes are saved automatically.
+              Choose which widgets to display on your PowerBI dashboard.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {allWidgets.map((config) => {
+          <div className="grid gap-4 py-4 max-h-[50vh] overflow-y-auto">
+            {widgetConfigs.map((config) => {
               const Icon = config.icon;
               const scheme = colorSchemes[config.colorScheme];
               const isVisible = widgetVisibility[config.id];
@@ -830,14 +631,17 @@ export default function PowerBIDashboardPage() {
                     <div className={`p-2 rounded-lg ${isVisible ? scheme.bg : 'bg-gray-300'}`}>
                       <Icon className={`h-4 w-4 ${isVisible ? 'text-white' : 'text-gray-600'}`} />
                     </div>
-                    <Label 
-                      htmlFor={`widget-${config.id}`} 
-                      className={`font-medium cursor-pointer ${
-                        isVisible ? scheme.lightText : 'text-gray-600'
-                      }`}
-                    >
-                      {config.title}
-                    </Label>
+                    <div>
+                      <Label 
+                        htmlFor={`widget-${config.id}`} 
+                        className={`font-medium cursor-pointer ${
+                          isVisible ? scheme.lightText : 'text-gray-600'
+                        }`}
+                      >
+                        {config.title}
+                      </Label>
+                      <p className="text-xs text-gray-500">{config.plugin.toUpperCase()}</p>
+                    </div>
                   </div>
                   <Switch
                     id={`widget-${config.id}`}
@@ -850,23 +654,19 @@ export default function PowerBIDashboardPage() {
           </div>
           <div className="flex items-center justify-between pt-2 border-t">
             <div className="text-sm text-gray-500">
-              {Object.values(widgetVisibility).filter(Boolean).length} of {allWidgets.length} widgets visible
+              {Object.values(widgetVisibility).filter(Boolean).length} of {widgetConfigs.length} widgets visible
             </div>
             <div className="flex space-x-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const allVisible = allWidgets.reduce((acc, config) => ({
+                  const allVisible = widgetConfigs.reduce((acc, config) => ({
                     ...acc,
                     [config.id]: true
                   }), {});
                   setWidgetVisibility(allVisible);
                   localStorage.setItem('powerbi-widget-visibility', JSON.stringify(allVisible));
-                  toast({
-                    title: "All widgets shown",
-                    description: "All dashboard widgets are now visible.",
-                  });
                 }}
               >
                 Show All
@@ -875,16 +675,12 @@ export default function PowerBIDashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const allHidden = allWidgets.reduce((acc, config) => ({
+                  const allHidden = widgetConfigs.reduce((acc, config) => ({
                     ...acc,
                     [config.id]: false
                   }), {});
                   setWidgetVisibility(allHidden);
                   localStorage.setItem('powerbi-widget-visibility', JSON.stringify(allHidden));
-                  toast({
-                    title: "All widgets hidden",
-                    description: "All dashboard widgets are now hidden.",
-                  });
                 }}
               >
                 Hide All
@@ -900,19 +696,19 @@ export default function PowerBIDashboardPage() {
           <DialogHeader>
             <DialogTitle>Manage PowerBI Dashboard Widgets</DialogTitle>
             <DialogDescription>
-              Create and manage widgets for the PowerBI dashboard. These widgets will appear with the PowerBI styling.
+              Create and manage custom widgets for the PowerBI dashboard.
             </DialogDescription>
           </DialogHeader>
           
           <Alert className="my-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Creating PowerBI Widgets:</strong>
+              <strong>PowerBI Dashboard Widgets:</strong>
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Use the <strong>SQL plugin</strong> to create metrics from your database</li>
-                <li>Set widget type to <strong>"metric"</strong> for best PowerBI appearance</li>
-                <li>Include these fields in your SQL query: <code>value</code>, <code>label</code></li>
-                <li>Widgets will automatically get PowerBI styling and colors</li>
+                <li>This dashboard displays both SQL metrics and Jira issue tracking</li>
+                <li>Custom widgets you create here will appear on this dashboard</li>
+                <li>Set placement to "powerbi-dashboard" for new widgets</li>
+                <li>Jira widgets have 1-minute rate limiting to prevent API overload</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -921,7 +717,7 @@ export default function PowerBIDashboardPage() {
             <GlobalWidgetManager 
               onClose={() => {
                 setShowWidgetManager(false);
-                loadDynamicWidgets();
+                window.location.reload(); // Reload to show new widgets
               }}
             />
           </div>

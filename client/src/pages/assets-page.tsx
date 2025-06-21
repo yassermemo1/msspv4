@@ -16,7 +16,7 @@ import { HardwareAssetForm } from "@/components/forms/hardware-asset-form";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
-import { getStatusColor, getStatusIcon, getStatusBadge, getStatusVariant } from '@/lib/status-utils';
+import { getStatusColor, getStatusIcon, getStatusVariant } from '@/lib/status-utils';
 
 export default function AssetsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -651,9 +651,12 @@ export default function AssetsPage() {
                                                   <div key={allocation.id} className="bg-white p-3 rounded-md border border-gray-200">
                                                     <div className="flex justify-between items-start">
                                                       <div>
-                                                        <p className="font-medium text-sm text-gray-900">
+                                                        <a 
+                                                          href={`/clients/${allocation.clientId}`}
+                                                          className="font-medium text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                                                        >
                                                           {allocation.clientName}
-                                                        </p>
+                                                        </a>
                                                         <p className="text-xs text-gray-500">
                                                           Allocated: {new Date(allocation.assignedDate).toLocaleDateString()}
                                                         </p>

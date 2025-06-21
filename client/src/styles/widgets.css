@@ -1,0 +1,335 @@
+/* Widget Grid Layout Improvements */
+.widget-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+/* Responsive widget sizing */
+.widget-container {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+/* Widget Card Styles */
+.widget-card {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+}
+
+/* Widget Header */
+.widget-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.5rem;
+}
+
+.widget-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.25;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Widget Content */
+.widget-content {
+  flex: 1;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+/* Metric Widget Specific Styles */
+.widget-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+.metric-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.metric-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-icon {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: #f3f4f6;
+  margin-bottom: 1rem;
+}
+
+/* Chart Widget Styles */
+.widget-chart {
+  padding: 1.5rem;
+  height: 100%;
+  min-height: 300px;
+}
+
+/* Table Widget Styles */
+.widget-table {
+  font-size: 0.875rem;
+}
+
+.widget-table th {
+  font-weight: 600;
+  color: #374151;
+  background: #f9fafb;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.widget-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.widget-table tr:hover {
+  background: #f9fafb;
+}
+
+/* Number/Statistic Widget Styles */
+.widget-number {
+  padding: 2rem;
+  background: linear-gradient(135deg, #f3f4f6 0%, #ffffff 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.number-value {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.number-label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* Progress Widget Styles */
+.widget-progress {
+  padding: 2rem;
+}
+
+.progress-bar {
+  height: 1rem;
+  background: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Card List Widget Styles */
+.widget-cards {
+  padding: 1.5rem;
+}
+
+.card-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.card-item:last-child {
+  border-bottom: none;
+}
+
+.card-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.card-value {
+  font-size: 0.875rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* Widget Loading State */
+.widget-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+}
+
+.widget-loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Widget Error State */
+.widget-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.widget-error-icon {
+  width: 3rem;
+  height: 3rem;
+  color: #ef4444;
+  margin-bottom: 1rem;
+}
+
+.widget-error-message {
+  font-size: 0.875rem;
+  color: #dc2626;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+/* Widget Size Variations */
+.widget-small {
+  min-height: 200px;
+}
+
+.widget-medium {
+  min-height: 300px;
+}
+
+.widget-large {
+  min-height: 400px;
+}
+
+/* Responsive Grid */
+@media (min-width: 640px) {
+  .widget-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .metric-value {
+    font-size: 3rem;
+  }
+  
+  .number-value {
+    font-size: 3.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .widget-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .widget-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1536px) {
+  .widget-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .widget-card {
+    background: #1f2937;
+    border-color: #374151;
+  }
+  
+  .widget-header {
+    border-bottom-color: #374151;
+  }
+  
+  .widget-title {
+    color: #f3f4f6;
+  }
+  
+  .metric-label,
+  .number-label,
+  .card-label {
+    color: #9ca3af;
+  }
+  
+  .metric-value,
+  .number-value,
+  .card-value {
+    color: #f9fafb;
+  }
+  
+  .widget-table th {
+    background: #374151;
+    color: #f3f4f6;
+  }
+  
+  .widget-table td {
+    border-bottom-color: #374151;
+  }
+  
+  .widget-table tr:hover {
+    background: #374151;
+  }
+} 

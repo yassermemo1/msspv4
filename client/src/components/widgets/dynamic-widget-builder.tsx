@@ -143,6 +143,10 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
   const [testResult, setTestResult] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('basic');
   const [availableFields, setAvailableFields] = useState<string[]>([]);
+  const [databaseSchema, setDatabaseSchema] = useState<Array<{
+    tableName: string;
+    columns: Array<{ name: string; type: string; nullable: boolean; default: string | null }>;
+  }>>([]);
 
   const [widget, setWidget] = useState<CustomWidget>({
     name: '',
@@ -189,6 +193,13 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
     }
   }, [editingWidget]);
 
+  // Load database schema when SQL plugin is selected
+  useEffect(() => {
+    if (widget.pluginName === 'sql') {
+      loadDatabaseSchema();
+    }
+  }, [widget.pluginName]);
+
   const loadPlugins = async () => {
     try {
       setLoading(true);
@@ -202,6 +213,19 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
       console.error('Failed to load plugins:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDatabaseSchema = async () => {
+    try {
+      const response = await fetch('/api/database-schema');
+      const data = await response.json();
+      
+      if (data.tables) {
+        setDatabaseSchema(data.tables);
+      }
+    } catch (error) {
+      console.error('Failed to load database schema:', error);
     }
   };
 
@@ -407,11 +431,11 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
 
   // Filter management functions
   const addFilter = () => {
-    const fieldName = prompt("Enter field name to filter (e.g., 'status', 'priority', 'amount'):");
-    if (fieldName && fieldName.trim()) {
+    if (widget.pluginName === 'sql' && databaseSchema.length > 0) {
+      // For SQL plugin, just add a new empty filter
       const newFilter = {
         id: Date.now().toString(),
-        field: fieldName.trim(),
+        field: '',
         operator: 'equals' as const,
         value: '',
         dataType: 'string' as const,
@@ -422,6 +446,24 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
         ...widget,
         filters: [...(widget.filters || []), newFilter]
       });
+    } else {
+      // For other plugins, use the prompt
+      const fieldName = prompt("Enter field name to filter (e.g., 'status', 'priority', 'amount'):");
+      if (fieldName && fieldName.trim()) {
+        const newFilter = {
+          id: Date.now().toString(),
+          field: fieldName.trim(),
+          operator: 'equals' as const,
+          value: '',
+          dataType: 'string' as const,
+          enabled: true
+        };
+        
+        setWidget({
+          ...widget,
+          filters: [...(widget.filters || []), newFilter]
+        });
+      }
     }
   };
 
@@ -1378,15 +1420,74 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
 
               <div>
                 <Label>Data Filters</Label>
+                {widget.pluginName === 'sql' && databaseSchema.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    <Activity className="h-3 w-3 inline mr-1" />
+                    Loading database schema...
+                  </p>
+                )}
                 <div className="space-y-2 mt-2">
                   {widget.filters?.map((filter, index) => (
                     <div key={filter.id || index} className="flex space-x-2 items-center">
-                      <Input
-                        placeholder="Field name"
-                        value={filter.field}
-                        onChange={(e) => updateFilter(filter.id, { field: e.target.value })}
-                        className="flex-1"
-                      />
+                      {widget.pluginName === 'sql' && databaseSchema.length > 0 ? (
+                        <Select
+                          value={filter.field}
+                          onValueChange={(value) => updateFilter(filter.id, { field: value })}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select table.column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {databaseSchema.map((table) => (
+                              <React.Fragment key={table.tableName}>
+                                <SelectItem value={table.tableName} disabled>
+                                  <span className="font-semibold text-gray-600">{table.tableName}</span>
+                                </SelectItem>
+                                {table.columns.map((column) => (
+                                  <SelectItem 
+                                    key={`${table.tableName}.${column.name}`} 
+                                    value={`${table.tableName}.${column.name}`}
+                                    onSelect={() => {
+                                      // Auto-detect data type based on PostgreSQL column type
+                                      let dataType: FilterType['dataType'] = 'string';
+                                      const pgType = column.type.toLowerCase();
+                                      
+                                      if (pgType.includes('int') || pgType.includes('numeric') || 
+                                          pgType.includes('decimal') || pgType.includes('real') || 
+                                          pgType.includes('double') || pgType.includes('serial')) {
+                                        dataType = 'number';
+                                      } else if (pgType.includes('bool')) {
+                                        dataType = 'boolean';
+                                      } else if (pgType.includes('date') || pgType.includes('time')) {
+                                        dataType = 'date';
+                                      } else if (pgType.includes('array') || pgType.includes('[]')) {
+                                        dataType = 'array';
+                                      }
+                                      
+                                      updateFilter(filter.id, { 
+                                        field: `${table.tableName}.${column.name}`,
+                                        dataType 
+                                      });
+                                    }}
+                                  >
+                                    <span className="ml-4">
+                                      {table.tableName}.{column.name}
+                                      <span className="text-xs text-gray-500 ml-2">({column.type})</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          placeholder="Field name"
+                          value={filter.field}
+                          onChange={(e) => updateFilter(filter.id, { field: e.target.value })}
+                          className="flex-1"
+                        />
+                      )}
                       <Select
                         value={filter.dataType}
                         onValueChange={(value: any) => updateFilter(filter.id, { dataType: value })}
@@ -1450,8 +1551,16 @@ export const DynamicWidgetBuilder: React.FC<DynamicWidgetBuilderProps> = ({
                   </Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Add filters to process and refine the data before display
+                  {widget.pluginName === 'sql' 
+                    ? "Select database columns from the dropdown. Data types are automatically detected." 
+                    : "Add filters to process and refine the data before display"}
                 </p>
+                {widget.pluginName === 'sql' && databaseSchema.length > 0 && (
+                  <p className="text-xs text-green-600 mt-1">
+                    <CheckCircle className="h-3 w-3 inline mr-1" />
+                    {databaseSchema.length} tables with {databaseSchema.reduce((sum, t) => sum + t.columns.length, 0)} columns available
+                  </p>
+                )}
               </div>
 
               <Separator />
